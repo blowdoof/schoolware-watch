@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+coverage/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Private Schoolware data
+/data/
+/exports/
+/schoolware-private/
+*.har
+
+# Temporary files
+*.log
+.DS_Store
+Thumbs.db
