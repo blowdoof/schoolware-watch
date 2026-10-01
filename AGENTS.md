@@ -1,0 +1,58 @@
+# AGENTS.md
+
+## Project
+Schoolware Watch is an independent Chrome Manifest V3 extension for parents
+to observe changes in Schoolware (WISA) agendas.
+Use TypeScript, React, Vite, Tailwind CSS, IndexedDB, Chrome Alarms, and Vitest.
+
+## Communication
+- Communicate with the project owner in Dutch.
+- Write code, identifiers, comments, and technical documentation in English.
+
+## Privacy
+- Keep student data local. Do not add a backend, analytics, telemetry, or cloud synchronization.
+- Never persist Schoolware passwords, session cookies, authentication tokens, or authorization headers.
+- Reuse the existing browser session only through the verified integration mechanism.
+- Never commit real student data, API captures, HAR files, screenshots containing personal data, or secrets.
+- Use synthetic test fixtures.
+- Do not log agenda payloads, student identifiers, or credentials.
+- Store only fields required for monitoring and history.
+- Use generic notification text by default.
+- Provide retention controls and deletion of local profile data.
+
+## Architecture
+- Keep domain logic independent of React and Chrome APIs.
+- Isolate Schoolware transport and response validation.
+- Isolate IndexedDB access behind repositories.
+- Use typed, runtime-validated messages between extension contexts.
+- Validate message senders and constrain request destinations.
+- Use the service worker to coordinate monitoring and history writes.
+- Do not rely on service-worker globals for durable state.
+- Bundle executable code locally and use minimal permissions.
+
+## Observation Semantics
+- GeldigVan is not evidence of creation time.
+- firstSeenAt means first local observation, not creation.
+- Treat initial observations as a baseline.
+- Scope identities by Schoolware installation and student profile.
+- Verify ID relationships and TypePunt values before relying on them.
+- Compare normalized, meaningful fields deterministically.
+- Record disappearance only after a successful, complete, comparable check covering the item's scope.
+- Never infer disappearance from authentication errors, partial pagination, invalid responses, or changed coverage.
+- Preserve reappearance history.
+- Commit item versions, events, and successful-check metadata atomically.
+- Make interrupted or repeated checks safe to retry.
+
+## Development and Validation
+- Use strict TypeScript.
+- Test observation semantics with Vitest and synthetic fixtures.
+- Cover baseline, appearance, changes, disappearance, reappearance, profile isolation, and failed or incomplete checks.
+- Test IndexedDB migrations and transaction behavior.
+- Verify alarms, session handling, permissions, and worker restart behavior in Chrome when relevant.
+- Run `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build` before reporting implementation complete.
+- Document unresolved API assumptions and required permissions.
+
+## Scope and Git
+- Keep changes focused on the approved task.
+- Do not publish, push, deploy, or upload artifacts unless authorized.
+- Inspect staged changes for private data before committing.

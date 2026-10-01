@@ -22,3 +22,15 @@ coverage/
 *.log
 .DS_Store
 Thumbs.db
+# Private Schoolware API responses
+agenda-response.json
+*-private.json
+*.har
+
+# Local application data
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example

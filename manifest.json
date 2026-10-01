@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "minimum_chrome_version": "120",
+  "name": "Schoolware Watch",
+  "version": "0.1.0",
+  "description": "Local observation history for Schoolware agenda changes.",
+  "permissions": ["storage"],
+  "optional_host_permissions": ["https://schoolware_siw.ksgwl.be/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_popup": "popup.html", "default_title": "Schoolware Watch" },
+  "options_ui": { "page": "options.html", "open_in_tab": true },
+  "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'self'" }
+}
