@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { Buffer } from 'node:buffer';
 import process from 'node:process';
 import { setTimeout, clearTimeout } from 'node:timers';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, mkdir, writeFile, copyFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -143,6 +144,79 @@ try {
   assert.ok(bag.text.includes('Aardrijkskunde') && bag.text.includes('Werkboek'));
   assert.ok(!bag.homeText.includes('Werkboek'), 'Same-day workbook must not appear in next-day home packing');
   console.log('Chrome schoolbag smoke passed: worker projection, both packing lists, laptop defaults and synthetic workbook page range.');
+  if (process.argv.includes('--store-assets')) {
+    const assets = resolve('artifacts/chrome-web-store');
+    await mkdir(assets, { recursive: true });
+    await copyFile(resolve('public/icons/icon128.png'), join(assets, 'icon128.png'));
+    // Add a second fictional due day for the home packing screenshot only.
+    await evaluate(restarted.sessionId, `(async () => {
+      const db = await new Promise((resolve, reject) => {
+        const request = indexedDB.open('schoolware-watch-history', 3);
+        request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+      });
+      const tx = db.transaction('scopes', 'readwrite');
+      const store = tx.objectStore('scopes');
+      const request = store.getAll();
+      request.onsuccess = () => {
+        const scope = request.result[0]; const first = scope.items[0];
+        const date = new Date(first.snapshot.startsAt.slice(0, 10) + 'T12:00:00Z');
+        do { date.setUTCDate(date.getUTCDate() + 1); } while ([0, 6].includes(date.getUTCDay()));
+        const day = date.toISOString().slice(0, 10);
+        scope.items.push({ ...first, sourceKey: 'synthetic-home-point', localId: crypto.randomUUID(),
+          lesson: { key: 'synthetic-french-lesson', subject: 'Frans', room: '' },
+          snapshot: { ...first.snapshot, title: 'Oefeningen voorbereiden', instructions: 'Cursus pagina 50-65',
+            startsAt: day + ' 10:00:00', endsAt: day + ' 10:50:00' } });
+        first.snapshot.title = 'Oefeningen in het werkboek'; store.put(scope);
+      };
+      await new Promise((resolve, reject) => { tx.oncomplete = resolve; tx.onabort = () => reject(tx.error); });
+      db.close(); return true;
+    })()`);
+    await command('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false }, bagSession);
+    await command('Page.enable', {}, bagSession);
+    await command('Page.navigate', { url: `chrome-extension://${id}/dashboard.html` }, bagSession);
+    await poll(() => evaluate(bagSession, `document.querySelector('[aria-label="Boekentas"]')?.textContent.includes('pagina 50-65')`));
+    const capture = async (fileName, selector) => {
+      await evaluate(bagSession, `(() => {
+        document.querySelector(${JSON.stringify(selector)}).scrollIntoView({ block: 'start' });
+        window.scrollBy(0, -80);
+        let label = document.getElementById('synthetic-store-label');
+        if (!label) { label = document.createElement('div'); label.id = 'synthetic-store-label'; document.body.append(label); }
+        label.textContent = 'Voorbeeld met fictieve agendagegevens';
+        label.style.cssText = 'position:fixed;bottom:12px;right:12px;background:#134e4a;color:white;padding:8px 12px;border-radius:8px;font:12px Arial;z-index:9999';
+        return true;
+      })()`);
+      await delay(200);
+      const { data } = await command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }, bagSession);
+      await writeFile(join(assets, fileName), Buffer.from(data, 'base64'));
+    };
+    await capture('screenshot-schoolbag-1280x800.png', '[aria-label="Boekentas"]');
+    await capture('screenshot-tasks-1280x800.png', '[aria-label="Taken, toetsen en voortgang"]');
+    const icon = (await readFile(resolve('public/icons/icon128.png'))).toString('base64');
+    const { targetId: promoTarget } = await command('Target.createTarget', { url: 'about:blank' });
+    const { sessionId: promoSession } = await command('Target.attachToTarget', { targetId: promoTarget, flatten: true });
+    await command('Emulation.setDeviceMetricsOverride', { width: 440, height: 280, deviceScaleFactor: 1, mobile: false }, promoSession);
+    await command('Page.enable', {}, promoSession);
+    await command('Page.setDocumentContent', { frameId: (await command('Page.getFrameTree', {}, promoSession)).frameTree.frame.id,
+      html: '<html><body style="margin:0"><canvas width="440" height="280"></canvas></body></html>' }, promoSession);
+    await evaluate(promoSession, `(async () => {
+      const context = document.querySelector('canvas').getContext('2d');
+      const gradient = context.createLinearGradient(0, 0, 440, 280);
+      gradient.addColorStop(0, '#134e4a'); gradient.addColorStop(1, '#0f766e');
+      context.fillStyle = gradient; context.fillRect(0, 0, 440, 280);
+      const image = new Image(); image.src = 'data:image/png;base64,${icon}';
+      await new Promise(resolve => image.onload = resolve);
+      context.drawImage(image, 164, 24, 112, 112);
+      context.fillStyle = '#ffffff'; context.textAlign = 'center'; context.font = 'bold 30px Arial';
+      context.fillText('Schoolware Watch', 220, 181);
+      context.font = '17px Arial'; context.fillStyle = '#ccfbf1';
+      context.fillText('Agenda, taken en boekentas', 220, 216);
+      context.font = '12px Arial'; context.fillText('Een onafhankelijk project van Bumper.be', 220, 250);
+      return true;
+    })()`);
+    const { data } = await command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }, promoSession);
+    await writeFile(join(assets, 'promo-440x280.png'), Buffer.from(data, 'base64'));
+    console.log('Store assets generated from the real extension UI with synthetic data only.');
+  }
 } finally {
   if (socket?.readyState === WebSocket.OPEN) {
     await command('Browser.close').catch(() => {});

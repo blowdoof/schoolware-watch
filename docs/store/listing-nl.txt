@@ -1,0 +1,30 @@
+Schoolware Watch
+
+Korte beschrijving
+Volg Schoolware-agendawijzigingen, taken en je boekentas. Agenda-inhoud blijft lokaal in je browser.
+
+Volledige beschrijving
+Schoolware Watch helpt ouders de Schoolware-agenda op te volgen: wat is veranderd, welk werk staat nog open en welk materiaal moet mee?
+
+LET OP: deze eerste versie ondersteunt uitsluitend schoolware_siw.ksgwl.be. Andere Schoolware-installaties worden momenteel niet ondersteund. Je hebt een eigen, geldig Schoolware-account nodig. Schoolware Watch is een onafhankelijk project van Bumper.be en geen officieel product van Schoolware of WISA.
+
+Wat kun je ermee?
+- Veranderingen volgen tegenover eerdere lokale waarnemingen.
+- Openstaande taken en toetsen bekijken en zelf Open, Bezig of Klaar markeren.
+- Een boekentasoverzicht bekijken: Mee naar school en Mee naar huis, met laptop, materiaal en paginaverwijzingen uit de agenda.
+- Optioneel algemene systeemmeldingen en een banner op Schoolware ontvangen.
+- Je bewaartermijn instellen en lokale gegevens verwijderen.
+- Optioneel versleutelde voortgang delen met andere gekoppelde toestellen via de Bumper.be-dienst.
+
+Agenda-inhoud, instructies en geschiedenis blijven lokaal. Schoolware-wachtwoorden, sessiecookies en authenticatietokens worden niet door de extensie opgeslagen. Er zijn geen advertenties, analytics of telemetrie. Bij optionele voortgangsdeling worden versleutelde statussen en eventueel zelfgekozen deelnemerlabels verstuurd; geen agendatitels of instructies. De server verwerkt ook verbindingsmetadata. Deel een koppelcode uitsluitend met iemand die je vertrouwt.
+
+Aan de slag
+Open Schoolware Watch, kies Schoolware verbinden, log in bij Schoolware, open de juiste agenda en bevestig de koppeling. Meldingen en voortgangsdeling zijn optioneel.
+
+Dit is een aanvullend overzicht. Een eerste lokale waarneming bewijst niet wanneer een punt is aangemaakt. Boekentassuggesties kunnen onvolledig zijn; controleer de brontekst. Automatische controles vereisen een draaiende Chrome-browser en een geldige Schoolware-sessie. Meldingen kunnen door browser- of systeeminstellingen worden vertraagd of onderdrukt. Taakstatussen wijzigen de Schoolware-agenda niet.
+
+Contact en ondersteuning: info@bumper.be
+Project: https://github.com/blowdoof/schoolware-watch
+
+Enig doel
+Ouders helpen de agenda en taakvoortgang van hun gekoppelde Schoolware-profiel op te volgen, met lokale geschiedenis, meldingen en materiaaloverzichten.
