@@ -21,8 +21,13 @@ can serve as its URL only after confirming anonymous accessibility:
 
 https://github.com/blowdoof/schoolware-watch/blob/main/docs/store/privacy-policy-nl.md
 
-If the repository is private, host this text on a public HTTPS page on bumper.be
-and use that URL instead. A privacy document bundled in the ZIP is insufficient.
+Anonymous access to that GitHub URL returned 404 during preparation. Do not use
+it until public accessibility is confirmed. Upload `server/public/privacy.html`
+beside the deployed `sync.php` and verify
+`https://schoolware.bumper.be/privacy.html` without signing in. This static page
+contains the same policy, no JavaScript and no external assets. Keep both copies
+in sync when editing the policy. No SQL or API changes are needed for this page.
+A privacy document bundled in the ZIP is insufficient.
 Review the hosting operator's actual log/backup retention before certification;
 the application cannot guarantee that those systems delete data immediately.
 
