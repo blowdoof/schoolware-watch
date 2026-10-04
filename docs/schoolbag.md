@@ -7,8 +7,8 @@ The popup and dashboard include **Boekentas** with two separate lists:
   time when positively observed, otherwise the next known weekday. Users can
   select another known day without changing reminders or task progress.
 - **Mee naar huis**: unfinished marked tasks/tests/starred points due on the
-  next known school day after today. This horizon stays independent of browsing
-  the school list. It is not a complete list of all future homework.
+  next known school day after the selected lesson day. Browsing the school list
+  also advances the home-work horizon. It is not a complete list of all future homework.
 
 Laptop is always displayed in both lists. Other entries are deterministic
 suggestions extracted from the already stored agenda title/instructions, grouped

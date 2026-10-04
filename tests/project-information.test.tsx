@@ -22,12 +22,12 @@ describe('local information and external donation navigation', () => {
     const html = renderToStaticMarkup(<InfoPanel section="licenses" onSectionChange={() => {}} onSettings={() => {}} />);
     expect(html).toContain('Bumper.be and contributors');
     expect(html).toContain('WITHOUT WARRANTY');
-    const notices = readFileSync(new URL('../THIRD-PARTY-NOTICES.txt', import.meta.url), 'utf8');
+    const notices = readFileSync(new URL('../THIRD-PARTY-NOTICES.txt', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
     for (const [name, licenseFile] of [['react', 'LICENSE'], ['react-dom', 'LICENSE'], ['scheduler', 'LICENSE'],
       ['idb', 'LICENSE'], ['tailwindcss', 'LICENSE'], ['vite', 'LICENSE.md']] as const) {
       const directory = new URL(`../node_modules/${name}/`, import.meta.url);
       const metadata = JSON.parse(readFileSync(new URL('package.json', directory), 'utf8')) as { version: string };
-      const original = readFileSync(new URL(licenseFile, directory), 'utf8');
+      const original = readFileSync(new URL(licenseFile, directory), 'utf8').replace(/\r\n/g, '\n');
       const license = name === 'vite' ? original.split('# Licenses of bundled dependencies')[0]!.trim() : original.trim();
       expect(notices).toContain(`${name} ${metadata.version}`);
       expect(notices).toContain(license);

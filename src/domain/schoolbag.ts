@@ -81,7 +81,8 @@ export function schoolbagOverview(agenda: BagAgenda, now: Date, selectedDay: str
   const defaultDay = wall.slice(11, 16) < '16:00' && days.includes(today) ? today : nextDay;
   const targetDay = selectedDay && days.includes(selectedDay) ? selectedDay : defaultDay;
   const schoolPoints = agenda.points.filter((point) => point.day === targetDay);
-  const homework = agenda.points.filter((point) => point.day === nextDay && point.status !== 'done' && hasAgendaMarker(point.typePunt));
-  return { today, nextDay, days, targetDay, homeDay: nextDay, school: materialsFor(schoolPoints), homework: materialsFor(homework),
+  const homeDay = targetDay ? days.find((day) => day > targetDay) ?? null : null;
+  const homework = agenda.points.filter((point) => point.day === homeDay && point.status !== 'done' && hasAgendaMarker(point.typePunt));
+  return { today, nextDay, days, targetDay, homeDay, school: materialsFor(schoolPoints), homework: materialsFor(homework),
     schoolPoints, homeworkPoints: homework };
 }

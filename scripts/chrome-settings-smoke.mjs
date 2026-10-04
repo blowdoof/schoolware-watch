@@ -136,11 +136,12 @@ try {
   await poll(() => evaluate(bagSession, `document.querySelector('[aria-label="Boekentas"]')?.textContent.includes('pagina 24-34')`));
   const bag = await evaluate(bagSession, `(() => {
     const section = document.querySelector('[aria-label="Boekentas"]');
-    return { text: section.textContent, laptops: [...section.querySelectorAll('li')].filter(li => li.textContent.includes('Altijd meenemen')).length };
+    return { text: section.textContent, homeText: [...section.querySelectorAll('h3')].find(heading => heading.textContent === 'Mee naar huis').parentElement.textContent, laptops: [...section.querySelectorAll('li')].filter(li => li.textContent.includes('Altijd meenemen')).length };
   })()`);
   assert.equal(bag.laptops, 2);
   assert.ok(bag.text.includes('Mee naar school') && bag.text.includes('Mee naar huis'));
   assert.ok(bag.text.includes('Aardrijkskunde') && bag.text.includes('Werkboek'));
+  assert.ok(!bag.homeText.includes('Werkboek'), 'Same-day workbook must not appear in next-day home packing');
   console.log('Chrome schoolbag smoke passed: worker projection, both packing lists, laptop defaults and synthetic workbook page range.');
 } finally {
   if (socket?.readyState === WebSocket.OPEN) {

@@ -58,7 +58,7 @@ export function SchoolbagOverview({ view, now }: { view: SchoolbagView | null; n
       </div>
       <div className="mt-5 border-t border-teal-200 pt-4">
         <h3 className="font-semibold">Mee naar huis</h3>
-        <p className="mt-2 text-xs text-slate-600">{overview.homeDay ? `Voor nog openstaande taken en toetsen tegen ${dateLabel(overview.homeDay)}. Neem het benodigde materiaal mee naar huis.` : 'Geen volgende lesdag bekend om huiswerk voor te bereiden.'}</p>
+        <p className="mt-2 text-xs text-slate-600">{overview.homeDay ? `Voor nog openstaande taken en toetsen tegen ${dateLabel(overview.homeDay)}. Neem het benodigde materiaal mee naar huis.` : 'Geen latere lesdag bekend na de gekozen lesdag. Controleer je agenda opnieuw.'}</p>
         <PackingList materials={overview.homework} points={overview.homeworkPoints} />
         <p className="mt-2 text-xs text-slate-500">Klaar gemarkeerde taken tellen hier niet mee. Controleer ook werk voor latere dagen.</p>
       </div>

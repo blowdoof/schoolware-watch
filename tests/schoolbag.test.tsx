@@ -48,11 +48,11 @@ describe('local schoolbag suggestions', () => {
   it('uses lessons including finished work for school and only pending marked points for home', () => {
     const lesson = bagPoint({ category: 'other', typePunt: 2, instructions: 'Atlas meebrengen' });
     const done = bagPoint({ status: 'done', instructions: 'Werkboek p. 5' });
-    const pending = bagPoint({ status: 'in-progress', instructions: 'Boek p. 9' });
+    const pending = bagPoint({ day: '2026-10-06', status: 'in-progress', instructions: 'Boek p. 9' });
     const view = { lastSuccessAt: now.toISOString(), points: [lesson, done, pending] };
     const result = schoolbagOverview(view, now);
     expect(result.targetDay).toBe('2026-10-05');
-    expect(result.school.map((item) => item.label)).toEqual(['Atlas', 'Boek', 'Werkboek']);
+    expect(result.school.map((item) => item.label)).toEqual(['Atlas', 'Werkboek']);
     expect(result.homework.map((item) => item.label)).toEqual(['Boek']);
     expect(result.homeworkPoints).toEqual([pending]);
   });
@@ -61,17 +61,35 @@ describe('local schoolbag suggestions', () => {
     expect(schoolbagOverview(agenda, new Date('2026-10-05T05:00:00Z')).targetDay).toBe('2026-10-05');
     const evening = schoolbagOverview(agenda, new Date('2026-10-05T14:00:00Z'));
     expect(evening.targetDay).toBe('2026-10-06');
-    expect(evening.homeDay).toBe('2026-10-06');
+    expect(evening.homeDay).toBeNull();
     expect(evening.days).not.toContain('2026-10-10');
     expect(schoolbagOverview(agenda, now, '2026-10-09').targetDay).toBe('2026-10-05');
     expect(schoolbagOverview({ points: [], lastSuccessAt: null }, now).targetDay).toBeNull();
   });
-  it('keeps the home-work horizon independent of browsing a later school day', () => {
+  it('does not include the selected day in home packing, on weekends or after 16:00', () => {
+    const monday = bagPoint();
+    const tuesday = bagPoint({ day: '2026-10-06', subject: 'Frans', instructions: 'Werkboek p. 50' });
+    const agenda = { points: [monday, tuesday], lastSuccessAt: now.toISOString() };
+    for (const time of ['2026-10-04T18:00:00Z', '2026-10-05T05:00:00Z']) {
+      const overview = schoolbagOverview(agenda, new Date(time));
+      expect(overview.targetDay).toBe('2026-10-05');
+      expect(overview.homeDay).toBe('2026-10-06');
+      expect(overview.homeworkPoints).toEqual([tuesday]);
+    }
+    const evening = schoolbagOverview(agenda, new Date('2026-10-05T18:00:00Z'));
+    expect(evening.targetDay).toBe('2026-10-06');
+    expect(evening.homeDay).toBeNull();
+    expect(evening.homeworkPoints).toEqual([]);
+  });
+  it('moves the homework horizon to the known school day after the selected lesson day', () => {
     const first = bagPoint(); const later = bagPoint({ day: '2026-10-07', instructions: 'Atlas' });
     const result = schoolbagOverview({ points: [first, later], lastSuccessAt: now.toISOString() }, now, '2026-10-07');
     expect(result.schoolPoints).toEqual([later]);
-    expect(result.homeworkPoints).toEqual([first]);
-    expect(result.homeDay).toBe('2026-10-05');
+    expect(result.homeworkPoints).toEqual([]);
+    expect(result.homeDay).toBeNull();
+    const monday = schoolbagOverview({ points: [first, later], lastSuccessAt: now.toISOString() }, now);
+    expect(monday.homeworkPoints).toEqual([later]);
+    expect(monday.homeDay).toBe('2026-10-07');
   });
 });
 
