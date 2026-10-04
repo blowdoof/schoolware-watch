@@ -1,0 +1,250 @@
+import { compareObservations, pruneHistory, type CheckInput, type HistoryScope } from '../domain/observations';
+import { openHistoryDatabase, ensureLocalIdentity, HISTORY_DB } from './database';
+import { activityInput, appendActivity, pruneActivity, type AuditContext } from './activity';
+import { isAlertId } from '../shared/browser-alerts';
+import { isTaskCategory, isTaskStatus, type TaskStatus } from '../domain/tasks';
+import { progressVersion, progressVersionText } from '../domain/progress-sync';
+import { SYNC_STATE_KEY } from '../shared/progress-sync';
+import { MAX_TASK_UPDATES, createTasksView } from '../shared/tasks';
+import { todoReminderSelection } from '../domain/todo';
+import type { Category } from '../domain/observations';
+
+export { HISTORY_DB, HISTORY_VERSION, openHistoryDatabase } from './database';
+
+export const RETENTION_DAYS = [30, 90, 180, 365] as const;
+export const DEFAULT_RETENTION = 90;
+
+export function retentionCutoff(now: string, days: number): string {
+  return new Date(Date.parse(now) - days * 86400000).toISOString();
+}
+
+export class HistoryRepository {
+  constructor(private readonly name = HISTORY_DB) {}
+
+  async record(input: CheckInput, signal?: AbortSignal, audit?: AuditContext): Promise<HistoryScope> {
+    const versions = new Map(await Promise.all(input.points.map(async (point) => [point.sourceKey, await progressVersion(point.snapshot)] as const)));
+    const db = await openHistoryDatabase(this.name);
+    try {
+      const tx = db.transaction(['scopes', 'settings', 'activity', 'sync'], 'readwrite');
+      const aborted = () => { try { tx.abort(); } catch { /* Already completed. */ } };
+      signal?.addEventListener('abort', aborted, { once: true });
+      // Always observe tx.done, including a synchronous comparison error.
+      const done = tx.done;
+      void done.catch(() => {});
+      try {
+        if (signal?.aborted) throw new Error('Observation cancelled');
+        const retention = await tx.objectStore('settings').get('retentionDays') ?? DEFAULT_RETENTION;
+        const cutoff = retentionCutoff(input.observedAt, retention);
+        const scopes = tx.objectStore('scopes');
+        // Clean up all scopes so old profiles cannot remain hidden indefinitely.
+        const retained = await scopes.getAll();
+        let previous: HistoryScope | null = null;
+        for (const scope of retained) {
+          const pruned = pruneHistory(scope, cutoff);
+          if (!pruned) {
+            await scopes.delete(scope.scopeId);
+            if ((await tx.objectStore('sync').get(SYNC_STATE_KEY))?.scopeId === scope.scopeId) await tx.objectStore('sync').delete(SYNC_STATE_KEY);
+          }
+          else { const migrated = ensureLocalIdentity(pruned); await scopes.put(migrated); if (scope.scopeId === input.scopeId) previous = migrated; }
+        }
+        const oldItems = new Map(previous?.items.map((item) => [item.sourceKey, item]) ?? []);
+        const next = ensureLocalIdentity(compareObservations(previous, { ...input, points: input.points.map((point) =>
+          ({ ...point, localId: oldItems.get(point.sourceKey)?.localId ?? crypto.randomUUID() })) }));
+        await scopes.put(next);
+        const sync = await tx.objectStore('sync').get(SYNC_STATE_KEY);
+        if (sync?.scopeId === input.scopeId) {
+          for (const event of next.events.filter((event) => event.taskReopened &&
+            event.id === JSON.stringify([input.checkId, event.sourceKey, event.kind]))) {
+            sync.outbox = sync.outbox.filter((operation) => operation.sourceKey !== event.sourceKey);
+            sync.outbox.push({ id: crypto.randomUUID(), sourceKey: event.sourceKey,
+              version: versions.get(event.sourceKey)!, status: 'in-progress', kind: 'reopen' });
+          }
+          await tx.objectStore('sync').put(sync, SYNC_STATE_KEY);
+        }
+        if (!previous?.checks.some((check) => check.checkId === input.checkId)) {
+          const trace = { ...(audit ?? { correlationId: isAlertId(input.checkId) ? input.checkId : crypto.randomUUID(),
+            spanId: crypto.randomUUID(), context: 'worker' as const }), profileId: next.localId! };
+          const items = new Map(next.items.map((item) => [item.sourceKey, item]));
+          for (const event of next.events.filter((entry) => entry.id === JSON.stringify([input.checkId, entry.sourceKey, entry.kind]))) {
+            await appendActivity(tx.objectStore('activity'), activityInput(trace, `observation.${event.kind}`, 'succeeded',
+              { fields: event.fields }, { timestamp: input.observedAt, itemId: items.get(event.sourceKey)!.localId! }));
+            if (event.taskReopened) {
+              await appendActivity(tx.objectStore('activity'), activityInput(trace, 'task.status', 'succeeded',
+                { from: 'done', to: 'in-progress', reason: 'source-changed' },
+                { timestamp: input.observedAt, itemId: items.get(event.sourceKey)!.localId! }));
+            }
+          }
+          await appendActivity(tx.objectStore('activity'), activityInput(trace, 'check', 'succeeded',
+            { count: next.items.length, added: next.checks.at(-1)!.counts.observed, changed: next.checks.at(-1)!.counts.changed },
+            { timestamp: input.observedAt }));
+        }
+        await pruneActivity(tx.objectStore('activity'), cutoff);
+        if (signal?.aborted) throw new Error('Observation cancelled');
+        await done;
+        return next;
+      } catch (error) {
+        aborted();
+        await done.catch(() => {});
+        throw error;
+      } finally { signal?.removeEventListener('abort', aborted); }
+    } finally { db.close(); }
+  }
+
+  async read(scopeId: string | null, now = new Date().toISOString()): Promise<{ scope: HistoryScope | null; retentionDays: number }> {
+    const db = await openHistoryDatabase(this.name);
+    try {
+      const tx = db.transaction(['scopes', 'settings', 'sync'], 'readwrite');
+      const done = tx.done;
+      void done.catch(() => {});
+      const retentionDays = await tx.objectStore('settings').get('retentionDays') ?? DEFAULT_RETENTION;
+      const cutoff = retentionCutoff(now, retentionDays);
+      let scope: HistoryScope | null = null;
+      for (const old of await tx.objectStore('scopes').getAll()) {
+        const pruned = pruneHistory(old, cutoff);
+        if (pruned) { const migrated = ensureLocalIdentity(pruned); await tx.objectStore('scopes').put(migrated); if (old.scopeId === scopeId) scope = migrated; }
+        else {
+          await tx.objectStore('scopes').delete(old.scopeId);
+          if ((await tx.objectStore('sync').get(SYNC_STATE_KEY))?.scopeId === old.scopeId) await tx.objectStore('sync').delete(SYNC_STATE_KEY);
+        }
+      }
+      const sync = await tx.objectStore('sync').get(SYNC_STATE_KEY);
+      if (sync && !await tx.objectStore('scopes').get(sync.scopeId)) await tx.objectStore('sync').delete(SYNC_STATE_KEY);
+      await done;
+      return { scope, retentionDays };
+    } finally { db.close(); }
+  }
+
+  async setRetention(days: number, now = new Date().toISOString()): Promise<void> {
+    if (!(RETENTION_DAYS as readonly number[]).includes(days)) throw new Error('Invalid retention');
+    const db = await openHistoryDatabase(this.name);
+    try {
+      const tx = db.transaction(['scopes', 'settings', 'activity', 'sync'], 'readwrite');
+      const done = tx.done;
+      void done.catch(() => {});
+      await tx.objectStore('settings').put(days, 'retentionDays');
+      const cutoff = retentionCutoff(now, days);
+      for (const scope of await tx.objectStore('scopes').getAll()) {
+        const pruned = pruneHistory(scope, cutoff);
+        if (pruned) await tx.objectStore('scopes').put(pruned);
+        else await tx.objectStore('scopes').delete(scope.scopeId);
+      }
+      const sync = await tx.objectStore('sync').get(SYNC_STATE_KEY);
+      if (sync && !await tx.objectStore('scopes').get(sync.scopeId)) await tx.objectStore('sync').delete(SYNC_STATE_KEY);
+      await pruneActivity(tx.objectStore('activity'), cutoff);
+      await done;
+    } finally { db.close(); }
+  }
+
+  async clearScope(scopeId: string): Promise<void> {
+    const db = await openHistoryDatabase(this.name);
+    try {
+      const tx = db.transaction(['scopes', 'activity', 'sync'], 'readwrite');
+      const sync = await tx.objectStore('sync').get(SYNC_STATE_KEY);
+      if (sync?.scopeId === scopeId) await tx.objectStore('sync').delete(SYNC_STATE_KEY);
+      const scope = await tx.objectStore('scopes').get(scopeId);
+      if (scope?.localId) {
+        const entries = await tx.objectStore('activity').getAll();
+        const correlations = new Set(entries.filter((entry) => entry.profileId === scope.localId).map((entry) => entry.correlationId));
+        for (const entry of entries) if (entry.profileId === scope.localId || correlations.has(entry.correlationId)) {
+          await tx.objectStore('activity').delete(entry.sequence!);
+        }
+      }
+      await tx.objectStore('scopes').delete(scopeId);
+      await tx.done;
+    } finally { db.close(); }
+  }
+
+  async setTaskStatus(scopeId: string, itemId: string, status: TaskStatus, trace: AuditContext): Promise<void> {
+    await this.setTaskStatuses(scopeId, [itemId], status, trace);
+  }
+
+  async setTaskStatuses(scopeId: string, itemIds: string[], status: TaskStatus, trace: AuditContext): Promise<void> {
+    if (!itemIds.length || itemIds.length > MAX_TASK_UPDATES || !itemIds.every(isAlertId) ||
+        new Set(itemIds).size !== itemIds.length || !isTaskStatus(status)) throw new Error('Invalid task update');
+    const db = await openHistoryDatabase(this.name);
+    try {
+      const previous = await db.get('scopes', scopeId);
+      const prepared = await Promise.all(itemIds.map(async (itemId) => {
+        const before = previous?.items.find((item) => item.localId === itemId);
+        if (!before) throw new Error('Task unavailable');
+        return { itemId, snapshot: before.snapshot, version: await progressVersion(before.snapshot) };
+      }));
+      const tx = db.transaction(['scopes', 'settings', 'activity', 'sync'], 'readwrite');
+      const done = tx.done; void done.catch(() => {});
+      try {
+        const scope = await tx.objectStore('scopes').get(scopeId);
+        if (!scope?.localId) throw new Error('Task unavailable');
+        const timestamp = new Date().toISOString();
+        const sync = await tx.objectStore('sync').get(SYNC_STATE_KEY);
+        let changed = false;
+        for (const { itemId, snapshot, version } of prepared) {
+          const item = scope.items.find((entry) => entry.localId === itemId && entry.present &&
+            !entry.snapshot.hidden && !entry.snapshot.cancelled && isTaskCategory(entry.category));
+          if (!item) throw new Error('Task unavailable');
+          if (progressVersionText(snapshot) !== progressVersionText(item.snapshot)) throw new Error('Task changed');
+          const from = item.taskStatus ?? 'open';
+          if (from !== status) { item.taskStatus = status; item.taskUpdatedAt = timestamp; changed = true; }
+          if (from !== status && sync?.scopeId === scopeId) {
+            // Coalesce unsent edits without replacing an operation in flight.
+            sync.outbox = sync.outbox.filter((operation) => operation.sourceKey !== item.sourceKey);
+            sync.outbox.push({ id: crypto.randomUUID(), sourceKey: item.sourceKey, version, status, kind: 'manual' });
+          }
+          await appendActivity(tx.objectStore('activity'), activityInput({ ...trace, profileId: scope.localId }, 'task.status',
+            from === status ? 'skipped' : 'succeeded', { from, to: status, ...(from === status ? { reason: 'unchanged' as const } : {}) }, { itemId, timestamp }));
+        }
+        if (changed) {
+          await tx.objectStore('scopes').put(scope);
+          if (sync?.scopeId === scopeId) await tx.objectStore('sync').put(sync, SYNC_STATE_KEY);
+        }
+        const retention = await tx.objectStore('settings').get('retentionDays') ?? DEFAULT_RETENTION;
+        await pruneActivity(tx.objectStore('activity'), retentionCutoff(timestamp, retention));
+        await done;
+      } catch (error) { try { tx.abort(); } catch { /* Completed. */ } await done.catch(() => {}); throw error; }
+    } finally { db.close(); }
+  }
+
+  // Claim before calling the external notification API: a worker interruption
+  // may lose a notification, but cannot display the same check twice.
+  async claimNotification(scopeId: string, checkId: string, now: string): Promise<boolean> {
+    const db = await openHistoryDatabase(this.name);
+    try {
+      const tx = db.transaction('scopes', 'readwrite');
+      const scope = await tx.store.get(scopeId);
+      const check = scope?.checks.find((entry) => entry.checkId === checkId);
+      if (!scope || !check || check.notificationClaimedAt) { await tx.done; return false; }
+      check.notificationClaimedAt = now;
+      await tx.store.put(scope);
+      await tx.done;
+      return true;
+    } finally { db.close(); }
+  }
+
+  async claimTodoReminder(scopeId: string, now: Date, categories: Category[], channels: { browser: boolean; system: boolean }) {
+    const db = await openHistoryDatabase(this.name);
+    try {
+      const tx = db.transaction('scopes', 'readwrite');
+      const scope = await tx.store.get(scopeId);
+      const selection = scope ? todoReminderSelection(createTasksView(scope), now, categories) : null;
+      if (!scope || !selection) { await tx.done; return null; }
+      const state = scope.todoReminder?.day === selection.day ? scope.todoReminder : { id: crypto.randomUUID(), day: selection.day };
+      const browser = channels.browser && !state.browserClaimedAt;
+      const system = channels.system && !state.systemClaimedAt;
+      if (browser) state.browserClaimedAt = now.toISOString();
+      if (system) state.systemClaimedAt = now.toISOString();
+      scope.todoReminder = state;
+      await tx.store.put(scope);
+      await tx.done;
+      return { ...selection, id: state.id, browser, system };
+    } finally { db.close(); }
+  }
+
+  async clearAll(): Promise<void> {
+    const db = await openHistoryDatabase(this.name);
+    try {
+      const tx = db.transaction(['scopes', 'settings', 'activity', 'sync'], 'readwrite');
+      await tx.objectStore('sync').clear();
+      await Promise.all([tx.objectStore('scopes').clear(), tx.objectStore('settings').clear(), tx.objectStore('activity').clear()]);
+      await tx.done;
+    } finally { db.close(); }
+  }
+}

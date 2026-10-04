@@ -1,0 +1,36 @@
+{
+  "success": true,
+  "data": [
+    {
+      "ID": 41000000001,
+      "AgendaID": 10,
+      "UniekAgendaPuntID": 200,
+      "Titel": "Synthetic recurring entry",
+      "TypePunt": 1,
+      "GeldigVan": "2026-09-01 00:00:00",
+      "Van": "2026-10-01 09:00:00",
+      "Tot": "2026-10-01 09:50:00",
+      "HerhaaldAgendaPuntID": 300,
+      "Herhaling": "FREQ=WEEKLY;UNTIL=20270630;",
+      "Verborgen": false,
+      "Vervalt": false,
+      "AgendaOmschrijving": "Synthetic profile",
+      "PersoneelNaam": "Synthetic staff",
+      "Commentaar": ""
+    },
+    {
+      "ID": 41000000002,
+      "AgendaID": 10,
+      "UniekAgendaPuntID": 200,
+      "OrigineelPuntID": 400,
+      "Titel": "Synthetic later occurrence",
+      "TypePunt": 9876,
+      "GeldigVan": "2026-09-01 00:00:00",
+      "Van": "2026-10-08 09:00:00",
+      "Tot": "2026-10-08 09:50:00",
+      "Herhaling": "",
+      "Verborgen": false,
+      "Vervalt": false
+    }
+  ]
+}
