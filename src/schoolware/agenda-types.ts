@@ -7,11 +7,12 @@ export type AgendaTypeCounts = Record<AgendaCategory, number>;
 export function classifyAgendaType(origin: string, typePunt: number): AgendaCategory {
   if (origin !== SCHOOLWARE_ORIGIN) return 'other';
   switch (typePunt) {
+    case 100:
     case 101: return 'tests';
+    case 1002:
     case 1001: return 'assignments';
-    // Type 2 includes both assignment-like instructions and ordinary lesson content.
-    // Titles are not a reliable basis for resolving that ambiguity automatically.
-    case 2: return 'review';
+    // Starred points are relevant, without asserting assignment/test semantics.
+    case 9: return 'review';
     default: return 'other';
   }
 }

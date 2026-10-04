@@ -1,11 +1,25 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { checkAgenda } from '../src/schoolware/agenda-client';
+import { checkAgenda, MAX_AGENDA_RESPONSE_BYTES } from '../src/schoolware/agenda-client';
 import fixture from './fixtures/synthetic-agenda.json';
 import { requestUrl } from './fixtures/agenda-request';
 
 afterEach(() => { vi.useRealTimers(); });
 
 describe('manual session check', () => {
+  it('rejects oversized response headers and streamed bodies without returning source content', async () => {
+    for (const declared of [true, false]) {
+      const cancelled = vi.fn();
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) { controller.enqueue(new Uint8Array(MAX_AGENDA_RESPONSE_BYTES + 1)); },
+        cancel: cancelled,
+      });
+      const response = new Response(body, declared ? { headers: { 'Content-Length': String(MAX_AGENDA_RESPONSE_BYTES + 1) } } : undefined);
+      const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response);
+      expect(await checkAgenda(requestUrl, { fetch: fetcher })).toEqual({ status: 'invalid-response', count: null });
+      expect(cancelled).toHaveBeenCalledOnce();
+      expect(response.body?.locked).toBe(false);
+    }
+  });
   it('uses browser-managed credentials, bounded redirects and no credential headers', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json(fixture));
     expect(await checkAgenda(requestUrl, { fetch: fetcher })).toEqual({ status: 'success', count: 2,

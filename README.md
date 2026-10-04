@@ -3,15 +3,20 @@
 An independent Chrome extension that monitors
 Schoolware agenda changes.
 
-## Features (planned)
+## Features
 
 - Automatic agenda monitoring
 - Detection of new assignments and tests
 - Change history
 - Browser notifications
 - Local data storage
-- Multiple student profiles
-- CSV export
+- Optional encrypted progress sharing through a self-hosted PHP/MySQL API
+
+For the owner's cPanel host, see [server/INSTALL.md](server/INSTALL.md).
+This optional service shares Open/Bezig/Klaar only. Agenda content and history
+remain local. Live cPanel and two-device Chrome checks are pending installation.
+
+Multiple student profiles and CSV export remain planned.
 
 ## Technology
 
@@ -19,13 +24,20 @@ TypeScript, React, Vite, Chrome Manifest V3.
 
 ## Status
 
-Phase 2: manual connection diagnostic for the observed Schoolware installation.
+Phase 4: periodic checks, rolling date coverage, configurable event colors,
+optional system notifications and Schoolware-page banners for upcoming
+new/changed points. Local IndexedDB
+history preserves baselines and first-observation/change events. Settings
+provide polling, notification, retention and deletion controls.
 Response validation and session-aware error handling are implemented. The project
 owner confirmed a successful live Chrome check on 2026-10-01: 449 agenda points
 were received and validated through the existing browser session. The check also
 succeeded with the Schoolware tab closed, and logout produced the expected
-session-unavailable status. Popup-close recovery still needs a live check. Automatic monitoring and
-observation history are not implemented yet.
+session-unavailable status. The owner reported another successful session check
+on 2026-10-02. Live testing of the new history UI and popup-close recovery remains
+pending. The owner confirmed Windows notification delivery on 2026-10-02 after
+enabling Chrome notifications in Windows settings. Live verification of alarms
+and the new Schoolware-page banner remains pending.
 
 ## Development
 
@@ -50,36 +62,191 @@ select this project's `dist` directory. Open the toolbar popup, follow its
 dashboard link, and open settings. Check the service worker for startup errors.
 Use `npm run build:watch` during extension development and reload the extension
 after rebuilds. Schoolware host access is optional and requested only when
-starting a manual check.
+starting a manual check or recognizing an agenda.
 
-## Manual connection check
+## Connect Schoolware
 
-Log in to Schoolware in the same Chrome profile. In extension settings, paste
-only the Request URL from the observed AgendaPunt request into **Agendalink**,
-then choose **Nu controleren**. The first integration supports only
-`schoolware_siw.ksgwl.be`. The URL's dates determine the checked period; they
-are not updated automatically. Never paste cookies or authentication headers.
+Click **Schoolware verbinden** in the extension and grant optional access.
+Sign in in the newly opened Schoolware tab and open the desired pupil's agenda.
+Return to the extension, verify the selection, check the confirmation box and
+click **Deze agenda koppelen**. Developer tools and copied URLs are unnecessary.
+Recognition remains active for five minutes in that dedicated tab. The
+extension validates the observed request and fetches the agenda through the
+existing browser session before creating the local baseline. Existing
+connections do not change until explicitly confirmed.
+
+The current integration supports only `schoolware_siw.ksgwl.be`. Every computer
+still connects to its own Schoolware session; the progress pairing code does
+not grant Schoolware access. The manual URL field remains under **Geavanceerd**
+for troubleshooting. See [automatic connection](docs/agenda-discovery.md).
+
+For both manual and periodic checks, request dates roll from seven days before
+today to at least fourteen days ahead (or the notification horizon, if longer),
+with an extra day at the upper boundary. Never paste cookies or authentication headers.
 
 The result reports a validated agenda-point count or a connection error.
 Successful checks also show supported test/assignment counts, mixed lesson
 content needing review, and other points. For this installation, TypePunt 101
 maps to tests and 1001 to assignments. TypePunt 2 remains ambiguous because it
-also represents ordinary lesson content. Other codes are not classified yet. No
-observation history is created, even for a valid empty response. Use
-**Koppeling wissen en toegang intrekken** to delete the local link/result and
-revoke host access. See the API investigation for the pending browser checks.
+also represents ordinary lesson content. Other codes are not classified yet.
+
+## Observation history
+
+The first successful nonempty check establishes a baseline for the exact
+installation, pupil and configured agenda URL. The dashboard reports
+first observations and changes to titles, pupil-visible instructions, planning,
+source validity dates, type, recurrence, and visibility/cancellation flags.
+Unchanged checks update last-seen times without duplicating content versions.
+
+Only identical source-ID tuples are compared; identity stability across checks
+is not yet proven. Changed IDs are separate observations, not automatically
+merged entities. Editing the configured URL's date window or selection starts a
+separate scope; automatically rolling request dates keep the configured scope.
+Newly covered days receive baseline events, rather than new-item alerts. Only
+new source tuples strictly inside previously checked coverage are classified as
+first observations. This is conservative because API boundary inclusion and
+pagination completeness remain unverified.
+First observation never means source creation time, and GeldigVan is not used
+as creation time. Incomplete or failed responses do not generate disappearance
+events. Disappearance detection remains disabled pending completeness and
+identity verification.
+
+History stays in local IndexedDB. The default retention is 90 days; settings
+offer 30, 90, 180, and 365 days. Loading, checking, and changing retention prune
+expired events/checks across all scopes. Recently observed current content
+remains available. Clearing the active selection starts its next baseline anew.
+**Koppeling en alle geschiedenis wissen** deletes all scopes, resets retention,
+removes connection and monitoring configuration, cancels the alarm, clears
+extension notifications, and revokes Schoolware access.
+
+## Automatic checks, colors and notifications
+
+After connection, polling defaults to every 15 minutes. Settings allow 5, 15,
+30 or 60 minutes, or disabling polling. The popup reports whether an alarm is
+scheduled, its next planned time, and retry delays. Failed checks use persisted
+exponential backoff capped at six hours. Manual checks can retry immediately.
+Worker startup restores a missing alarm without resetting an existing schedule.
+Checks never overlap. Chrome must be running; sleeping devices can delay alarms.
+
+First observations have a green accent and changes an orange accent in the
+dashboard. Both colors are configurable; text labels always identify event kinds.
+Baseline entries remain neutral.
+
+Both notification channels are off by default. Enable system notifications in
+settings and grant Chrome's optional notification permission. For a banner on
+the actual Schoolware website, enable **Banner op de Schoolware-webpagina** and
+grant optional scripting access to the existing Schoolware origin. Banners are
+never injected into other websites or the extension's own pages. They require
+an open Schoolware tab; notifications remain pending until dismissed, and a
+toolbar badge shows their count. Neither channel depends on the other.
+Choose 1–30 future calendar days (default 3),
+and select categories. Confirmed tests and assignments are selected by default;
+ambiguous TypePunt 2 entries and other codes can be included explicitly.
+Only new/changed events detected during a successful check qualify, using the
+point's planned start between now and the selected limit. Source timestamps are
+assumed to use Europe/Brussels wall time for this installation; that assumption
+still requires API verification. Crossing into the time window alone does not
+create an alert. Baseline, hidden/cancelled points and failed checks never alert.
+
+One generic notification per qualifying check contains counts, with no student
+names or agenda titles. Clicking opens the affected lesson details. All fetched
+points in each affected lesson appear, including unchanged lesson content. New
+and changed items use the configured colors and text labels; changes include
+before/after values. Details are frozen at the observation, stored atomically
+with history, and remain available after worker restart until retention/deletion.
+Older notifications without detail snapshots show an unavailable message.
+A durable claim prevents
+repeated notification delivery for the same check; an interruption between
+commit/claim and delivery can lose a notification. Notifications are best effort,
+while committed history remains available. Use **Testmelding systeem** to verify
+Chrome/OS notification delivery without needing a real agenda change. The test
+reports Chrome permission/registration status, which does not prove a visible
+OS banner, and requests that the test toast remain until dismissed.
+
+For the banner, open a Schoolware page and choose **Testbanner op Schoolware**
+in extension settings. This button works before saving: it requests optional
+permission, enables banners and injects the script into existing Schoolware tabs.
+Preference changes save automatically. A generic banner should appear
+at the bottom right of Schoolware. Each notification is clickable to open its
+lesson details; **Sluiten** dismisses the pending notifications. Both test
+channels open an explicitly synthetic lesson preview, without adding history.
+Closing dismisses the current selection's pending banners on all Schoolware
+tabs and clears the badge; observation history stays intact. Unread banners
+survive worker restarts. Their generic inbox is capped at 20 notifications across
+selections and follows the configured retention period. Clearing selection
+history also clears its banners; disconnect removes every banner and unregisters
+the content script. Disabling banners stops injection and hides existing banners;
+Chrome keeps granted optional permission until revoked or disconnected.
+
+After rebuilding, reload the extension at `chrome://extensions`. Open settings,
+confirm automatic checks are active, enable notifications, then show a
+test notification. For a quick polling smoke check, choose 5 minutes, close the
+popup, and verify the last-attempt time advances after one interval. Reload the
+extension to check schedule recovery. Repeat while logged out: the session error
+must not alter history or produce notifications. Restore the preferred interval.
+
+After loading the new build, run a manual check and open **Overzicht**. Run a
+second unchanged check: it should report zero new observations and changes.
+Reload the extension and confirm the history remains. Test session logout and
+deletion as described in the API investigation.
+
+## Activity logging and local task progress
+
+Activity logging is enabled automatically. In settings, **Activiteitenlog** shows
+timestamped requests, checks, observation kinds, alarm/retry operations, permission
+results and notification creation/rendering/click/closure/dismissal. A check and
+its alerts share a random correlation ID; individual actions have span IDs. Local
+item IDs connect observations and progress changes across different checks.
+Filter by either ID, refresh the log, or export retained metadata to a local JSON
+file. No raw payload, URL, student identifier, instruction or credential is logged.
+The log follows history retention and is capped at 20,000 entries; oldest entries
+are removed first. Logs cannot reconstruct activity before this build or prove
+that Windows displayed a toast. Clearing logs leaves no deletion receipt; later
+actions start new entries. Disconnect removes logs as well as all profile data.
+
+The dashboard's **Taken en voortgang** section offers **Bezig** and **Klaar**
+checkboxes. Unchecking returns the task to **Open**. Progress also appears in
+new notification lesson details when the item is still in the active selection.
+Status changes and audit entries commit together. Status survives checks, content
+changes and worker restarts; it is local and does not update Schoolware's
+`Completed` field. Source-ID changes still represent separate items and do not
+automatically inherit progress. TypePunt 2 remains explicitly marked for review.
+Clear active history to remove its progress and related logs, or disconnect to
+remove every selection. The existing retention setting also applies to logs.
 
 ## Documentation
 
 - [Architecture](docs/architecture.md)
 - [API investigation](docs/schoolware-api.md)
 - [Privacy](docs/privacy.md)
+- [Security, privacy and notification review](docs/security-review.md)
 - [Roadmap](docs/roadmap.md)
+- [Monitoring and notification smoke checks](docs/monitoring.md)
+- [Activity logging and task progress](docs/activity-and-tasks.md)
 - [Contributor instructions](AGENTS.md)
+- [Project information, licensing and donations](docs/project-information.md)
+
+## Project information and license
+
+The extension footer opens **Info**, **Privacy**, **Open source** and **Steunen**
+inside the current window. Schoolware Watch is an independent Bumper.be project,
+licensed under [MIT](LICENSE). Full third-party copyright and license notices
+are displayed locally and included in the built extension. The optional PayPal
+link opens externally on a user click; it adds no payment SDK or data collection.
+
+The to-do **Volgende schooldag** button browses later known weekdays from the
+latest observed agenda; **Vorige schooldag** and **Terug naar eerstvolgende
+schooldag** return to earlier planning. Later selections show only that day's
+pending work. The default view includes today and the first known future school
+day. Browsing does not change progress, overdue grouping or reminder scheduling.
 
 ## Privacy
 
-All personal Schoolware data will remain stored locally. No credentials are
-persisted and no real student data may be committed. The manual diagnostic
-stores only the local request configuration and last attempt summary; fetched
-agenda content is not persisted.
+All personal Schoolware data remains local. No credentials are persisted and no
+real student data may be committed. History stores a minimized field allowlist;
+raw responses, staff/student descriptions, and private comment fields are not
+retained. HTML instructions are rendered as text, never executed.
+Lesson drill-down additionally retains subject, room and a scoped lesson-grouping
+hint. Staff names and student descriptions are excluded. Grouping uses agenda,
+LesDataID and exact planning times; without LesDataID it falls back to the same
+agenda/time. This is presentation grouping, not verified stable lesson identity.

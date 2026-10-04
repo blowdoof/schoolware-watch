@@ -13,3 +13,24 @@
 
 Publication and uploads require separate authorization. Chrome loading and
 worker behavior need browser smoke checks in addition to automated tests.
+
+Current implementation: phases 1 and the manual session integration in phase 2
+are available. Phase 3 provides scoped, local baseline/first-observation/
+change history and retention/deletion controls. Phase 4 adds rolling coverage,
+alarms, durable backoff, overlap prevention and restart recovery. Configurable
+colors, optional system notifications and an optional Schoolware-page banner are
+also available. System notification delivery was owner-confirmed on 2026-10-02.
+Both channels now open captured lesson details with configurable new/changed
+accents and before/after values. The test-banner button can enable and test the
+banner directly after permission approval, without saving first. Test clicks
+open synthetic previews without adding observations.
+Version 2 adds always-on local activity logs with correlation/span IDs, filtering,
+local JSON export and deletion. Task progress (open/in-progress/done) persists
+locally and is committed atomically with its audit entry. Real version-1 migration,
+profile isolation, restarts, logging failure reporting and rollback are tested.
+Live Chrome alarm, banner and popup-close checks remain pending. Stable entity
+identity, pagination completeness, full TypePunt
+mapping and source timezone semantics remain research items. Disappearance is
+implemented only in the pure comparison engine behind verified completeness and
+identity flags; the live adapter leaves both false. Multiple profiles and safe
+export remain future work.

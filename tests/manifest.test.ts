@@ -10,11 +10,13 @@ describe('extension security contract', () => {
     expect(manifest.content_security_policy.extension_pages).toBe("script-src 'self'; object-src 'self'");
   });
 
-  it('only permits local settings and optional access to the verified installation', () => {
-    expect(manifest.permissions ?? []).toEqual(['storage']);
+  it('only permits local settings, alarms and optional notifications/site access', () => {
+    expect(manifest.permissions ?? []).toEqual(['storage', 'alarms']);
+    expect(manifest.optional_permissions).toEqual(['notifications', 'scripting', 'webRequest']);
     expect(manifest.host_permissions ?? []).toEqual([]);
-    expect(manifest.optional_host_permissions).toEqual(['https://schoolware_siw.ksgwl.be/*']);
+    expect(manifest.optional_host_permissions).toEqual(['https://schoolware_siw.ksgwl.be/*', 'https://schoolware.bumper.be/*']);
     expect(manifest.content_scripts ?? []).toEqual([]);
+    expect(existsSync(new URL(`../public/${manifest.icons['128']}`, import.meta.url))).toBe(true);
   });
 
   it('references existing UI entry points', () => {

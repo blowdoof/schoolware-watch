@@ -5,6 +5,7 @@ export interface AgendaPoint {
   OrigineelPuntID?: number;
   UniekAgendaPuntID: number;
   Titel: string;
+  PublicComment?: string;
   TypePunt: number;
   GeldigVan: string;
   Van: string;
@@ -13,15 +14,20 @@ export interface AgendaPoint {
   Herhaling?: string;
   Verborgen?: boolean;
   Vervalt?: boolean;
+  LesDataID?: number;
+  VakNaam?: string;
+  LokaalCode?: string;
+  LokaalOmschrijving?: string;
 }
 
 export type AgendaResponseResult =
   | { ok: true; points: AgendaPoint[]; completeness: 'unverified' }
   | { ok: false; reason: 'invalid-json' | 'api-failure' | 'invalid-response' }
-  | { ok: false; reason: 'invalid-item'; index: number; field: keyof AgendaPoint | null };
+  | { ok: false; reason: 'invalid-item'; index: number; field: keyof AgendaPoint | 'Commentaar' | null };
 
 const requiredIds = ['ID', 'AgendaID', 'UniekAgendaPuntID', 'TypePunt'] as const;
-const optionalIds = ['OrigineelPuntID', 'HerhaaldAgendaPuntID'] as const;
+const optionalIds = ['OrigineelPuntID', 'HerhaaldAgendaPuntID', 'LesDataID'] as const;
+const optionalText = ['VakNaam', 'LokaalCode', 'LokaalOmschrijving'] as const;
 const dates = ['GeldigVan', 'Van', 'Tot'] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -46,6 +52,17 @@ function isSourceDate(value: unknown): value is string {
     day <= (daysInMonth[month - 1] ?? 0) && hour <= 23 && minute <= 59 && second <= 59;
 }
 
+function publicComment(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  if (!value.trimStart().startsWith('{') && !value.trimStart().startsWith('[')) return value;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!isRecord(parsed)) return null;
+    if (!Object.hasOwn(parsed, 'leerlingen')) return '';
+    return typeof parsed.leerlingen === 'string' ? parsed.leerlingen : null;
+  } catch { return null; }
+}
+
 /** Validate all items before returning any; errors contain no source values. */
 export function validateAgendaResponse(value: unknown): AgendaResponseResult {
   if (!isRecord(value)) return { ok: false, reason: 'invalid-response' };
@@ -57,7 +74,7 @@ export function validateAgendaResponse(value: unknown): AgendaResponseResult {
   const points: AgendaPoint[] = [];
   for (let index = 0; index < value.data.length; index++) {
     const item: unknown = value.data[index];
-    const invalid = (field: keyof AgendaPoint | null): AgendaResponseResult =>
+    const invalid = (field: keyof AgendaPoint | 'Commentaar' | null): AgendaResponseResult =>
       ({ ok: false, reason: 'invalid-item', index, field });
     if (!isRecord(item)) return invalid(null);
     for (const field of requiredIds) {
@@ -67,6 +84,11 @@ export function validateAgendaResponse(value: unknown): AgendaResponseResult {
       if (Object.hasOwn(item, field) && !isSourceId(item[field])) return invalid(field);
     }
     if (typeof item.Titel !== 'string') return invalid('Titel');
+    for (const field of optionalText) {
+      if (Object.hasOwn(item, field) && typeof item[field] !== 'string') return invalid(field);
+    }
+    const comment = Object.hasOwn(item, 'Commentaar') ? publicComment(item.Commentaar) : '';
+    if (comment === null) return invalid('Commentaar');
     for (const field of dates) {
       if (!isSourceDate(item[field])) return invalid(field);
     }
@@ -81,6 +103,7 @@ export function validateAgendaResponse(value: unknown): AgendaResponseResult {
       AgendaID: item.AgendaID as number,
       UniekAgendaPuntID: item.UniekAgendaPuntID as number,
       Titel: item.Titel,
+      PublicComment: comment,
       TypePunt: item.TypePunt as number,
       GeldigVan: item.GeldigVan as string,
       Van: item.Van as string,
@@ -88,6 +111,9 @@ export function validateAgendaResponse(value: unknown): AgendaResponseResult {
     };
     for (const field of optionalIds) {
       if (Object.hasOwn(item, field)) point[field] = item[field] as number;
+    }
+    for (const field of optionalText) {
+      if (Object.hasOwn(item, field)) point[field] = item[field] as string;
     }
     if (Object.hasOwn(item, 'Herhaling')) point.Herhaling = item.Herhaling as string;
     for (const field of ['Verborgen', 'Vervalt'] as const) {

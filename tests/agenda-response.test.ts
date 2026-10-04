@@ -74,4 +74,15 @@ describe('Schoolware response validation', () => {
     expect(validateAgendaResponse({ success: true, data: [{ ...first, Van: '2028-02-29 09:00:00' }] }).ok).toBe(true);
     expect(validateAgendaResponse({ success: true, data: [{ ...first, Van: '2026-02-29 09:00:00' }] }).ok).toBe(false);
   });
+
+  it('keeps only pupil-visible instructions and excludes serialized private comment content', () => {
+    const result = validateAgendaResponse({ success: true, data: [{ ...first,
+      Commentaar: JSON.stringify({ leerlingen: '<p>Synthetic public instructions</p>', prive: 'synthetic-private-secret' }) }] });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('Invalid synthetic fixture');
+    expect(result.points[0]?.PublicComment).toBe('<p>Synthetic public instructions</p>');
+    expect(JSON.stringify(result)).not.toContain('synthetic-private-secret');
+    expect(result.points[0]).not.toHaveProperty('Commentaar');
+    expect(validateAgendaResponse({ success: true, data: [{ ...first, Commentaar: '{invalid private JSON' }] }).ok).toBe(false);
+  });
 });

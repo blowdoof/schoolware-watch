@@ -46,8 +46,9 @@ Observed response contract:
   (test), 1001 (assignment), and 2 (assignment-like content). See the scoped
   classification below; this does not establish every possible task/test code.
 - Recurrence fields and visibility/cancellation flags exist.
-- Commentaar may contain serialized JSON with HTML. It is omitted from the
-  current connection diagnostic, as are student/staff descriptions and names.
+- Commentaar may contain either plain/HTML instructions or serialized JSON.
+  History keeps only pupil-visible content (`leerlingen` for structured JSON),
+  never `prive`. Student/staff descriptions and names remain excluded.
 
 The implemented worker diagnostic requests optional access to this exact origin,
 uses `credentials: 'include'`, and never reads or stores cookies. Redirects are
@@ -66,25 +67,41 @@ for entirely synthetic examples.
 
 ## TypePunt classification
 
-The owner identified these examples on 2026-10-01 for the inspected installation:
+The initial mapping was refined on 2026-10-03 by comparing the owner's
+week-view screenshot with a locally inspected response covering the same week.
+Only the following sanitized mapping is retained; the response is not committed.
 
-| TypePunt | Evidence | Diagnostic category |
+| TypePunt | Week-view marker | Category |
 | --- | --- | --- |
-| 101 | Owner-confirmed test example | Tests |
-| 1001 | Owner-confirmed assignment example | Assignments |
-| 2 | Owner-confirmed assignment-like example, but ordinary lesson descriptions also use this value in the earlier response | Review |
-| Other values | Not yet classified | Other |
+| 100, 101 | Red flag | Tests |
+| 1001, 1002 | Orange flag | Assignments |
+| 9 | Star | Review (marked content, without asserting test/assignment meaning) |
+| 1, 2 | No task/test marker | Other (lesson information) |
+| Other values | Unverified | Other |
 
-Do not infer that all TypePunt 2 entries are assignments, classify based on
-homework-like titles, or extrapolate these mappings to other installations.
-Review entries can contain relevant tasks and must remain visible as ambiguous
-content. Other codes may also represent tests or assignments; the diagnostic
-counts are a supported subset, not a complete categorization guarantee.
+This mapping applies only to the inspected installation. Marker meanings beyond
+these observed types remain unverified. Titles are never used for classification.
+The task/test overview excludes unmarked lesson information, including legacy
+TypePunt 2 entries previously classified as review. The next successful check
+refreshes stored categories without deleting existing history or task progress.
+Tests now support local progress in the same way as assignments and starred
+points. Existing notification preferences still determine which categories alert.
 
-The manual check now returns only total/category counts. It still does not
-persist titles, comments, student names, or source item identifiers. Existing
-count-only summaries remain readable; categories appear after the next check.
+The connection summary returns only total/category counts. The worker now
+also saves a minimized observation history locally in IndexedDB; the dashboard
+receives display snapshots without source identifiers. Existing count-only
+summaries remain readable; categories appear after the next check.
 All classification fixtures use invented titles and identifiers.
+
+## User-facing connection
+
+Users can now discover the already verified request URL without DevTools.
+The opt-in worker observer does not invent endpoints, IDs or relationships and
+never reads authentication headers or response bodies. An explicit confirmation
+runs the unchanged session-aware transport and response validator. See
+[automatic discovery](agenda-discovery.md) for permissions, bounded scope and
+remaining live checks. The investigation steps below are for technical fallback,
+not the normal onboarding flow.
 
 ## Gather the request contract
 
@@ -157,9 +174,45 @@ Additional checks confirmed by the project owner on 2026-10-01:
 - Logging out produced the expected session-unavailable message in the popup.
   Explicit logout is tested; passive session timeout has not been tested separately.
 
+On 2026-10-02 the owner reported another successful check with the session still
+working. The owner subsequently reported the history implementation working.
+This is a repeated success, not evidence of session lifetime or refresh
+semantics.
+
 Pending live checks: popup closure during a request and clearing local state/host
 access. The successful count alone does not verify pagination completeness or
 identity stability.
+
+History smoke checks after loading phase 3:
+- First nonempty check creates baseline events, not newly-created task claims.
+- A second unchanged check creates no new event versions.
+- Dashboard history remains after extension reload/worker restart.
+- Logout produces a session error without changing successful-check history.
+- Clearing active history keeps the connection but resets its next baseline.
+- Disconnecting removes all history and local connection configuration.
+- Shortening retention removes expired versions without removing recently
+  observed current items. Editing the configured date window starts a separate
+  scoped baseline; automatically rolling dates keep the configured scope.
+
+Phase 4 introduces rolling requests and notifications. Dates are based on
+Europe/Brussels; source wall-time interpretation remains an explicit assumption.
+Only newly covered content receives extra baseline events. Full API boundary,
+pagination and identity semantics remain unverified. See
+[monitoring smoke checks](monitoring.md) for pending live alarm/notification tests.
+
+No live disappearance/reappearance detection is enabled until scope completeness
+and stable identity have been verified. The pure engine's gated behavior is
+covered with synthetic tests only.
+
+Notification drill-down uses `AgendaID`, optional `LesDataID`, and the exact
+`Van`/`Tot` pair as a presentation group within the configured scope. Without a
+positive `LesDataID`, grouping falls back to agenda/time; different simultaneous
+lessons in that fallback group cannot yet be distinguished. These groups never
+merge observation identities or establish stable lesson relationships. Only
+fetched points are shown: unverified response completeness also applies to
+lesson details. Optional `VakNaam`, `LokaalCode` and `LokaalOmschrijving` supply
+subject/room context; staff/student descriptions are still discarded. Context
+enrichment updates the current item without creating a source change event.
 
 1. Build and reload the unpacked extension from `dist`.
 2. Log in to Schoolware normally in the same Chrome profile.
