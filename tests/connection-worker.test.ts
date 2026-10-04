@@ -116,6 +116,30 @@ beforeEach(async () => {
   await import('../src/background/service-worker');
 });
 
+describe('schoolbag worker access', () => {
+  it('reads only the active profile, includes lessons, survives session errors and clears with history', async () => {
+    const lesson = { ...parsed.points[0]!, TypePunt: 2, Titel: 'Synthetic lesson', PublicComment: 'Atlas meebrengen', VakNaam: 'Aardrijkskunde' };
+    vi.mocked(fetchAgenda).mockResolvedValue({ ...success, count: 1, typeCounts: { tests: 0, assignments: 0, review: 0, other: 1 }, points: [lesson] });
+    await dispatch({ type: 'agenda.check', requestUrl });
+    expect(await dispatch({ type: 'schoolbag.read' })).toMatchObject({ ok: true, points: [{
+      category: 'other', instructions: 'Atlas meebrengen', subject: 'Aardrijkskunde',
+    }] });
+    const website = { id: sender.id, url: 'https://schoolware_siw.ksgwl.be/webouders/start.html', tab: { id: 1 }, frameId: 0 };
+    expect(listener({ type: 'schoolbag.read' }, website, vi.fn())).toBe(false);
+    const first = await dispatch({ type: 'schoolbag.read' });
+    vi.mocked(fetchAgenda).mockResolvedValue({ status: 'session-required', count: null });
+    await dispatch({ type: 'agenda.check', requestUrl });
+    expect(await dispatch({ type: 'schoolbag.read' })).toEqual(first);
+    vi.mocked(fetchAgenda).mockResolvedValue({ ...success, count: 1, typeCounts: { tests: 0, assignments: 0, review: 0, other: 1 }, points: [{ ...lesson, PublicComment: 'Schrift meebrengen' }] });
+    await dispatch({ type: 'agenda.check', requestUrl: requestUrl.replace('CompletedTaskForLL=30', 'CompletedTaskForLL=40') });
+    const other = await dispatch({ type: 'schoolbag.read' });
+    expect(other).toMatchObject({ points: [{ instructions: 'Schrift meebrengen' }] });
+    expect(JSON.stringify(other)).not.toContain('Atlas meebrengen');
+    await dispatch({ type: 'history.clear' });
+    expect(await dispatch({ type: 'schoolbag.read' })).toEqual({ ok: true, lastSuccessAt: null, points: [] });
+  });
+});
+
 describe('main extension navigation', () => {
   it('serializes simultaneous opens and reuses a loading tab without reading Schoolware', async () => {
     const tab = { id: 7, windowId: 3, url: `chrome-extension://${sender.id}/options.html` } as chrome.tabs.Tab;
@@ -302,9 +326,9 @@ describe('Schoolware page banners', () => {
     expect(registeredScripts).toEqual([]);
   });
 
-  it('registers and injects only on Schoolware, and refuses enabling without optional scripting access', async () => {
+  it('persists banner intent but registers and injects only with Schoolware permission', async () => {
     browserPermission = false;
-    expect(await dispatch({ type: 'preferences.save', preferences: { ...DEFAULT_PREFERENCES, browserNotificationsEnabled: true } })).toMatchObject({ ok: false });
+    expect(await dispatch({ type: 'preferences.save', preferences: { ...DEFAULT_PREFERENCES, browserNotificationsEnabled: true } })).toMatchObject({ ok: true, browserPermission: false });
     expect(registeredScripts).toEqual([]);
     browserPermission = true;
     await dispatch({ type: 'preferences.save', preferences: { ...DEFAULT_PREFERENCES, browserNotificationsEnabled: true } });
@@ -675,6 +699,56 @@ describe('periodic monitoring and optional notifications', () => {
     expect(fetchAgenda).toHaveBeenCalledTimes(1);
   });
 
+  it('finishes handed-off rapid edits without a UI reply and preserves the reversal across restart', async () => {
+    await dispatch({ type: 'preferences.read' });
+    let release!: () => void;
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    let firstWrite = true;
+    vi.mocked(chrome.storage.local.set).mockImplementation(async (value) => {
+      if (PREFERENCES_KEY in value && firstWrite) { firstWrite = false; await blocked; }
+      Object.assign(stored, value);
+    });
+    const replies = vi.fn();
+    expect(listener({ type: 'preferences.save', preferences: { ...DEFAULT_PREFERENCES,
+      notificationsEnabled: true, browserNotificationsEnabled: true } }, sender, replies)).toBe(true);
+    await vi.waitFor(() => expect(firstWrite).toBe(false));
+    // A closed settings document no longer needs to execute anything for this edit.
+    expect(listener({ type: 'preferences.save', preferences: DEFAULT_PREFERENCES }, sender, replies)).toBe(true);
+    release();
+    await vi.waitFor(() => expect(replies).toHaveBeenCalledTimes(2));
+    expect(stored[PREFERENCES_KEY]).toEqual(DEFAULT_PREFERENCES);
+    expect(registeredScripts).toEqual([]);
+    vi.resetModules();
+    await import('../src/background/service-worker');
+    expect(await dispatch({ type: 'preferences.read' })).toMatchObject({ preferences: DEFAULT_PREFERENCES });
+  });
+
+  it('reconciles a late permission grant against the latest disabled settings', async () => {
+    browserPermission = false;
+    notificationPermission = false;
+    await dispatch({ type: 'preferences.save', preferences: { ...DEFAULT_PREFERENCES,
+      notificationsEnabled: true, browserNotificationsEnabled: true } });
+    expect(registeredScripts).toEqual([]);
+    await dispatch({ type: 'preferences.save', preferences: DEFAULT_PREFERENCES });
+    browserPermission = true;
+    notificationPermission = true;
+    const callbacks = vi.mocked(chrome.permissions.onAdded.addListener).mock.calls.map(([callback]) => callback);
+    for (const callback of callbacks) callback({ permissions: ['notifications', 'scripting'],
+      origins: ['https://schoolware_siw.ksgwl.be/*'] });
+    await dispatch({ type: 'preferences.read' });
+    expect(stored[PREFERENCES_KEY]).toEqual(DEFAULT_PREFERENCES);
+    expect(registeredScripts).toEqual([]);
+    expect(createNotification).not.toHaveBeenCalled();
+    // Granting access to a still-enabled banner reconciles without another UI write.
+    await dispatch({ type: 'preferences.save', preferences: { ...DEFAULT_PREFERENCES, browserNotificationsEnabled: true } });
+    browserPermission = false;
+    await dispatch({ type: 'preferences.save', preferences: { ...DEFAULT_PREFERENCES, browserNotificationsEnabled: true } });
+    expect(registeredScripts).toEqual([]);
+    browserPermission = true;
+    for (const callback of callbacks) callback({ permissions: ['scripting'], origins: ['https://schoolware_siw.ksgwl.be/*'] });
+    await vi.waitFor(() => expect(registeredScripts).toHaveLength(1));
+  });
+
   it('persists backoff on session failure across a restart and lets a manual check retry immediately', async () => {
     vi.mocked(fetchAgenda).mockResolvedValue({ status: 'session-required', count: null });
     await dispatch({ type: 'agenda.check', requestUrl });
@@ -690,10 +764,10 @@ describe('periodic monitoring and optional notifications', () => {
     expect(stored.schoolwareMonitoringState).toEqual({ failures: 0, retryAt: null });
   });
 
-  it('requires notification permission before enabling or testing notifications', async () => {
+  it('persists notification intent without permission but prevents delivery', async () => {
     notificationPermission = false;
-    expect(await dispatch({ type: 'preferences.save', preferences: { ...DEFAULT_PREFERENCES, notificationsEnabled: true } })).toMatchObject({ ok: false });
-    expect(stored[PREFERENCES_KEY]).toBeUndefined();
+    expect(await dispatch({ type: 'preferences.save', preferences: { ...DEFAULT_PREFERENCES, notificationsEnabled: true } })).toMatchObject({ ok: true, notificationPermission: false });
+    expect(stored[PREFERENCES_KEY]).toMatchObject({ notificationsEnabled: true });
     expect(await dispatch({ type: 'notifications.test' })).toEqual({ status: 'permission-required', permissionLevel: 'unknown', registered: null });
     expect(createNotification).not.toHaveBeenCalled();
   });

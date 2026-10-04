@@ -10,6 +10,40 @@ never from a client-supplied
 student or group ID. No Schoolware account or plaintext student name is stored server-side.
 The extension still connects to one group/local agenda selection at a time.
 
+## Upgrade for request limits and retry safety (2026-10-04)
+
+Before replacing the endpoint, import the updated `schema.sql` into the existing
+sync database. Its `CREATE TABLE IF NOT EXISTS` statements preserve existing
+groups, revisions, ciphertext and pairing codes, and add `sw_sync_request_limits`.
+Use a private backup and the host's maintenance procedure before any production
+schema change. Then replace `public/sync.php`. No server deployment is performed
+by the repository changes.
+
+Existing private configuration remains compatible. Optional settings
+`requests_per_minute` (default 6000 globally) and
+`requests_per_token_minute` (default 120 per enabled group token) must be integers
+from 1 to 100000. All validated actions count, including registration retries,
+exchange, membership, deletion and operations that fail after authentication.
+Unknown tokens consume only the global bucket. Overload returns HTTP 429 with
+`Retry-After` until the next UTC minute. Choose limits for expected paired-device
+counts; legitimate retry bursts can be throttled too.
+
+Counters commit before the operation transaction, so failed operations cannot
+bypass quotas. Bucket keys are one-way digests, not credentials; no IP, raw token,
+header or payload is stored. Old minute buckets are pruned on requests after two
+minutes. Idle counters need operator cleanup if immediate expiry is required.
+Database rate controls do not prevent connections/body parsing from reaching PHP;
+configure hosting/WAF connection and body limits as an additional layer.
+
+Duplicate operation IDs remain acknowledged even at the 20,000-row capacity.
+Only new operations consume capacity, and an oversized mixed batch rolls back
+all inserts and revision changes. Capacity failure remains HTTP 503.
+
+Validate upgrades with the isolated harness in `server/tests/integration.py`
+using PHP 8.2 and a disposable localhost MySQL database on port 33307. The harness
+covers full-group retries, mixed batches, rollback and concurrent request quotas.
+Never point it at the hosting database.
+
 ## Files and database
 
 1. In phpMyAdmin, select `example_sync` and import `schema.sql`.

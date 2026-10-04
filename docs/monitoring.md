@@ -248,3 +248,14 @@ be delayed during device sleep and do not wake a sleeping device.
 
 References: [Chrome Alarms](https://developer.chrome.com/docs/extensions/reference/api/alarms)
 and [Chrome notifications](https://developer.chrome.com/docs/extensions/reference/api/notifications).
+
+## Settings closure regression check
+
+Run `node scripts/chrome-settings-smoke.mjs "PATH_TO_CHROME"` after building.
+This loads the actual extension in a new isolated headless Chrome profile,
+changes the interval twice while the first worker write is artificially delayed,
+closes the settings tab immediately, and verifies the latest interval persists
+through worker restart. It does not open Schoolware or use existing browser data.
+Interactive permission prompts and Windows notification visibility still require
+an owner acceptance check. Desired notification settings can be saved without
+permission; settings report that permission is missing and delivery stays blocked.

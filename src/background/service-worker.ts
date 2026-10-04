@@ -12,6 +12,7 @@ import { HistoryRepository, DEFAULT_RETENTION } from '../storage/history';
 import { ActivityRepository, activityInput, type AuditContext } from '../storage/activity';
 import { type ActivityAction, type ActivityData, type ActivityPhase, type ActivityView, type ActivityReporter, type ActivityTrigger } from '../shared/activity';
 import { createTasksView, type TasksView } from '../shared/tasks';
+import { createSchoolbagView, type SchoolbagView } from '../shared/schoolbag';
 import { isAlertId } from '../shared/browser-alerts';
 import type { Category, HistoryScope } from '../domain/observations';
 import { notificationEventSelection } from '../domain/notification-window';
@@ -379,7 +380,7 @@ function startCheck(requestUrl: string, current = trace('worker')): Promise<Conn
   return task.finally(() => { activeTask = null; activeCheck = null; });
 }
 
-type Reply = OpenPageResult | DiscoveryView | SyncView | ConnectionState | HistoryView | PreferencesView | NotificationTestResult | BrowserAlertsView | NotificationDetailsView | TasksView | ActivityView;
+type Reply = OpenPageResult | DiscoveryView | SyncView | ConnectionState | HistoryView | PreferencesView | NotificationTestResult | BrowserAlertsView | NotificationDetailsView | TasksView | SchoolbagView | ActivityView;
 async function readActivity(message: { limit?: number; correlationId?: string; itemId?: string } = {}): Promise<ActivityView> {
   const view = await activity.read(message.limit, message);
   const health = await chrome.storage.local.get(LOG_HEALTH_KEY);
@@ -463,6 +464,12 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
       await invalidateTaskViews();
       await refreshBrowserBadge(true, current).catch(() => {});
       return progressSync.view();
+    });
+  }
+  if (message.type === 'schoolbag.read') {
+    return serializeMutation(async () => {
+      const connection = await readConnection();
+      return createSchoolbagView((await history.read(connection.requestUrl)).scope);
     });
   }
   if (message.type === 'tasks.read') {
@@ -568,12 +575,8 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
     return serializeMutation(async () => {
       await pending;
       if (message.type === 'preferences.save') {
-        if (message.preferences.notificationsEnabled && !await chrome.permissions.contains({ permissions: ['notifications'] })) {
-          throw new Error('Notification permission required');
-        }
-        if (message.preferences.browserNotificationsEnabled && !await chrome.permissions.contains(BROWSER_PERMISSIONS)) {
-          throw new Error('Website permission required');
-        }
+        // Persist intent independently of permission prompts in the settings tab.
+        // Delivery and injection still enforce the actual Chrome permissions.
         await chrome.storage.local.set({ [PREFERENCES_KEY]: message.preferences });
         await log(current, 'preferences.saved', 'succeeded', { intervalMinutes: message.preferences.intervalMinutes, days: message.preferences.notificationDays,
           monitoringEnabled: message.preferences.monitoringEnabled, notificationsEnabled: message.preferences.notificationsEnabled,
@@ -690,6 +693,7 @@ chrome.runtime.onMessage.addListener((raw: unknown, sender, sendResponse) => {
     else if (message.type.startsWith('browser.alerts.')) sendResponse({ ok: false, enabled: false, entries: [] });
     else if (message.type === 'notifications.test') sendResponse({ status: 'api-error', permissionLevel: 'unknown', registered: null });
     else if (message.type === 'notifications.details') sendResponse({ ok: false, status: 'missing', details: null });
+    else if (message.type === 'schoolbag.read') sendResponse({ ok: false, lastSuccessAt: null, points: [] });
     else if (message.type.startsWith('tasks.')) sendResponse({ ok: false, entries: [] });
     else if (message.type.startsWith('activity.')) sendResponse({ ok: false, healthy: false, entries: [], total: 0, retentionDays: DEFAULT_RETENTION });
     else if (message.type.startsWith('history.')) sendResponse({ ...createHistoryView(null, DEFAULT_RETENTION), ok: false });
@@ -794,7 +798,13 @@ function registerNotificationListener(): void {
 }
 registerNotificationListener();
 chrome.permissions.onAdded.addListener(registerNotificationListener);
-chrome.permissions.onAdded.addListener(() => { void initialization.then(() => log(trace('worker'), 'permission.changed', 'info', { reason: 'granted' })).catch(() => {}); });
+chrome.permissions.onAdded.addListener(() => {
+  void initialization.then(() => serializeMutation(async () => {
+    const current = trace('worker');
+    await log(current, 'permission.changed', 'info', { reason: 'granted' });
+    await restoreMonitoring(current, 'permission-change');
+  })).catch(() => {});
+});
 chrome.permissions.onRemoved?.addListener(() => {
   if (erasingData) return;
   void initialization.then(async () => {

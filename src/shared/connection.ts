@@ -37,6 +37,7 @@ export type ConnectionMessage = SyncMessage | DiscoveryMessage | OpenPageMessage
   | { type: 'browser.alerts.open'; alertId?: string }
   | { type: 'notifications.details'; target: string }
   | { type: 'tasks.read' }
+  | { type: 'schoolbag.read' }
   | { type: 'tasks.update'; itemId: string; status: TaskStatus }
   | { type: 'tasks.updateMany'; itemIds: string[]; status: TaskStatus }
   | { type: 'activity.read'; limit?: number; correlationId?: string; itemId?: string }
@@ -89,7 +90,7 @@ export function validateConnectionMessage(value: unknown): ConnectionMessage | n
     return { type: 'notifications.details', target: message.target };
   }
   if (['connection.read', 'connection.clear', 'history.clear', 'preferences.read', 'notifications.test',
-    'browser.alerts.read', 'browser.alerts.dismiss', 'browser.alerts.test', 'browser.alerts.open', 'tasks.read', 'activity.clear'].includes(message.type as string) && Object.keys(message).length === 1) {
+    'browser.alerts.read', 'browser.alerts.dismiss', 'browser.alerts.test', 'browser.alerts.open', 'tasks.read', 'schoolbag.read', 'activity.clear'].includes(message.type as string) && Object.keys(message).length === 1) {
     return { type: message.type } as ConnectionMessage;
   }
   if (message.type === 'preferences.save' && Object.keys(message).length === 2) {

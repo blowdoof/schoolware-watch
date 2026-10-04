@@ -44,3 +44,12 @@ CREATE TABLE IF NOT EXISTS sw_sync_group_operations (
     INDEX retention (group_id, received_at),
     FOREIGN KEY (group_id) REFERENCES sw_sync_groups(id)
 ) ENGINE=InnoDB;
+
+-- Bounded minute buckets. No raw IP, token, header or payload is stored.
+CREATE TABLE IF NOT EXISTS sw_sync_request_limits (
+    bucket_key CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    window_start DATETIME NOT NULL,
+    requests INT UNSIGNED NOT NULL DEFAULT 0,
+    PRIMARY KEY (bucket_key, window_start),
+    INDEX expiry (window_start)
+) ENGINE=InnoDB;

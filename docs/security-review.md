@@ -4,6 +4,27 @@ Review date: 2026-10-04. This report describes the current local working tree,
 including the fixes below. It is a source review with synthetic tests, not a
 penetration test or a certification of the deployed host.
 
+## Remediation update (2026-10-04)
+
+R1, R2 and R3 below describe the original findings. Source remediation now:
+
+- Sends valid preference edits immediately during the input event, without a
+  document-owned queue or waiting for permission prompts. The worker serializes
+  writes and persists desired settings even when permission is absent. Actual
+  notification delivery and script injection still require Chrome permission.
+  Permission grants reconcile the latest persisted settings, so a late grant
+  cannot restore a setting the user has since disabled.
+- Counts only genuinely new operation IDs under the group lock. Duplicate-only
+  retries succeed at capacity; oversized mixed batches roll back completely.
+- Applies configurable global and per-enabled-token minute quotas to validated
+  requests. Counters commit independently of operation success, unknown tokens
+  create no per-token rows, old buckets are pruned, and overload returns 429.
+
+PHP 8.2 and isolated MySQL 5.6 integration checks pass for quota boundaries,
+rollback and concurrency. Hosting/WAF limits and actual server upgrade are still
+required operational checks. These are application controls, not a DDoS guarantee.
+See [production review](production-review.md) for current release status.
+
 ## Scope and conclusion
 
 Reviewed the manifest/build, application layers in `src/`, runtime messages,
@@ -14,8 +35,8 @@ deployment instructions. Existing synthetic tests were inspected and the whole
 Vitest suite was run. Dependency advisories were checked with `npm audit`.
 
 No critical or high-severity issue was identified. Two concrete issues were
-fixed. Three medium-priority findings or hardening actions remain below and
-should be addressed before treating the project as release-ready. Absence of
+fixed. The three medium-priority findings below are historical; see the remediation
+update above for their current status and deployment requirements. Absence of
 a finding does not prove absence of a vulnerability.
 
 The supplied activity file was read in place, never copied into the project,
@@ -97,7 +118,7 @@ Such a response becomes `invalid-response`; no partial history is committed.
 Synthetic tests cover both rejection paths. An unusually large legitimate
 agenda may need a reviewed limit adjustment; failure remains non-destructive.
 
-## Remaining findings and actions
+## Original findings (remediated in source)
 
 ### R1 — Medium: closing the settings document can discard queued edits
 
@@ -200,7 +221,7 @@ adapter disables disappearance inference. See [monitoring](monitoring.md),
 [privacy](privacy.md), [API assumptions](schoolware-api.md) and
 [server rules](../server/INSTALL.md).
 
-## Validation and limits
+## Original review validation and limits
 
 - Typecheck, lint, tests and production build passed; 204 tests in 20 files.
 - `npm audit --json` reported zero vulnerabilities at review time. Package

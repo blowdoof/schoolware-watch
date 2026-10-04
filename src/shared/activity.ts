@@ -20,7 +20,7 @@ export const ACTIVITY_REQUESTS = ['ui.open', 'sync.read', 'sync.run', 'sync.crea
   'connection.discovery.start', 'connection.discovery.read', 'connection.discovery.cancel', 'connection.discovery.confirm',
   'preferences.read', 'preferences.save', 'notifications.test', 'notifications.details', 'browser.alerts.read',
   'browser.alerts.dismiss', 'browser.alerts.test', 'browser.alerts.open', 'browser.alerts.rendered', 'agenda.check',
-  'tasks.read', 'tasks.update', 'tasks.updateMany', 'activity.read', 'activity.clear', 'activity.exported', 'permission.result'] as const;
+  'schoolbag.read', 'tasks.read', 'tasks.update', 'tasks.updateMany', 'activity.read', 'activity.clear', 'activity.exported', 'permission.result'] as const;
 export const ACTIVITY_REASONS = ['success', 'session-required', 'redirected', 'api-failure', 'invalid-response',
   'network-error', 'timeout', 'http-error', 'rate-limited', 'invalid-request', 'permission-required', 'busy', 'storage-error',
   'api-error', 'blocked', 'accepted', 'denied', 'granted', 'unavailable', 'disabled', 'backoff', 'no-events',

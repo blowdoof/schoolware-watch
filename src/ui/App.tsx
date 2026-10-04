@@ -10,6 +10,7 @@ import { ActivityPanel } from './ActivityPanel';
 import { HelpPanel } from './HelpPanel';
 import { ProgressSyncPanel } from './ProgressSyncPanel';
 import { TodoPanel } from './TodoPanel';
+import { SchoolbagPanel } from './SchoolbagPanel';
 import { InfoPanel, infoSections, type InfoSection } from './InfoPanel';
 import type { OpenPageMessage } from '../shared/navigation';
 
@@ -104,6 +105,7 @@ export function App({ page: initialPage }: { page: Page }) {
         <ConnectionPanel showSetup refreshToken={historyRevision} onHistoryChanged={() => setHistoryRevision((revision) => revision + 1)} /> :
         <ConnectionNotice refreshToken={historyRevision} onSettings={() => navigate('options')} navigationPending={navigationPending} />}
       {page === 'popup' && <TodoPanel refreshToken={historyRevision} />}
+      {(page === 'popup' || page === 'dashboard') && <SchoolbagPanel refreshToken={historyRevision} />}
       <PreferencesPanel settings={page === 'options'} refreshToken={historyRevision} onSaved={() => setHistoryRevision((revision) => revision + 1)} />
       {page === 'dashboard' && <TasksPanel refreshToken={historyRevision} />}
       {page !== 'popup' && <HistoryPanel settings={page === 'options'} refreshToken={historyRevision} />}

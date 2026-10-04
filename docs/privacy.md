@@ -158,3 +158,12 @@ file contains personal information and escape formula-like cell values.
 
 Only synthetic fixtures belong in Git. The private data directories and HAR
 files are ignored, but ignore patterns do not replace review of staged changes.
+
+## Request-rate metadata
+
+The approved optional progress service limits validated requests using global
+and per-enabled-token UTC minute buckets. It stores only one-way bucket digests,
+minute timestamps and counts, never raw tokens, IPs, headers or bodies. Old
+buckets are pruned on subsequent requests after two minutes; idle deployment
+cleanup remains the host operator's responsibility. Hosting connection metadata
+and backups remain separate from application storage and its deletion controls.

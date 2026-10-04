@@ -1,7 +1,20 @@
 # Release readiness and distribution
 
-Status: 2026-10-04. The current feature build can be committed and pushed for
-review. This does not mean that the extension is ready for public release.
+Status: 2026-10-04. The owner has authorized integration into local `main`
+for continued testing. Public release remains a separate checkpoint.
+
+## Owner acceptance evidence (2026-10-04)
+
+The owner reports successful synchronization after installing the SQL/API update,
+a Schoolware banner for unfinished agenda work, a visible Windows to-do reminder,
+and normal extension operation after a PC restart. The logout test produced the
+expected session-unavailable message; after signing back in, the same agenda
+connection fetched and validated successfully without reconnecting.
+No screenshot, payload or personal identifiers are stored in this repository.
+These observations confirm the reported paths, not automatic new/change alerts
+or two-device propagation. Two-device testing is currently pending access to a
+second installed device. The owner reviewed the schoolbag UI positively; material accuracy should still
+be checked against normal school days.
 
 ## Remaining acceptance checks
 
@@ -10,16 +23,18 @@ review. This does not mean that the extension is ready for public release.
 - Verify an automatically detected, eligible new or changed agenda item produces
   the configured system notification and Schoolware banner. A manual test or
   Chrome accepting a notification is not proof of a visible automatic alert.
-- Verify two-device progress propagation, authentication expiry, alarm wake-up
-  and worker restart in Chrome with the deployed PHP service.
-- Resolve or explicitly assess the remaining findings in
-  [the security review](security-review.md): queued setting edits on document
-  closure, idempotent retries at server capacity and request-rate controls.
+- Verify two-device progress propagation with the deployed PHP service.
+  Logout/login recovery and operation after PC restart are owner-confirmed.
+- The owner installed the SQL/API upgrade and reports successful synchronization.
+  Hosting/WAF controls and throttling behavior still need deployment verification.
+- Verify automatic new/change alerts separately from the owner-confirmed visible
+  to-do system notification and Schoolware banner.
 - Keep the verified origin restriction explicit. The current extension supports
   the inspected Schoolware installation, not arbitrary schools.
 
-Merge the feature branch into `main` only after the owner and maintainer agree
-that the release criteria are met. Publishing to the store is a separate action.
+The owner explicitly authorized the local main merge while the remaining
+acceptance checks stay open. This is an integration checkpoint, not public-release
+approval. Store submission and remote publication are separate actions.
 
 ## Proposed invitation flow (not implemented)
 

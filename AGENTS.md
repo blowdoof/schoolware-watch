@@ -10,7 +10,10 @@ Use TypeScript, React, Vite, Tailwind CSS, IndexedDB, Chrome Alarms, and Vitest.
 - Write code, identifiers, comments, and technical documentation in English.
 
 ## Privacy
-- Keep student data local. Do not add a backend, analytics, telemetry, or cloud synchronization.
+- Keep Schoolware agenda content, history, and session material local. Do not add analytics or telemetry.
+- The owner authorizes optional encrypted progress-only synchronization through the existing self-hosted PHP service.
+- Remote sharing must be opt-in and limited to encrypted progress and optional encrypted participant labels; never upload agenda content, raw student/source identifiers, or Schoolware credentials.
+- Document remote processing, retention, deletion, shared-secret access limits, and hosting metadata accurately. Do not add other backend or cloud synchronization features without explicit authorization.
 - Never persist Schoolware passwords, session cookies, authentication tokens, or authorization headers.
 - Reuse the existing browser session only through the verified integration mechanism.
 - Never commit real student data, API captures, HAR files, screenshots containing personal data, or secrets.

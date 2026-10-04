@@ -14,4 +14,7 @@ return [
     'max_groups' => 1000,
     'registrations_per_hour' => 50,
     'registrations_per_ip_hour' => 5,
+    // All valid API actions, including retries and failed operations.
+    'requests_per_minute' => 6000,
+    'requests_per_token_minute' => 120,
 ];

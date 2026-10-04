@@ -6,7 +6,7 @@ import { notificationTestMessage, validateNotificationTestResult } from '../shar
 import { BROWSER_ORIGINS, BROWSER_PERMISSIONS, validateBrowserAlertsView } from '../shared/browser-alerts';
 import { recordPermissionResult } from './permission-log';
 import { NotificationDiagnostics } from './NotificationDiagnostics';
-import { AutosaveQueue } from './autosave';
+import { savePreferences } from './autosave';
 
 const categories: Record<Category, string> = { tests: 'Toetsen (rood vlagje)', assignments: 'Taken (oranje vlagje)', review: 'Punten met een sterretje', other: 'Lesinformatie zonder vlagje of sterretje' };
 const localTime = (value: string) => new Date(value).toLocaleString('nl-BE', { timeZone: 'Europe/Brussels' });
@@ -26,7 +26,6 @@ export function PreferencesPanel({ settings, refreshToken, onSaved }: {
   const dirty = useRef(false);
   const draftRef = useRef(draft);
   const revision = useRef(0);
-  const saves = useRef(new AutosaveQueue());
   const pendingSaves = useRef(0);
   const [saving, setSaving] = useState(false);
   const [working, setWorking] = useState(false);
@@ -56,21 +55,31 @@ export function PreferencesPanel({ settings, refreshToken, onSaved }: {
     setMessage('Wijziging wordt opgeslagen…');
     pendingSaves.current++;
     setSaving(true);
-    // Start permission prompts inside the change gesture, before queueing or
-    // awaiting anything. Keep subsequent saves ordered even if a prompt is slow.
-    const permission = next.notificationsEnabled || next.browserNotificationsEnabled ? chrome.permissions.request({
-      permissions: [...(next.notificationsEnabled ? ['notifications' as const] : []), ...(next.browserNotificationsEnabled ? ['scripting' as const] : [])],
-      origins: next.browserNotificationsEnabled ? BROWSER_ORIGINS : [],
-    }) : Promise.resolve(true);
-    void permission.catch(() => {});
-    void saves.current.enqueue(async () => {
-      const granted = await permission;
-      if (patch.notificationsEnabled === true) await recordPermissionResult('notifications', granted);
-      if (patch.browserNotificationsEnabled === true) await recordPermissionResult('browser', granted);
-      if (!granted) throw new Error('Permission denied');
-      return send({ type: 'preferences.save', preferences: next });
-    }).then((saved) => {
-      if (revision.current === current) { dirty.current = false; setView(saved); setMessage('Automatisch opgeslagen.'); }
+    // Send the desired state immediately. Permission prompts never delay writes.
+    const save = savePreferences(next);
+    if (patch.notificationsEnabled === true || patch.browserNotificationsEnabled === true) {
+      const permission = chrome.permissions.request({
+        permissions: [...(patch.notificationsEnabled === true ? ['notifications' as const] : []),
+          ...(patch.browserNotificationsEnabled === true ? ['scripting' as const] : [])],
+        origins: patch.browserNotificationsEnabled === true ? BROWSER_ORIGINS : [],
+      });
+      void permission.then(async (granted) => {
+        if (patch.notificationsEnabled === true) await recordPermissionResult('notifications', granted);
+        if (patch.browserNotificationsEnabled === true) await recordPermissionResult('browser', granted);
+        if (revision.current === current && !granted) setMessage('Instelling opgeslagen, maar Chrome-toestemming ontbreekt.');
+        onSaved();
+      }).catch(() => {
+        if (revision.current === current) setMessage('Instelling opgeslagen, maar Chrome-toestemming ontbreekt.');
+      });
+    }
+    void save.then((saved) => {
+      if (revision.current === current) {
+        dirty.current = false;
+        setView(saved);
+        const missing = (saved.preferences.notificationsEnabled && !saved.notificationPermission) ||
+          (saved.preferences.browserNotificationsEnabled && !saved.browserPermission);
+        setMessage(missing ? 'Instelling opgeslagen, maar Chrome-toestemming ontbreekt.' : 'Automatisch opgeslagen.');
+      }
       onSaved();
     }).catch(() => {
       if (revision.current === current) setMessage('Deze wijziging kon niet worden opgeslagen. Controleer de Chrome-toestemming en probeer opnieuw.');

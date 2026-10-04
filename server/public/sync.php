@@ -26,6 +26,38 @@ function validOperation(mixed $value): bool {
         preg_match('/^[a-f0-9]{32,2048}$/D', $value['ciphertext']) === 1;
 }
 
+/** Commit request counters separately so failed operations still consume quota. */
+function enforceRequestLimits(PDO $pdo, array $config, string $tokenHash): void {
+    $globalLimit = $config['requests_per_minute'] ?? 6000;
+    $tokenLimit = $config['requests_per_token_minute'] ?? 120;
+    foreach ([$globalLimit, $tokenLimit] as $limit) {
+        if (!is_int($limit) || $limit < 1 || $limit > 100000) throw new RuntimeException('Invalid request limit');
+    }
+    $window = gmdate('Y-m-d H:i:00');
+    $pdo->beginTransaction();
+    // Lock global first, including unknown tokens. Unknown tokens never create
+    // per-token rows, keeping storage bounded without storing IPs or secrets.
+    $buckets = [hash('sha256', 'requests:global') => $globalLimit];
+    $known = $pdo->prepare('SELECT id FROM sw_sync_groups WHERE token_hash = ? AND enabled = 1');
+    $known->execute([$tokenHash]);
+    if ($known->fetchColumn() !== false) $buckets[hash('sha256', 'requests:' . $tokenHash)] = $tokenLimit;
+    $create = $pdo->prepare('INSERT INTO sw_sync_request_limits (bucket_key, window_start, requests) VALUES (?, ?, 0) ON DUPLICATE KEY UPDATE requests = requests');
+    $read = $pdo->prepare('SELECT requests FROM sw_sync_request_limits WHERE bucket_key = ? AND window_start = ? FOR UPDATE');
+    $increment = $pdo->prepare('UPDATE sw_sync_request_limits SET requests = requests + 1 WHERE bucket_key = ? AND window_start = ?');
+    foreach ($buckets as $bucket => $limit) {
+        $create->execute([$bucket, $window]);
+        $read->execute([$bucket, $window]);
+        if ((int)$read->fetchColumn() >= $limit) {
+            $pdo->commit();
+            header('Retry-After: ' . (60 - (int)gmdate('s')));
+            reply(429, ['ok' => false]);
+        }
+        $increment->execute([$bucket, $window]);
+    }
+    $pdo->exec('DELETE FROM sw_sync_request_limits WHERE window_start < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 2 MINUTE)');
+    $pdo->commit();
+}
+
 function registerGroup(PDO $pdo, array $config, string $tokenHash): never {
     // Serialize registration quotas and inserts; the caller owns the transaction.
     $settings = $pdo->query('SELECT enabled, rate_secret FROM sw_sync_registration_settings WHERE singleton = 1 FOR UPDATE')->fetch(PDO::FETCH_ASSOC);
@@ -110,7 +142,8 @@ try {
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_EMULATE_PREPARES => false,
     ]);
-    if ($body['action'] === 'members' || $body['action'] === 'member.leave') $pdo->exec("SET time_zone = '+00:00'");
+    $pdo->exec("SET time_zone = '+00:00'");
+    enforceRequestLimits($pdo, $config, hash('sha256', $matches[1]));
     $pdo->beginTransaction();
     if ($body['action'] === 'register') registerGroup($pdo, $config, hash('sha256', $matches[1]));
     // Serialize revision allocation and pull visibility. AUTO_INCREMENT alone
@@ -163,15 +196,16 @@ try {
     $cleanup->execute([$groupId, $days]);
     $count = $pdo->prepare('SELECT COUNT(*) FROM sw_sync_group_operations WHERE group_id = ?');
     $count->execute([$groupId]);
-    if ((int)$count->fetchColumn() + count($body['operations']) > 20000) {
-        $pdo->rollBack(); reply(503, ['ok' => false]);
-    }
+    $storedCount = (int)$count->fetchColumn();
     $exists = $pdo->prepare('SELECT revision FROM sw_sync_group_operations WHERE group_id = ? AND operation_id = ?');
     $insert = $pdo->prepare('INSERT INTO sw_sync_group_operations (group_id, revision, operation_id, iv, ciphertext, received_at) VALUES (?, ?, ?, ?, ?, UTC_TIMESTAMP())');
     $acknowledged = [];
     foreach ($body['operations'] as $operation) {
         $exists->execute([$groupId, $operation['id']]);
         if ($exists->fetchColumn() === false) {
+            // Duplicate IDs do not consume capacity. Mixed batches roll back
+            // atomically under the existing group lock.
+            if (++$storedCount > 20000) { $pdo->rollBack(); reply(503, ['ok' => false]); }
             if ($revision >= 9007199254740991) throw new RuntimeException('Revision exhausted');
             $insert->execute([$groupId, ++$revision, $operation['id'], $operation['iv'], $operation['ciphertext']]);
         }

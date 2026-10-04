@@ -8,6 +8,7 @@ Schoolware agenda changes.
 - Automatic agenda monitoring
 - Detection of new assignments and tests
 - Change history
+- Local schoolbag suggestions for school and homework
 - Browser notifications
 - Local data storage
 - Optional encrypted progress sharing through a self-hosted PHP/MySQL API
@@ -38,6 +39,14 @@ on 2026-10-02. Live testing of the new history UI and popup-close recovery remai
 pending. The owner confirmed Windows notification delivery on 2026-10-02 after
 enabling Chrome notifications in Windows settings. Live verification of alarms
 and the new Schoolware-page banner remains pending.
+
+## Release review
+
+See [production review](docs/production-review.md) and
+[release readiness](docs/release-readiness.md) before merging or publishing.
+Review findings around settings handoff, server capacity retries and request
+quotas are fixed in source. The hosting schema/endpoint upgrade and remaining
+interactive Chrome acceptance checks must still be completed before public release.
 
 ## Development
 
@@ -223,6 +232,7 @@ remove every selection. The existing retention setting also applies to logs.
 - [Roadmap](docs/roadmap.md)
 - [Monitoring and notification smoke checks](docs/monitoring.md)
 - [Activity logging and task progress](docs/activity-and-tasks.md)
+- [Schoolbag suggestions](docs/schoolbag.md)
 - [Contributor instructions](AGENTS.md)
 - [Project information, licensing and donations](docs/project-information.md)
 
@@ -242,11 +252,21 @@ day. Browsing does not change progress, overdue grouping or reminder scheduling.
 
 ## Privacy
 
-All personal Schoolware data remains local. No credentials are persisted and no
-real student data may be committed. History stores a minimized field allowlist;
+Schoolware agenda content and observation history remain local. Optional encrypted
+progress sharing follows the documented opt-in exception. No Schoolware credentials
+are persisted and no real student data may be committed. History stores a minimized field allowlist;
 raw responses, staff/student descriptions, and private comment fields are not
 retained. HTML instructions are rendered as text, never executed.
 Lesson drill-down additionally retains subject, room and a scoped lesson-grouping
 hint. Staff names and student descriptions are excluded. Grouping uses agenda,
 LesDataID and exact planning times; without LesDataID it falls back to the same
 agenda/time. This is presentation grouping, not verified stable lesson identity.
+
+## Schoolbag
+
+**Boekentas** appears in the popup and dashboard, with **Mee naar school** and
+**Mee naar huis**. Laptop is always listed. Material names and page references
+come from locally stored agenda text, including ordinary lessons for the school
+list and unfinished marked work for the home list. Unknown material remains
+explicitly marked for review. No new API, server update or permission is needed.
+See [schoolbag behavior and verification](docs/schoolbag.md).

@@ -48,7 +48,7 @@ def main():
                 (folder / 'schoolware-sync-config.php').write_text(
                     "<?php return ['dsn'=>'mysql:host=127.0.0.1;port=33307;dbname=" + database +
                     "','user'=>'root','password'=>'','token_hash'=>'" + hashlib.sha256(token.encode()).hexdigest() +
-                    "','retention_days'=>90" + extra + "];", encoding='utf-8')
+                    "','retention_days'=>90,'requests_per_token_minute'=>10000" + extra + "];", encoding='utf-8')
             configure()
             php = [args.php, '-d', 'extension_dir=' + str(Path(args.php).parent / 'ext'), '-d', 'extension=pdo_mysql']
             def sql(statement):
@@ -82,14 +82,16 @@ def main():
                 processes.append(subprocess.Popen(php + ['-S', f'127.0.0.1:{ports[-1]}', str(router)],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
 
-            def call(body, bearer=token, server=0):
+            def call(body, bearer=token, server=0, include_headers=False):
                 request = urllib.request.Request(f'http://127.0.0.1:{ports[server]}/sync.php',
                     data=json.dumps(body).encode(), headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + bearer})
                 try:
                     with urllib.request.urlopen(request, timeout=5) as result:
-                        return result.status, json.load(result)
+                        value = (result.status, json.load(result))
+                        return (*value, result.headers.get('Retry-After')) if include_headers else value
                 except urllib.error.HTTPError as error:
-                    return error.code, json.load(error)
+                    value = (error.code, json.load(error))
+                    return (*value, error.headers.get('Retry-After')) if include_headers else value
 
             empty = {'action': 'exchange', 'cursor': 0, 'operations': []}
             for _ in range(30):
@@ -174,13 +176,26 @@ def main():
                     for revision in range(2, 20001)]
             sql('INSERT INTO sw_sync_group_operations VALUES ' + ','.join(rows) + '; '
                 "UPDATE sw_sync_groups SET revision = 20000 WHERE id = '" + other_id + "';")
+            # A full group accepts duplicate-only retries, even with a lost ack.
+            assert call({**empty, 'operations': [operation]}, other_token)[0] == 200
+            new_operation = {**operation, 'id': str(uuid.uuid4())}
+            assert call({**empty, 'operations': [operation, new_operation]}, other_token)[0] == 503
+            assert sql("SELECT COUNT(*) FROM sw_sync_group_operations WHERE group_id = '" + other_id + "';").splitlines()[-1] == '20000'
+            # One free slot: a mixed retry can fill it, but an oversized batch
+            # must roll back both its insert and revision update.
+            sql("DELETE FROM sw_sync_group_operations WHERE group_id = '" + other_id + "' AND revision = 20000;")
+            assert call({**empty, 'operations': [new_operation, {**operation, 'id': str(uuid.uuid4())}]}, other_token)[0] == 503
+            assert sql("SELECT COUNT(*) FROM sw_sync_group_operations WHERE group_id = '" + other_id + "';").splitlines()[-1] == '19999'
+            assert sql("SELECT revision FROM sw_sync_groups WHERE id = '" + other_id + "';").splitlines()[-1] == '20000'
+            assert call({**empty, 'operations': [operation, new_operation]}, other_token)[0] == 200
+            assert call({**empty, 'operations': [new_operation]}, other_token)[0] == 200
             assert call({**empty, 'operations': [{**operation, 'id': str(uuid.uuid4())}]}, other_token)[0] == 503
             assert call(empty)[0] == 200
-            assert sql("SELECT revision FROM sw_sync_groups WHERE id = '" + other_id + "';").splitlines()[-1] == '20000'
+            assert sql("SELECT revision FROM sw_sync_groups WHERE id = '" + other_id + "';").splitlines()[-1] == '20001'
             # Cleanup removes only expired records belonging to the caller.
             sql("UPDATE sw_sync_group_operations SET received_at = '2000-01-01' WHERE group_id = '" + other_id + "';")
             assert call(empty, other_token)[1]['operations'] == []
-            assert call(empty, other_token)[1]['head'] == 20000
+            assert call(empty, other_token)[1]['head'] == 20001
             subprocess.run(manager + ['disable', other_id], check=True, capture_output=True)
             assert call(empty, other_token)[0] == 401
             assert call({'action': 'delete'}, other_token)[0] == 401
@@ -198,8 +213,8 @@ def main():
             assert call({**registration, 'key': 'synthetic'}, new_token)[0] == 400
             assert call(registration, 'invalid')[0] == 401
             with ThreadPoolExecutor(max_workers=4) as pool:
-                assert all(result == (200, {'ok': True}) for result in
-                           pool.map(lambda index: call(registration, new_token, index % 4), range(8)))
+                results = list(pool.map(lambda index: call(registration, new_token, index % 4), range(8)))
+                assert all(result == (200, {'ok': True}) for result in results), results
             assert int(sql('SELECT COUNT(*) FROM sw_sync_groups;').splitlines()[-1]) == before_count + 1
             assert call(empty, new_token)[1]['head'] == 0
             assert call(empty, token)[1]['head'] == 252
@@ -225,6 +240,38 @@ def main():
             assert call(registration, new_token)[0] == 200
             assert call({'action': 'delete'}, new_token)[0] == 200
             assert call(empty, token)[1]['head'] == 252
+            # Keep minute-boundary rollover out of these short quota assertions.
+            if time.gmtime().tm_sec >= 55:
+                time.sleep(60 - time.gmtime().tm_sec)
+            # Request quotas cover every action, failed operations and retries.
+            sql('DELETE FROM sw_sync_request_limits;')
+            configure(", 'requests_per_token_minute'=>3, 'requests_per_minute'=>100")
+            assert call(empty)[0] == 200
+            assert call({**empty, 'cursor': 999999})[0] == 409
+            assert call({'action': 'member.leave', 'id': member['id']})[0] == 200
+            throttled = call({'action': 'delete'}, include_headers=True)
+            assert throttled[0] == 429 and 1 <= int(throttled[2]) <= 60
+            assert call({'action': 'members', 'device': member})[0] == 429
+            assert call(registration)[0] == 429
+            assert call(empty, new_token)[0] == 200  # Token isolation.
+            sql('DELETE FROM sw_sync_request_limits;')
+            configure(", 'requests_per_token_minute'=>3, 'requests_per_minute'=>100")
+            # Concurrent requests cannot overrun a per-token bucket.
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                statuses = list(pool.map(lambda index: call(empty, token, index % 4)[0], range(8)))
+            assert statuses.count(200) == 3 and statuses.count(429) == 5, statuses
+            sql('DELETE FROM sw_sync_request_limits;')
+            configure(", 'requests_per_token_minute'=>100, 'requests_per_minute'=>2")
+            assert call(empty, 'b' * 64)[0] == 401
+            assert call(empty, new_token)[0] == 200
+            assert call(empty, token)[0] == 429
+            # Unknown credentials allocate only the single global bucket.
+            assert sql('SELECT COUNT(*) FROM sw_sync_request_limits;').splitlines()[-1] == '2'
+            sql("UPDATE sw_sync_request_limits SET window_start = '2000-01-01';")
+            assert call(empty, token)[0] == 200
+            assert sql("SELECT COUNT(*) FROM sw_sync_request_limits WHERE window_start = '2000-01-01';").splitlines()[-1] == '0'
+            configure(", 'requests_per_minute'=>0")
+            assert call(empty)[0] == 503  # Invalid host configuration fails closed.
             print('PHP 8.2 / MySQL API integration passed: migration, isolation, revocation, authentication, validation, retry, pagination, scoped deletion, registration, quotas and encrypted participant isolation/deletion.')
     finally:
         for process in processes:
