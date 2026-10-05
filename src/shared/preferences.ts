@@ -14,7 +14,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   notificationDays: 3, notificationCategories: ['tests', 'assignments'],
   browserNotificationsEnabled: false,
   todoRemindersEnabled: true,
-  schoolbagEnabled: false,
+  schoolbagEnabled: true,
   newColor: '#15803d', changedColor: '#b45309',
 };
 
@@ -43,7 +43,7 @@ export function validateStoredPreferences(value: unknown): Preferences | null {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     return validatePreferences({
       ...(!Object.hasOwn(value, 'browserNotificationsEnabled') ? { browserNotificationsEnabled: false } : {}),
-      ...(!Object.hasOwn(value, 'schoolbagEnabled') ? { schoolbagEnabled: false } : {}),
+      ...(!Object.hasOwn(value, 'schoolbagEnabled') ? { schoolbagEnabled: true } : {}),
       ...(!Object.hasOwn(value, 'todoRemindersEnabled') ? { todoRemindersEnabled: true } : {}), ...value,
     });
   }

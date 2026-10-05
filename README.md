@@ -296,7 +296,8 @@ origin, preserving existing Wetteren-Lede keys. No backend change is required.
 See [multi-installation acceptance](docs/multi-installation-setup.md) for assumptions
 and remaining real-browser acceptance checks.
 
-Schoolbag suggestions are optional and disabled by default, including when older
-preferences are upgraded. Enable **Boekentas tonen onder de planning** in settings.
-The panel appears below the dashboard planning and popup to-do overview; changing
+Schoolbag suggestions are optional and enabled by default, including when older
+preferences are upgraded. Explicitly saved visibility choices are preserved.
+Use **Boekentas tonen onder de to-do** in settings to change visibility.
+The panel appears below the to-do overview and above dashboard planning; changing
 the setting immediately updates open extension views without deleting history.

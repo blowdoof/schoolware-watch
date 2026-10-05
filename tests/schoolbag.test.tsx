@@ -15,11 +15,12 @@ function bagPoint(overrides: Partial<BagPoint> = {}): BagPoint {
 const now = new Date('2026-10-04T12:00:00Z');
 
 describe('local schoolbag suggestions', () => {
-  it('requires opt-in and preserves existing settings when upgrading old preferences', () => {
-    expect(DEFAULT_PREFERENCES.schoolbagEnabled).toBe(false);
+  it('enables schoolbag by default and preserves explicit choices when upgrading preferences', () => {
+    expect(DEFAULT_PREFERENCES.schoolbagEnabled).toBe(true);
     const legacy = { ...DEFAULT_PREFERENCES, intervalMinutes: 30, notificationsEnabled: true };
     Reflect.deleteProperty(legacy, 'schoolbagEnabled');
-    expect(validateStoredPreferences(legacy)).toEqual({ ...legacy, schoolbagEnabled: false });
+    expect(validateStoredPreferences(legacy)).toEqual({ ...legacy, schoolbagEnabled: true });
+    expect(validateStoredPreferences({ ...DEFAULT_PREFERENCES, schoolbagEnabled: false })?.schoolbagEnabled).toBe(false);
     expect(validatePreferences({ ...DEFAULT_PREFERENCES, schoolbagEnabled: true })?.schoolbagEnabled).toBe(true);
     expect(validatePreferences({ ...DEFAULT_PREFERENCES, schoolbagEnabled: 'yes' })).toBeNull();
   });

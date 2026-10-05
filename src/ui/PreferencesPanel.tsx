@@ -176,7 +176,7 @@ export function PreferencesPanel({ settings, refreshToken, onSaved }: {
           <fieldset disabled={working} className="space-y-3">
             <legend className="font-medium">Boekentas</legend>
             <label className="flex items-center gap-2"><input type="checkbox" checked={draft.schoolbagEnabled}
-              onChange={(event) => change({ schoolbagEnabled: event.target.checked })} />Boekentas tonen onder de planning</label>
+              onChange={(event) => change({ schoolbagEnabled: event.target.checked })} />Boekentas tonen onder de to-do</label>
             <p className="text-xs text-slate-500">Optionele suggesties voor materiaal om mee naar school en naar huis te nemen.</p>
           </fieldset>
           <fieldset disabled={working} className="space-y-3">

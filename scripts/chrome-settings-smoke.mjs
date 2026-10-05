@@ -168,18 +168,19 @@ try {
   assert.ok(bag.text.includes('Aardrijkskunde') && bag.text.includes('Werkboek'));
   assert.ok(!bag.homeText.includes('Werkboek'), 'Same-day workbook must not appear in next-day home packing');
   console.log('Chrome schoolbag smoke passed: worker projection, both packing lists, laptop defaults and synthetic workbook page range.');
-  assert.equal(await evaluate(bagSession, `Boolean(document.querySelector('[aria-label="Taken, toetsen en voortgang"]').compareDocumentPosition(document.querySelector('[aria-label="Boekentas"]')) & Node.DOCUMENT_POSITION_FOLLOWING)`), true);
+  assert.equal(await evaluate(bagSession, `Boolean(document.querySelector('[aria-label="To-do voor de volgende schooldag"]').compareDocumentPosition(document.querySelector('[aria-label="Boekentas"]')) & Node.DOCUMENT_POSITION_FOLLOWING)`), true);
+  assert.equal(await evaluate(bagSession, `Boolean(document.querySelector('[aria-label="Boekentas"]').compareDocumentPosition(document.querySelector('[aria-label="Taken, toetsen en voortgang"]')) & Node.DOCUMENT_POSITION_FOLLOWING)`), true);
   const toggleSchoolbag = () => evaluate(restarted.sessionId, `(() => {
-    [...document.querySelectorAll('label')].find(label => label.textContent.includes('Boekentas tonen onder de planning')).querySelector('input').click();
+    [...document.querySelectorAll('label')].find(label => label.textContent.includes('Boekentas tonen onder de to-do')).querySelector('input').click();
     return true;
   })()`);
-  await poll(() => evaluate(restarted.sessionId, `Boolean([...document.querySelectorAll('label')].find(label => label.textContent.includes('Boekentas tonen onder de planning'))?.querySelector('input').checked)`));
+  await poll(() => evaluate(restarted.sessionId, `Boolean([...document.querySelectorAll('label')].find(label => label.textContent.includes('Boekentas tonen onder de to-do'))?.querySelector('input').checked)`));
   await toggleSchoolbag();
   await poll(() => evaluate(bagSession, `!document.querySelector('[aria-label="Boekentas"]')`));
   assert.equal(await evaluate(bagSession, `(async () => (await chrome.runtime.sendMessage({ type: 'preferences.read' })).preferences.schoolbagEnabled)()`), false);
   await toggleSchoolbag();
   await poll(() => evaluate(bagSession, `document.querySelector('[aria-label="Boekentas"]')?.textContent.includes('pagina 24-34')`));
-  console.log('Chrome schoolbag preference smoke passed: below planning, immediate hide/show and durable opt-in.');
+  console.log('Chrome schoolbag preference smoke passed: below to-do and above planning, immediate hide/show and durable visibility preference.');
   // The dashboard must retain its own content while setup/repair is pending.
   assert.equal(await evaluate(bagSession, `Boolean(document.querySelector('[aria-label="Taken, toetsen en voortgang"]'))`), true);
   assert.equal(await evaluate(restarted.sessionId, `Boolean(document.querySelector('[aria-label="Voortgang synchroniseren"]'))`), true);

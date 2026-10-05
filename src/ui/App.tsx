@@ -106,10 +106,10 @@ export function App({ page: initialPage }: { page: Page }) {
       {page === 'options' ?
         <ConnectionPanel showSetup refreshToken={historyRevision} onHistoryChanged={() => setHistoryRevision((revision) => revision + 1)} /> :
         <ConnectionNotice refreshToken={historyRevision} onSettings={() => navigate('options')} navigationPending={navigationPending} />}
-      {page === 'popup' && <TodoPanel refreshToken={historyRevision} />}
       <PreferencesPanel settings={page === 'options'} refreshToken={historyRevision} onSaved={() => setHistoryRevision((revision) => revision + 1)} />
-      {page === 'dashboard' && <TasksPanel refreshToken={historyRevision} />}
+      {(page === 'popup' || page === 'dashboard') && <TodoPanel refreshToken={historyRevision} />}
       {(page === 'popup' || page === 'dashboard') && <SchoolbagPanel refreshToken={historyRevision} />}
+      {page === 'dashboard' && <TasksPanel refreshToken={historyRevision} />}
       {page !== 'popup' && <HistoryPanel settings={page === 'options'} refreshToken={historyRevision} />}
       {page === 'options' && (
         <p className="mt-6 text-sm leading-6 text-slate-600">
