@@ -23,6 +23,7 @@ def main():
     parser.add_argument('--php', required=True)
     parser.add_argument('--mysql', required=True)
     parser.add_argument('--mysql-port', type=int, default=33307)
+    parser.add_argument('--legacy-compatibility', action='store_true')
     args = parser.parse_args()
     if args.mysql_port != 33307:
         raise ValueError('Use the dedicated isolated test port 33307')
@@ -112,6 +113,9 @@ def main():
             assert result['head'] == 9 and result['operations'][0]['id'] == legacy['id']
             assert call({'action': 'delete'})[0] == 200
             assert call({**empty, 'cursor': 9})[1]['head'] == 9
+            if args.legacy_compatibility:
+                subprocess.run(['node', str(root / 'tests/legacy-compatibility.mjs'),
+                                f'http://127.0.0.1:{ports[0]}/sync.php', token], check=True)
             # Reset only this synthetic fixture for the existing pagination assertions.
             sql('UPDATE sw_sync_groups SET revision = 0;')
             assert call(empty, 'b' * 64)[0] == 401
