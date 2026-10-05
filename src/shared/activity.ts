@@ -34,7 +34,7 @@ export interface ActivityData {
   reason?: ActivityReason; count?: number; added?: number; changed?: number; days?: number; durationMs?: number;
   baselineCount?: number; categoryExcludedCount?: number; outsideWindowCount?: number; inactiveCount?: number;
   intervalMinutes?: number; retryAt?: string; scheduledAt?: string; registered?: boolean; test?: boolean; byUser?: boolean;
-  monitoringEnabled?: boolean; notificationsEnabled?: boolean; browserNotificationsEnabled?: boolean; todoRemindersEnabled?: boolean;
+  monitoringEnabled?: boolean; notificationsEnabled?: boolean; browserNotificationsEnabled?: boolean; todoRemindersEnabled?: boolean; schoolbagEnabled?: boolean;
   newColor?: string; changedColor?: string; categories?: Category[]; failedCount?: number;
   from?: TaskStatus; to?: TaskStatus; fields?: (keyof Snapshot)[];
   trigger?: ActivityTrigger; alarm?: 'agenda' | 'progress-sync' | 'agenda-discovery';
@@ -94,7 +94,7 @@ export function validateActivityInput(value: unknown): ActivityInput | null {
     if (!['agenda', 'progress-sync', 'agenda-discovery'].includes(value.data.alarm as string)) return null;
     data.alarm = value.data.alarm as NonNullable<ActivityData['alarm']>;
   }
-  for (const key of ['registered', 'test', 'byUser', 'monitoringEnabled', 'notificationsEnabled', 'browserNotificationsEnabled', 'todoRemindersEnabled', 'applied', 'membersUpdated', 'hasMore'] as const) {
+  for (const key of ['registered', 'test', 'byUser', 'monitoringEnabled', 'notificationsEnabled', 'browserNotificationsEnabled', 'todoRemindersEnabled', 'schoolbagEnabled', 'applied', 'membersUpdated', 'hasMore'] as const) {
     if (Object.hasOwn(value.data, key)) { if (typeof value.data[key] !== 'boolean') return null; data[key] = value.data[key]; }
   }
   for (const key of ['newColor', 'changedColor'] as const) {

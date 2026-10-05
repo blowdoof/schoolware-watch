@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { agendaText, schoolbagOverview, type BagMaterial, type BagPoint } from '../domain/schoolbag';
 import { validateSchoolbagView, type SchoolbagView } from '../shared/schoolbag';
 import type { ConnectionMessage } from '../shared/connection';
+import { validatePreferencesView } from '../shared/preferences';
 import { useNow } from './useNow';
 
 const dateLabel = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString('nl-BE', {
@@ -70,6 +71,7 @@ export function SchoolbagOverview({ view, now }: { view: SchoolbagView | null; n
 }
 
 export function SchoolbagPanel({ refreshToken }: { refreshToken: number }) {
+  const [enabled, setEnabled] = useState(false);
   const [view, setView] = useState<SchoolbagView | null>(null);
   const [error, setError] = useState('');
   const now = useNow();
@@ -77,14 +79,20 @@ export function SchoolbagPanel({ refreshToken }: { refreshToken: number }) {
   useEffect(() => {
     if (!available) return;
     let active = true;
-    void chrome.runtime.sendMessage({ type: 'schoolbag.read' } satisfies ConnectionMessage).then((raw: unknown) => {
+    void (async () => {
+      const preferences = validatePreferencesView(await chrome.runtime.sendMessage({ type: 'preferences.read' } satisfies ConnectionMessage));
+      if (!preferences?.ok) throw new Error('Preferences unavailable');
+      if (!active) return;
+      setEnabled(preferences.preferences.schoolbagEnabled);
+      if (!preferences.preferences.schoolbagEnabled) { setView(null); setError(''); return; }
+      const raw: unknown = await chrome.runtime.sendMessage({ type: 'schoolbag.read' } satisfies ConnectionMessage);
       const next = validateSchoolbagView(raw);
       if (!next?.ok) throw new Error('Schoolbag unavailable');
       if (active) { setView(next); setError(''); }
-    }).catch(() => { if (active) { setView(null); setError('De boekentas kon niet worden geladen. Probeer het overzicht opnieuw te openen.'); } });
+    })().catch(() => { if (active) { setView(null); setError('De boekentas kon niet worden geladen. Probeer het overzicht opnieuw te openen.'); } });
     return () => { active = false; };
   }, [available, refreshToken]);
-  if (!available) return null;
+  if (!available || !enabled) return null;
   if (error) return <section aria-label="Boekentas" className="mt-6 rounded-2xl border border-teal-200 p-5"><h2 className="font-semibold">Boekentas</h2><p role="alert" className="mt-2 text-sm text-red-700">{error}</p></section>;
   return <SchoolbagOverview view={view} now={now} />;
 }

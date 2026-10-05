@@ -600,7 +600,7 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
         await log(current, 'preferences.saved', 'succeeded', { intervalMinutes: message.preferences.intervalMinutes, days: message.preferences.notificationDays,
           monitoringEnabled: message.preferences.monitoringEnabled, notificationsEnabled: message.preferences.notificationsEnabled,
           browserNotificationsEnabled: message.preferences.browserNotificationsEnabled, categories: message.preferences.notificationCategories,
-          todoRemindersEnabled: message.preferences.todoRemindersEnabled,
+          todoRemindersEnabled: message.preferences.todoRemindersEnabled, schoolbagEnabled: message.preferences.schoolbagEnabled,
           newColor: message.preferences.newColor, changedColor: message.preferences.changedColor });
         await ensureAlarm(current);
         await configureWebsite(message.preferences.browserNotificationsEnabled, current);

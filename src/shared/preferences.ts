@@ -6,6 +6,7 @@ export interface Preferences {
   notificationsEnabled: boolean; notificationDays: number; notificationCategories: Category[];
   browserNotificationsEnabled: boolean;
   todoRemindersEnabled: boolean;
+  schoolbagEnabled: boolean;
   newColor: string; changedColor: string;
 }
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -13,6 +14,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   notificationDays: 3, notificationCategories: ['tests', 'assignments'],
   browserNotificationsEnabled: false,
   todoRemindersEnabled: true,
+  schoolbagEnabled: false,
   newColor: '#15803d', changedColor: '#b45309',
 };
 
@@ -22,7 +24,7 @@ export function validatePreferences(value: unknown): Preferences | null {
   const keys = Object.keys(DEFAULT_PREFERENCES);
   if (Object.keys(prefs).length !== keys.length || !keys.every((key) => Object.hasOwn(prefs, key)) ||
       typeof prefs.monitoringEnabled !== 'boolean' || typeof prefs.notificationsEnabled !== 'boolean' ||
-      typeof prefs.browserNotificationsEnabled !== 'boolean' || typeof prefs.todoRemindersEnabled !== 'boolean' ||
+      typeof prefs.browserNotificationsEnabled !== 'boolean' || typeof prefs.todoRemindersEnabled !== 'boolean' || typeof prefs.schoolbagEnabled !== 'boolean' ||
       ![5, 15, 30, 60].includes(prefs.intervalMinutes as number) ||
       typeof prefs.notificationDays !== 'number' || !Number.isInteger(prefs.notificationDays) || prefs.notificationDays < 1 || prefs.notificationDays > 30 ||
       typeof prefs.newColor !== 'string' || !/^#[0-9a-f]{6}$/i.test(prefs.newColor) ||
@@ -33,7 +35,7 @@ export function validatePreferences(value: unknown): Preferences | null {
   return { monitoringEnabled: prefs.monitoringEnabled, intervalMinutes: prefs.intervalMinutes as number,
     notificationsEnabled: prefs.notificationsEnabled, notificationDays: prefs.notificationDays,
     notificationCategories: [...prefs.notificationCategories] as Category[], browserNotificationsEnabled: prefs.browserNotificationsEnabled,
-    todoRemindersEnabled: prefs.todoRemindersEnabled,
+    todoRemindersEnabled: prefs.todoRemindersEnabled, schoolbagEnabled: prefs.schoolbagEnabled,
     newColor: prefs.newColor, changedColor: prefs.changedColor };
 }
 
@@ -41,6 +43,7 @@ export function validateStoredPreferences(value: unknown): Preferences | null {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     return validatePreferences({
       ...(!Object.hasOwn(value, 'browserNotificationsEnabled') ? { browserNotificationsEnabled: false } : {}),
+      ...(!Object.hasOwn(value, 'schoolbagEnabled') ? { schoolbagEnabled: false } : {}),
       ...(!Object.hasOwn(value, 'todoRemindersEnabled') ? { todoRemindersEnabled: true } : {}), ...value,
     });
   }

@@ -6,6 +6,7 @@ import { SchoolbagOverview } from '../src/ui/SchoolbagPanel';
 import { compareObservations } from '../src/domain/observations';
 import { validateConnectionMessage } from '../src/shared/connection';
 import { check, point } from './fixtures/observations';
+import { DEFAULT_PREFERENCES, validatePreferences, validateStoredPreferences } from '../src/shared/preferences';
 
 function bagPoint(overrides: Partial<BagPoint> = {}): BagPoint {
   return { id: crypto.randomUUID(), day: '2026-10-05', subject: 'Aardrijkskunde', title: 'Huiswerk',
@@ -14,6 +15,14 @@ function bagPoint(overrides: Partial<BagPoint> = {}): BagPoint {
 const now = new Date('2026-10-04T12:00:00Z');
 
 describe('local schoolbag suggestions', () => {
+  it('requires opt-in and preserves existing settings when upgrading old preferences', () => {
+    expect(DEFAULT_PREFERENCES.schoolbagEnabled).toBe(false);
+    const legacy = { ...DEFAULT_PREFERENCES, intervalMinutes: 30, notificationsEnabled: true };
+    Reflect.deleteProperty(legacy, 'schoolbagEnabled');
+    expect(validateStoredPreferences(legacy)).toEqual({ ...legacy, schoolbagEnabled: false });
+    expect(validatePreferences({ ...DEFAULT_PREFERENCES, schoolbagEnabled: true })?.schoolbagEnabled).toBe(true);
+    expect(validatePreferences({ ...DEFAULT_PREFERENCES, schoolbagEnabled: 'yes' })).toBeNull();
+  });
   it('recognizes folder diminutives in titles without separate instructions', () => {
     for (const name of ['map', 'mappen', 'mapje', 'mapjes', 'ringmap', 'ringmappen', 'ringmapje', 'ringmapjes']) {
       const materials = materialsFor([bagPoint({ title: `Neem je ${name} mee voor de oefening`, instructions: '' })]);

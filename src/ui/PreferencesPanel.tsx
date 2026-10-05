@@ -174,6 +174,12 @@ export function PreferencesPanel({ settings, refreshToken, onSaved }: {
               Chrome moet draaien en je Schoolware-sessie moet geldig zijn. Tijdens slaapstand kunnen controles later plaatsvinden.</p>
           </fieldset>
           <fieldset disabled={working} className="space-y-3">
+            <legend className="font-medium">Boekentas</legend>
+            <label className="flex items-center gap-2"><input type="checkbox" checked={draft.schoolbagEnabled}
+              onChange={(event) => change({ schoolbagEnabled: event.target.checked })} />Boekentas tonen onder de planning</label>
+            <p className="text-xs text-slate-500">Optionele suggesties voor materiaal om mee naar school en naar huis te nemen.</p>
+          </fieldset>
+          <fieldset disabled={working} className="space-y-3">
             <legend className="font-medium">Kleuren in de geschiedenis</legend>
             <label className="flex items-center gap-3"><input type="color" value={draft.newColor}
               onChange={(event) => change({ newColor: event.target.value })} className="h-9 w-12" />Nieuw waargenomen</label>
