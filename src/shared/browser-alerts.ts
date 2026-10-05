@@ -1,8 +1,7 @@
-import { SCHOOLWARE_ORIGIN, SCHOOLWARE_PERMISSION } from '../schoolware/agenda-request';
+import { SCHOOLWARE_ORIGIN, schoolwarePermission, schoolwareOrigin } from '../schoolware/agenda-request';
 
 export const BROWSER_ALERTS_KEY = 'schoolwareBrowserAlerts';
-export const BROWSER_ORIGINS = [SCHOOLWARE_PERMISSION];
-export const BROWSER_PERMISSIONS = { permissions: ['scripting' as const], origins: BROWSER_ORIGINS };
+export const browserPermissions = (value: string) => ({ permissions: ['scripting' as const], origins: [schoolwarePermission(value)] });
 export const MAX_BROWSER_ALERTS = 20;
 export interface BrowserAlert {
   id: string; createdAt: string; added: number; changed: number; days: number; test: boolean;
@@ -66,7 +65,7 @@ export function browserAlertsText(entries: BrowserAlert[]): string {
   return `${added} nieuwe of opnieuw zichtbare en ${changed} gewijzigde of niet meer zichtbare agendapunten in ${actual.length} melding(en).`;
 }
 
-export function isWebsiteSender(sender: { id?: string; url?: string; tab?: { id?: number | undefined }; frameId?: number }, extensionId: string): boolean {
+export function isWebsiteSender(sender: { id?: string; url?: string; tab?: { id?: number | undefined }; frameId?: number }, extensionId: string, origin = SCHOOLWARE_ORIGIN): boolean {
   if (sender.id !== extensionId || !Number.isSafeInteger(sender.tab?.id) || (sender.tab?.id ?? -1) < 0 || sender.frameId !== 0 || !sender.url) return false;
-  try { return new URL(sender.url).origin === SCHOOLWARE_ORIGIN; } catch { return false; }
+  try { return schoolwareOrigin(sender.url) === origin; } catch { return false; }
 }

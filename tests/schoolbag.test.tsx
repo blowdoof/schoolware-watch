@@ -105,7 +105,7 @@ describe('schoolbag projection and message validation', () => {
     const view = createSchoolbagView(scope);
     expect(view.points).toHaveLength(2);
     expect(validateSchoolbagView(view)).toEqual(view);
-    expect(JSON.stringify(view)).not.toContain('synthetic-profile-and-window');
+    expect(JSON.stringify(view)).not.toContain(check().scopeId);
     expect(JSON.stringify(view)).not.toContain('synthetic-source');
     expect(createSchoolbagView(null)).toEqual({ ok: true, lastSuccessAt: null, points: [] });
   });

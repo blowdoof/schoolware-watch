@@ -174,7 +174,7 @@ export async function synchronizeProgress(scopeId: string | null, reporter?: Act
       // IDs survive retries; a fresh nonce does not change operation identity.
       const pending = current.outbox.slice(0, 50);
       const operations = await Promise.all(pending.map(async (operation) => {
-        const item = await progressItemKey(current.key, operation.sourceKey);
+        const item = await progressItemKey(current.key, operation.sourceKey, new URL(current.scopeId).origin);
         return { id: operation.id, ...await encrypt(current.key, operation.id,
           { item, version: operation.version, status: operation.status, kind: operation.kind }) };
       }));

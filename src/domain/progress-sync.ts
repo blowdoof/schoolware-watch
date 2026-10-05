@@ -15,11 +15,11 @@ export function progressVersionText(snapshot: Snapshot): string {
 export async function progressVersion(snapshot: Snapshot): Promise<string> {
   return hex(await crypto.subtle.digest('SHA-256', encode(progressVersionText(snapshot))));
 }
-export async function progressItemKey(key: string, sourceKey: string): Promise<string> {
+export async function progressItemKey(key: string, sourceKey: string, origin = 'https://schoolware_siw.ksgwl.be'): Promise<string> {
   if (!isSecret(key)) throw new Error('Invalid key');
   const cryptoKey = await crypto.subtle.importKey('raw', unhex(key), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   return hex(await crypto.subtle.sign('HMAC', cryptoKey, encode(JSON.stringify(['schoolware-progress-v1',
-    'https://schoolware_siw.ksgwl.be', sourceKey]))));
+    origin, sourceKey]))));
 }
 export async function encryptProgress(key: string, id: string, value: unknown): Promise<{ iv: string; ciphertext: string }> {
   if (!isSecret(key)) throw new Error('Invalid key');

@@ -130,9 +130,11 @@ Chrome test, including with the Schoolware tab closed. An open Schoolware tab
 is not required for the tested session. Logging out correctly results in a
 session-unavailable status. No tab bridge is needed for this integration.
 Do not extract or persist cookies or tokens. Permissions are added only as the integration
-requires them. The manifest requests storage and alarms, and declares optional
-notifications, scripting and host access only for the observed Schoolware installation. Only trusted bundled
-extension pages can invoke the manual-check message; arbitrary URLs, extra query
+requires them. The manifest requests storage, alarms and activeTab, and declares optional
+notifications, scripting, webRequest and HTTPS host access. Each host request
+names the exact user-selected installation; the broad optional declaration allows
+custom school domains without granting all-sites access. Only trusted bundled
+extension pages can invoke the manual-check message; URLs outside the constrained agenda contract, extra query
 parameters, credentials in URLs, and unknown message fields are rejected.
 No full agenda payload is persisted or sent to the UI. History messages expose
 display snapshots and counts, not source keys or profile IDs. Structured comments

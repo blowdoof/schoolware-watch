@@ -60,13 +60,32 @@ try {
   };
   const { id } = await command('Extensions.loadUnpacked', { path: resolve('dist') });
   const optionsUrl = `chrome-extension://${id}/options.html`;
-  async function openSettings() {
+  async function openSettings(checkGuide = false) {
     const { targetId } = await command('Target.createTarget', { url: optionsUrl });
     const { sessionId } = await command('Target.attachToTarget', { targetId, flatten: true });
-    await poll(() => evaluate(sessionId, 'Boolean([...document.querySelectorAll("select")].find(select => select.options[0]?.text === "5 minuten"))'));
+    if (checkGuide) {
+      await poll(() => evaluate(sessionId, `document.querySelector('[aria-label="Installatiehulp"]')?.textContent.includes('Stap 1 van 3')`));
+      await poll(() => evaluate(sessionId, `Boolean([...document.querySelectorAll('button')].find(button => button.textContent === 'Schoolware verbinden'))`));
+      // Simulate a denied prompt without granting hosts or contacting Schoolware.
+      await evaluate(sessionId, `(() => {
+        chrome.permissions.request = async () => false;
+        [...document.querySelectorAll('button')].find(button => button.textContent === 'Schoolware verbinden').click();
+        return true;
+      })()`);
+      await poll(() => evaluate(sessionId, `document.body.textContent.includes('Geef toestemming om je agenda in Schoolware te herkennen.')`));
+      const local = await evaluate(sessionId, "chrome.storage.local.get(['schoolwareConnection', 'schoolwareSetupComplete'])");
+      assert.equal(local.schoolwareConnection, undefined);
+      assert.equal(local.schoolwareSetupComplete, undefined);
+      console.log('Chrome setup smoke passed: first-opening guide and denied access leave the agenda unconnected.');
+    }
+    await poll(() => evaluate(sessionId, `(() => {
+      const later = [...document.querySelectorAll('button')].find(button => button.textContent === 'Later instellen');
+      if (later) later.click();
+      return Boolean([...document.querySelectorAll('select')].find(select => select.options[0]?.text === '5 minuten'));
+    })()`));
     return { targetId, sessionId };
   }
-  const page = await openSettings();
+  const page = await openSettings(true);
   const worker = await poll(async () => {
     const { targetInfos } = await command('Target.getTargets');
     return targetInfos.find((target) => target.type === 'service_worker' && target.url.startsWith(`chrome-extension://${id}/`));
@@ -134,7 +153,10 @@ try {
   })()`);
   const { targetId: bagTarget } = await command('Target.createTarget', { url: `chrome-extension://${id}/dashboard.html` });
   const { sessionId: bagSession } = await command('Target.attachToTarget', { targetId: bagTarget, flatten: true });
-  await poll(() => evaluate(bagSession, `document.querySelector('[aria-label="Boekentas"]')?.textContent.includes('pagina 24-34')`));
+  await poll(() => evaluate(bagSession, `(() => {
+    [...document.querySelectorAll('button')].find(button => button.textContent === 'Later instellen')?.click();
+    return document.querySelector('[aria-label="Boekentas"]')?.textContent.includes('pagina 24-34');
+  })()`));
   const bag = await evaluate(bagSession, `(() => {
     const section = document.querySelector('[aria-label="Boekentas"]');
     return { text: section.textContent, homeText: [...section.querySelectorAll('h3')].find(heading => heading.textContent === 'Mee naar huis').parentElement.textContent, laptops: [...section.querySelectorAll('li')].filter(li => li.textContent.includes('Altijd meenemen')).length };
@@ -174,7 +196,10 @@ try {
     await command('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false }, bagSession);
     await command('Page.enable', {}, bagSession);
     await command('Page.navigate', { url: `chrome-extension://${id}/dashboard.html` }, bagSession);
-    await poll(() => evaluate(bagSession, `document.querySelector('[aria-label="Boekentas"]')?.textContent.includes('pagina 50-65')`));
+    await poll(() => evaluate(bagSession, `(() => {
+      [...document.querySelectorAll('button')].find(button => button.textContent === 'Later instellen')?.click();
+      return document.querySelector('[aria-label="Boekentas"]')?.textContent.includes('pagina 50-65');
+    })()`));
     const capture = async (fileName, selector) => {
       await evaluate(bagSession, `(() => {
         document.querySelector(${JSON.stringify(selector)}).scrollIntoView({ block: 'start' });

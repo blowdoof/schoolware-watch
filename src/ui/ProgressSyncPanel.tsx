@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
+import { SCHOOLWARE_ORIGIN, schoolwareOrigin } from '../schoolware/agenda-request';
+import { validateConnectionState } from '../shared/connection';
 import { hex } from '../domain/progress-sync';
 import { SYNC_PERMISSION, parsePairingCode, normalizeSyncLabel, validateSyncView, type SyncMessage, type SyncView } from '../shared/progress-sync';
 
-export function ProgressSyncPanel({ refreshToken }: { refreshToken: number }) {
+export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { refreshToken: number; initialMode?: 'first' | 'join' }) {
   const available = typeof chrome !== 'undefined' && Boolean(chrome.runtime?.id);
+  const [compatible, setCompatible] = useState(false);
   const [view, setView] = useState<SyncView | null>(null);
-  const [mode, setMode] = useState('first');
+  const [mode, setMode] = useState(initialMode);
   const [secret, setSecret] = useState('');
   const [pairing, setPairing] = useState('');
   const [working, setWorking] = useState(false);
@@ -17,6 +20,9 @@ export function ProgressSyncPanel({ refreshToken }: { refreshToken: number }) {
   useEffect(() => {
     if (!available) return;
     let mounted = true;
+    void chrome.runtime.sendMessage({ type: 'connection.read' }).then((raw: unknown) => {
+      if (mounted) setCompatible(schoolwareOrigin(validateConnectionState(raw)?.requestUrl) === SCHOOLWARE_ORIGIN);
+    }).catch(() => {});
     void chrome.runtime.sendMessage({ type: 'sync.read' } satisfies SyncMessage).then((raw: unknown) => {
       const next = validateSyncView(raw);
       if (mounted && next?.ok) {
@@ -33,6 +39,7 @@ export function ProgressSyncPanel({ refreshToken }: { refreshToken: number }) {
     setView(next); return next;
   }
   async function connect() {
+    if (!compatible) { setMessage('Taaksoorten zijn op deze installatie nog niet bevestigd. Gedeelde taakvoortgang is nog niet beschikbaar.'); return; }
     setWorking(true); setMessage('');
     try {
       // Request optional host access directly from the user's click.
@@ -84,6 +91,7 @@ export function ProgressSyncPanel({ refreshToken }: { refreshToken: number }) {
     <h2 className="font-semibold">Voortgang delen tussen computers</h2>
     <p className="mt-2 text-sm leading-6 text-slate-600">Deel Open, Bezig en Klaar via schoolware.bumper.be. Titels, instructies en Schoolware-inloggegevens blijven lokaal.
       Koppel alleen computers die de agenda van dezelfde leerling bekijken. Elke leerling heeft een eigen deelgroep en koppelcode; verschillende gezinnen blijven gescheiden.</p>
+    {!compatible && <p role="status" className="mt-3 text-sm text-amber-800">Koppel eerst een ondersteunde agenda. Voor experimentele installaties zijn taaksoorten en gedeelde taakvoortgang nog niet bevestigd.</p>}
     {view?.enabled ? <>
       <p className="mt-3 text-sm">{view.registrationPending ? 'Je nieuwe leerlinggroep wacht nog op registratie; Chrome probeert het automatisch opnieuw.' : 'Ingeschakeld voor de agendaselectie waarmee je hebt gekoppeld.'} {view.pending} wijzigingen wachten op verzending.</p>
       <p className="mt-2 text-xs text-slate-500">{view.lastSuccessAt ? `Laatst gesynchroniseerd: ${new Date(view.lastSuccessAt).toLocaleString('nl-BE', { timeZone: 'Europe/Brussels' })}` : 'Nog geen geslaagde synchronisatie.'}</p>
@@ -119,7 +127,7 @@ export function ProgressSyncPanel({ refreshToken }: { refreshToken: number }) {
       </details>
     </> : <div className="mt-4 space-y-3 text-sm">
       <label className="block">Deze computer
-        <select value={mode} onChange={(e) => { setMode(e.target.value); setSecret(''); }} className="mt-1 block rounded-lg border border-slate-300 p-2">
+        <select value={mode} onChange={(e) => { setMode(e.target.value === 'first' ? 'first' : 'join'); setSecret(''); }} className="mt-1 block rounded-lg border border-slate-300 p-2">
           <option value="first">Eerste computer instellen</option><option value="join">Koppelen aan een bestaande computer</option>
         </select>
       </label>
@@ -130,7 +138,7 @@ export function ProgressSyncPanel({ refreshToken }: { refreshToken: number }) {
       {mode === 'first' ? <p>Maak automatisch een nieuwe leerlinggroep aan. Je ontvangt een koppelcode voor de andere computers. Gebruik dit eenmaal per leerling.</p> : <label className="block">Koppelcode van de eerste computer
         <input type="password" autoComplete="off" spellCheck={false} value={secret} onChange={(e) => setSecret(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-300 p-2" />
       </label>}
-      <button type="button" disabled={working || !normalizeSyncLabel(label) || (mode !== 'first' && !parsePairingCode(secret.trim()))}
+      <button type="button" disabled={working || !compatible || !normalizeSyncLabel(label) || (mode !== 'first' && !parsePairingCode(secret.trim()))}
         onClick={() => { void connect(); }} className="rounded-lg bg-teal-700 px-4 py-2 font-medium text-white disabled:opacity-50">{mode === 'first' ? 'Nieuwe leerlinggroep aanmaken' : 'Koppelen'}</button>
     </div>}
     {pairing && <div className="mt-4 text-sm">

@@ -1,5 +1,9 @@
 # Production review
 
+Historical review of the first release. The owner subsequently reported store
+approval and publication. The current unpublished multi-installation and setup
+update is documented in [multi-installation setup](multi-installation-setup.md).
+
 Review date: 2026-10-04. Reviewed branch `features/local-observation-history`
 based on `22e5e22`, including the remediation working tree, against local
 `main` at `d463fa7`.

@@ -1,7 +1,7 @@
 import { openHistoryDatabase, HISTORY_DB } from './database';
 import { SYNC_STATE_KEY, parsePairingCode, normalizeSyncLabel, type SyncState, type SyncView, type SyncMember } from '../shared/progress-sync';
 import { progressItemKey, progressVersion, progressVersionText } from '../domain/progress-sync';
-import { hasAgendaMarker } from '../domain/tasks';
+import { hasAgendaMarker, isTaskCategory } from '../domain/tasks';
 import type { TaskStatus } from '../domain/tasks';
 import { activityInput, appendActivity, type AuditContext } from './activity';
 
@@ -27,7 +27,7 @@ export class ProgressSyncRepository {
     try {
       const scope = await db.get('scopes', scopeId);
       if (!scope) throw new Error('Check agenda first');
-      const outbox = seed ? await Promise.all(scope.items.filter((item) => item.present && hasAgendaMarker(item.snapshot.typePunt) &&
+      const outbox = seed ? await Promise.all(scope.items.filter((item) => item.present && isTaskCategory(item.category) && hasAgendaMarker(item.snapshot.typePunt) &&
         !item.snapshot.hidden && !item.snapshot.cancelled && item.taskStatus && item.taskStatus !== 'open').map(async (item) =>
         ({ id: crypto.randomUUID(), sourceKey: item.sourceKey, version: await progressVersion(item.snapshot), status: item.taskStatus!, kind: 'manual' as const }))) : [];
       const tx = db.transaction(['sync', 'scopes'], 'readwrite');
@@ -123,9 +123,9 @@ export class ProgressSyncRepository {
       const state = await db.get('sync', SYNC_STATE_KEY);
       const before = await db.get('scopes', scopeId);
       if (!state || state.scopeId !== scopeId || !before || state.cursor < state.head) return false;
-      const matches = await Promise.all(before.items.filter((item) => item.present && hasAgendaMarker(item.snapshot.typePunt) &&
+      const matches = await Promise.all(before.items.filter((item) => item.present && isTaskCategory(item.category) && hasAgendaMarker(item.snapshot.typePunt) &&
         !item.snapshot.hidden && !item.snapshot.cancelled).map(async (item) => {
-        const version = await progressVersion(item.snapshot); const key = await progressItemKey(state.key, item.sourceKey);
+        const version = await progressVersion(item.snapshot); const key = await progressItemKey(state.key, item.sourceKey, new URL(state.scopeId).origin);
         return { sourceKey: item.sourceKey, text: progressVersionText(item.snapshot), remoteKey: `${key}.${version}` };
       }));
       const tx = db.transaction(['scopes', 'sync', 'activity'], 'readwrite');

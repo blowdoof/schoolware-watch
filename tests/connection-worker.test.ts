@@ -905,6 +905,56 @@ describe('periodic monitoring and optional notifications', () => {
 
 
 describe('agenda discovery worker integration', () => {
+  it('keeps a successful observation when optional banner registration fails', async () => {
+    const selectedUrl = requestUrl.replace('schoolware_siw.ksgwl.be', 'synthetic.schoolware.be');
+    await dispatch({ type: 'preferences.save', preferences: { ...DEFAULT_PREFERENCES, browserNotificationsEnabled: true } });
+    vi.mocked(chrome.scripting.getRegisteredContentScripts).mockRejectedValue(new Error('Synthetic registration failure'));
+    expect(await dispatch({ type: 'agenda.check', requestUrl: selectedUrl })).toMatchObject({ lastCheck: { status: 'success' } });
+    expect(await dispatch({ type: 'history.read' })).toMatchObject({ itemCount: 2 });
+  });
+  it('requires permission for the selected destination even when the original school is allowed', async () => {
+    const selectedUrl = requestUrl.replace('schoolware_siw.ksgwl.be', 'synthetic.schoolware.be');
+    vi.mocked(chrome.permissions.contains).mockImplementation(async (request) =>
+      !request.origins?.includes('https://synthetic.schoolware.be/*'));
+    expect(await dispatch({ type: 'agenda.check', requestUrl: selectedUrl })).toMatchObject({ lastCheck: { status: 'permission-required' } });
+    expect(fetchAgenda).not.toHaveBeenCalled();
+    expect(alarm).toBeUndefined();
+  });
+  it('uses the chosen installation for transport, alarms and banner permissions', async () => {
+    const origin = 'https://synthetic.schoolware.be';
+    const selectedUrl = requestUrl.replace('https://schoolware_siw.ksgwl.be', origin);
+    await dispatch({ type: 'agenda.check', requestUrl });
+    await dispatch({ type: 'preferences.save', preferences: { ...DEFAULT_PREFERENCES, browserNotificationsEnabled: true } });
+    await dispatch({ type: 'agenda.check', requestUrl: selectedUrl });
+    expect(new URL(String(vi.mocked(fetchAgenda).mock.calls.at(-1)![0])).origin).toBe(origin);
+    expect(chrome.permissions.contains).toHaveBeenCalledWith({ origins: [`${origin}/*`] });
+    expect(registeredScripts[0]?.matches).toEqual([`${origin}/*`]);
+    expect(chrome.permissions.remove).toHaveBeenCalledWith({ origins: ['https://schoolware_siw.ksgwl.be/*'] });
+    expect(alarm).toBeDefined();
+    const otherWebsite = { ...sender, url: 'https://schoolware_siw.ksgwl.be/webouders/start.html', tab: { id: 1 }, frameId: 0 };
+    const reply = await new Promise((resolve) => listener({ type: 'browser.alerts.read' }, otherWebsite, resolve));
+    expect(reply).toMatchObject({ enabled: false, entries: [] });
+    expect(await dispatch({ type: 'history.read' })).toMatchObject({ itemCount: 2, entries: [{ kind: 'baseline' }, { kind: 'baseline' }] });
+  });
+  it('cannot finish setup without history and clears the completion decision with local data', async () => {
+    expect(await dispatch({ type: 'setup.complete' })).toMatchObject({ requestUrl: null });
+    expect(stored.schoolwareSetupComplete).toBeUndefined();
+    await dispatch({ type: 'agenda.check', requestUrl });
+    await dispatch({ type: 'setup.complete' });
+    expect(stored.schoolwareSetupComplete).toBe(true);
+    await dispatch({ type: 'connection.clear' });
+    expect(stored.schoolwareSetupComplete).toBeUndefined();
+  });
+  it('cannot finish setup while an enabled notification channel lacks permission', async () => {
+    await dispatch({ type: 'agenda.check', requestUrl });
+    notificationPermission = false;
+    await dispatch({ type: 'preferences.save', preferences: { ...DEFAULT_PREFERENCES, notificationsEnabled: true } });
+    expect(await dispatch({ type: 'setup.complete' })).toMatchObject({ requestUrl: null });
+    expect(stored.schoolwareSetupComplete).toBeUndefined();
+    notificationPermission = true;
+    await dispatch({ type: 'setup.complete' });
+    expect(stored.schoolwareSetupComplete).toBe(true);
+  });
   it('captures only in the chosen tab and creates a baseline only after explicit confirmation', async () => {
     vi.mocked(chrome.tabs.create).mockImplementation(async () => ({ id: 9 }) as chrome.tabs.Tab);
     const initial = await dispatch({ type: 'connection.discovery.start' }) as { id: string; status: string };

@@ -1,6 +1,27 @@
 export const SCHOOLWARE_ORIGIN = 'https://schoolware_siw.ksgwl.be';
-export const SCHOOLWARE_PERMISSION = `${SCHOOLWARE_ORIGIN}/*`;
 export const AGENDA_PATH = '/webouders/bin/server.fcgi/REST/AgendaPunt';
+
+/** User-selected public HTTPS installations; endpoint validation is separate from host consent. */
+export function schoolwareOrigin(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length > 4096) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.username || url.password || url.port ||
+        !/^[a-z0-9_](?:[a-z0-9_.-]*[a-z0-9])?\.[a-z]{2,}$/i.test(url.hostname) ||
+        /(?:^|\.)(?:localhost|local|internal|test|invalid)$/i.test(url.hostname)) return null;
+    return url.origin;
+  } catch { return null; }
+}
+export function schoolwarePermission(value: string): string {
+  const origin = schoolwareOrigin(value);
+  if (!origin) throw new Error('Invalid installation');
+  return `${origin}/*`;
+}
+export function isSchoolwarePage(value: unknown): boolean {
+  if (!schoolwareOrigin(value)) return false;
+  const url = new URL(value as string);
+  return /^\/web(?:ouders|wisad)(?:\/|$)/.test(url.pathname) || /(?:^|[._-])schoolware(?:[._-]|$)/i.test(url.hostname);
+}
 
 const parameters = ['AgendaID', 'MapAgendasOp', 'MinTot', 'MaxVan', 'CompletedTaskForLL'] as const;
 
@@ -19,7 +40,7 @@ export function validateAgendaRequest(value: unknown): string | null {
   if (typeof value !== 'string' || value.length > 4096) return null;
   let url: URL;
   try { url = new URL(value); } catch { return null; }
-  if (url.origin !== SCHOOLWARE_ORIGIN || url.pathname !== AGENDA_PATH ||
+  if (!schoolwareOrigin(value) || url.pathname !== AGENDA_PATH ||
       url.username || url.password || url.hash) return null;
   const keys = [...url.searchParams.keys()];
   if (keys.length !== parameters.length ||
@@ -32,7 +53,7 @@ export function validateAgendaRequest(value: unknown): string | null {
   if (!isDate(min) || !isDate(max) || min > max) return null;
 
   // Reconstruct from the allowlist; preserve repeated agenda IDs until understood.
-  const canonical = new URL(AGENDA_PATH, SCHOOLWARE_ORIGIN);
+  const canonical = new URL(AGENDA_PATH, url.origin);
   for (const key of parameters) canonical.searchParams.set(key, url.searchParams.get(key)!);
   return canonical.href;
 }

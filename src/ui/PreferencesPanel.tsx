@@ -3,7 +3,9 @@ import type { Category } from '../domain/observations';
 import { DEFAULT_PREFERENCES, validatePreferences, validatePreferencesView, type Preferences, type PreferencesView } from '../shared/preferences';
 import type { ConnectionMessage } from '../shared/connection';
 import { notificationTestMessage, validateNotificationTestResult } from '../shared/notifications';
-import { BROWSER_ORIGINS, BROWSER_PERMISSIONS, validateBrowserAlertsView } from '../shared/browser-alerts';
+import { browserPermissions, validateBrowserAlertsView } from '../shared/browser-alerts';
+import { SCHOOLWARE_ORIGIN } from '../schoolware/agenda-request';
+import { validateConnectionState } from '../shared/connection';
 import { recordPermissionResult } from './permission-log';
 import { NotificationDiagnostics } from './NotificationDiagnostics';
 import { savePreferences } from './autosave';
@@ -21,6 +23,8 @@ async function send(message: ConnectionMessage): Promise<PreferencesView> {
 export function PreferencesPanel({ settings, refreshToken, onSaved }: {
   settings: boolean; refreshToken: number; onSaved: () => void;
 }) {
+  const [schoolwareUrl, setSchoolwareUrl] = useState(SCHOOLWARE_ORIGIN);
+  const permissions = browserPermissions(schoolwareUrl);
   const [view, setView] = useState<PreferencesView | null>(null);
   const [draft, setDraft] = useState({ ...DEFAULT_PREFERENCES });
   const dirty = useRef(false);
@@ -35,6 +39,10 @@ export function PreferencesPanel({ settings, refreshToken, onSaved }: {
   useEffect(() => {
     if (!extensionAvailable) return;
     let mounted = true;
+    void chrome.runtime.sendMessage({ type: 'connection.read' }).then((raw: unknown) => {
+      const state = validateConnectionState(raw);
+      if (mounted) setSchoolwareUrl(state?.requestUrl ?? SCHOOLWARE_ORIGIN);
+    }).catch(() => {});
     const acceptDraft = !dirty.current;
     void send({ type: 'preferences.read' }).then((next) => {
       if (mounted) { setView(next); if (acceptDraft && !dirty.current) { setDraft(next.preferences); draftRef.current = next.preferences; } }
@@ -61,7 +69,7 @@ export function PreferencesPanel({ settings, refreshToken, onSaved }: {
       const permission = chrome.permissions.request({
         permissions: [...(patch.notificationsEnabled === true ? ['notifications' as const] : []),
           ...(patch.browserNotificationsEnabled === true ? ['scripting' as const] : [])],
-        origins: patch.browserNotificationsEnabled === true ? BROWSER_ORIGINS : [],
+        origins: patch.browserNotificationsEnabled === true ? permissions.origins : [],
       });
       void permission.then(async (granted) => {
         if (patch.notificationsEnabled === true) await recordPermissionResult('notifications', granted);
@@ -112,7 +120,7 @@ export function PreferencesPanel({ settings, refreshToken, onSaved }: {
     setWorking(true);
     setMessage('');
     try {
-      const granted = await chrome.permissions.request(BROWSER_PERMISSIONS);
+      const granted = await chrome.permissions.request(permissions);
       await recordPermissionResult('browser', granted);
       if (!granted) {
         setMessage('Chrome heeft geen toestemming gegeven om de banner op Schoolware te tonen.'); return;
@@ -182,7 +190,7 @@ export function PreferencesPanel({ settings, refreshToken, onSaved }: {
               onChange={(event) => change({ todoRemindersEnabled: event.target.checked })} />Dagelijkse to-do herinnering vanaf 16 uur</label>
             <p className="text-xs leading-5 text-slate-500">Na een geslaagde agendacontrole krijg je maximaal één to-do herinnering per dag via elk ingeschakeld meldingskanaal.
               Ze volgt de geselecteerde categorieën en kijkt tot de volgende bekende schooldag in je agenda. Chrome moet draaien; zonder open taken of bekende volgende schooldag komt er geen herinnering.</p>
-            <p className="text-xs leading-5 text-slate-500">De banner verschijnt alleen op schoolware_siw.ksgwl.be en toont algemene aantallen.
+            <p className="text-xs leading-5 text-slate-500">De banner verschijnt alleen op je gekoppelde Schoolware-website en toont algemene aantallen.
               De extensie leest of bewaart geen pagina-inhoud. Chrome vraagt toestemming om de banner op Schoolware te plaatsen.
               Het extensie-icoon toont een teller totdat je de meldingen op Schoolware sluit.</p>
             <label className="flex items-center gap-3">Van nu tot

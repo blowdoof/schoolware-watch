@@ -1,6 +1,6 @@
 # Privacyverklaring Schoolware Watch
 
-Laatst bijgewerkt: 4 oktober 2026. Versie: 0.1.0.
+Laatst bijgewerkt: 5 oktober 2026. Versie: 0.1.0.
 
 Schoolware Watch is een onafhankelijk project van Bumper.be. Contact:
 [info@bumper.be](mailto:info@bumper.be). Het is geen officieel product van
@@ -54,7 +54,7 @@ niet onafhankelijk of gekoppelde toestellen dezelfde leerling mogen opvolgen.
 Systeemmeldingen en Schoolware-banners zijn optioneel. De standaardtekst gebruikt
 algemene aantallen zonder leerlingnamen of agendatitels. Aanklikken opent lokale
 lesdetails. Chrome-toestemming is nodig voor de gekozen functie. Hosttoegang is
-beperkt tot de ondersteunde Schoolware-installatie en optionele voortgangsdienst.
+wordt alleen gevraagd voor de door jou gekozen Schoolware-website en, bij inschakelen van delen, de voortgangsdienst. Na een klik op het extensie-icoon kan het adres van het huidige tabblad tijdelijk worden gelezen om Schoolware te herkennen. Andere tabbladadressen worden niet bewaard.
 
 Er zijn geen advertenties, analytics of telemetrie. Externe project-, contact-
 en PayPal-links openen alleen op jouw actie; er wordt geen agendagegeven aan

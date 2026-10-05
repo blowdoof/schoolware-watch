@@ -15,7 +15,7 @@ export const ACTIVITY_ACTIONS = ['worker.started', 'worker.installed', 'browser.
 export type ActivityAction = typeof ACTIVITY_ACTIONS[number];
 export type ActivityPhase = 'started' | 'succeeded' | 'failed' | 'skipped' | 'info';
 export type ActivityContext = 'worker' | 'popup' | 'options' | 'dashboard' | 'schoolware' | 'alarm' | 'system';
-export const ACTIVITY_REQUESTS = ['ui.open', 'sync.read', 'sync.run', 'sync.create', 'sync.connect', 'sync.disconnect', 'sync.delete', 'sync.pairing', 'connection.read', 'connection.clear', 'history.read', 'history.clear', 'history.retention',
+export const ACTIVITY_REQUESTS = ['setup.complete', 'ui.open', 'sync.read', 'sync.run', 'sync.create', 'sync.connect', 'sync.disconnect', 'sync.delete', 'sync.pairing', 'connection.read', 'connection.clear', 'history.read', 'history.clear', 'history.retention',
   'sync.name',
   'connection.discovery.start', 'connection.discovery.read', 'connection.discovery.cancel', 'connection.discovery.confirm',
   'preferences.read', 'preferences.save', 'notifications.test', 'notifications.details', 'browser.alerts.read',

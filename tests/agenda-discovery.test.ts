@@ -31,6 +31,25 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe('explicit agenda discovery', () => {
+  it('binds an existing selected tab to its exact installation and survives restoration', async () => {
+    const origin = 'https://synthetic.schoolware.be';
+    const selectedUrl = requestUrl.replace('https://schoolware_siw.ksgwl.be', origin);
+    tabUrl = `${origin}/webouders/start.html`;
+    await beginAgendaDiscovery(origin, 9);
+    expect(chrome.tabs.create).not.toHaveBeenCalled();
+    await observeAgendaRequest(details());
+    expect((await readAgendaDiscovery()).status).toBe('waiting');
+    await restoreAgendaDiscovery();
+    await observeAgendaRequest(details({ url: selectedUrl, initiator: origin }));
+    const found = await readAgendaDiscovery();
+    expect(found.status).toBe('found');
+    expect(await takeDiscoveredAgenda(found.id!)).toBe(validateAgendaRequest(selectedUrl));
+    expect(chrome.permissions.contains).toHaveBeenCalledWith({ permissions: ['webRequest'], origins: [`${origin}/*`] });
+  });
+  it('refuses a selected tab that moved before discovery starts', async () => {
+    await expect(beginAgendaDiscovery('https://synthetic.schoolware.be', 9)).rejects.toThrow('Tab changed');
+    expect(stored[DISCOVERY_KEY]).toBeUndefined();
+  });
   it('binds a dedicated tab before navigation, restores its deadline and reveals no source URL in status', async () => {
     const initial = await beginAgendaDiscovery();
     expect(initial.status).toBe('waiting');
