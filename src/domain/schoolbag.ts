@@ -16,7 +16,7 @@ const materialNames: [RegExp, string][] = [
   [/\b(?:werkboek(?:en)?|cahier)\b/iu, 'Werkboek'],
   [/\b(?:handboek(?:en)?|leerboek(?:en)?)\b/iu, 'Handboek'],
   [/\bboek(?:en)?\b/iu, 'Boek'], [/\bcursus\b/iu, 'Cursus'],
-  [/\bschrift(?:en)?\b/iu, 'Schrift'], [/\b(?:ringmap|map(?:pen)?)\b/iu, 'Map'],
+  [/\bschrift(?:en)?\b/iu, 'Schrift'], [/\b(?:ringmap(?:pen|jes?)?|map(?:pen|jes?)?)\b/iu, 'Map'],
   [/\batlas\b/iu, 'Atlas'], [/\bwoordenboek\b/iu, 'Woordenboek'],
   [/\b(?:rekenmachine|calculator)\b/iu, 'Rekenmachine'],
   [/\bgeodriehoek\b/iu, 'Geodriehoek'], [/\bpasser\b/iu, 'Passer'],

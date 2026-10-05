@@ -1,5 +1,26 @@
 # Development roadmap
 
+## Owner-requested backlog
+
+Recorded on 2026-10-04. These extensions are planned, not implemented; they do
+not change the current Chrome Web Store submission.
+
+- [ ] Support multiple children within one extension installation. Add a pupil
+  selector and separate agenda connections, monitoring state, history, task
+  progress, schoolbag suggestions and notification routing per pupil. Manage a
+  separate optional sharing group and pairing code for each pupil. Preserve
+  existing single-pupil data through migration and verify isolation across
+  pupils, devices and worker restarts. Today, one active agenda connection and
+  one sharing group are supported per Chrome profile.
+- [ ] Explore teacher follow-up of selected marked items. The owner will first
+  brainstorm the workflow. Define verified invitations, pupil/item selection,
+  read-only teacher access, revocation and how teachers identify assignments
+  before implementation. See [Teacher follow-up proposal](teacher-follow-up-proposal.md)
+  for the design constraints and unresolved decisions. Existing parent pairing
+  codes must not be used to grant teacher access.
+
+## Development phases
+
 1. Foundation: project instructions, architecture, strict TypeScript, React,
    Vite, Tailwind, MV3 build, and Vitest. Build artifacts ready for local loading.
 2. API and session: verify endpoint, authentication, pagination, dates, identity,

@@ -27,8 +27,10 @@ function PackingList({ materials, points }: { materials: BagMaterial[]; points: 
         </details>
       </li>)}
     </ul>
-    {!materials.length && <p className="mt-2 text-xs text-slate-600">Geen materiaalverwijzingen herkend. Dat betekent niet dat je verder niets nodig hebt.</p>}
-    {unspecified.length > 0 && <details className="mt-3 text-xs">
+    {!materials.length && <p className="mt-2 text-xs text-slate-600">{unspecified.length > 0
+      ? 'Controleer de agendapunten hieronder: het benodigde materiaal kon nog niet automatisch worden bepaald.'
+      : 'Controleer zelf welk extra materiaal je nodig hebt; de opgehaalde agenda geeft hierover geen uitsluitsel.'}</p>}
+    {unspecified.length > 0 && <details open={materials.length === 0 ? true : undefined} className="mt-3 text-xs">
       <summary className="cursor-pointer font-medium text-amber-800">Materiaal zelf controleren ({unspecified.length} agendapunten)</summary>
       <ul className="mt-2 space-y-3">{unspecified.map((point) => <li key={point.id}>
         <p className="break-words font-medium">{point.subject ? `${point.subject} · ` : ''}{agendaText(point.title) || 'Zonder titel'}</p>

@@ -14,6 +14,21 @@ function bagPoint(overrides: Partial<BagPoint> = {}): BagPoint {
 const now = new Date('2026-10-04T12:00:00Z');
 
 describe('local schoolbag suggestions', () => {
+  it('recognizes folder diminutives in titles without separate instructions', () => {
+    for (const name of ['map', 'mappen', 'mapje', 'mapjes', 'ringmap', 'ringmappen', 'ringmapje', 'ringmapjes']) {
+      const materials = materialsFor([bagPoint({ title: `Neem je ${name} mee voor de oefening`, instructions: '' })]);
+      expect(materials.map((item) => item.label)).toEqual(['Map']);
+    }
+    expect(materialsFor([bagPoint({ title: 'Geen mapje nodig', instructions: '' })])).toEqual([]);
+    expect(materialsFor([bagPoint({ title: 'Bekijk de roadmap', instructions: '' })])).toEqual([]);
+  });
+  it('shows unresolved agenda points immediately without suggesting no material is needed', () => {
+    const html = renderToStaticMarkup(<SchoolbagOverview now={now} view={{ ok: true,
+      lastSuccessAt: now.toISOString(), points: [bagPoint({ title: 'Herhaal de oefeningen', instructions: '' })] }} />);
+    expect(html).toContain('het benodigde materiaal kon nog niet automatisch worden bepaald');
+    expect(html).toMatch(/<details open=""/);
+    expect(html).not.toContain('Geen materiaalverwijzingen herkend');
+  });
   it('extracts Dutch material and page references and keeps subjects separate', () => {
     const materials = materialsFor([bagPoint(), bagPoint({ subject: 'Frans', instructions: 'Werkboek pagina 50–65; schrift meebrengen.' })]);
     expect(materials.map((item) => [item.subject, item.label, item.pages])).toEqual([
@@ -130,7 +145,7 @@ describe('schoolbag projection and message validation', () => {
   it('does not describe missing material or a missing day as a complete packing list', () => {
     const markup = renderToStaticMarkup(<SchoolbagOverview view={{ ok: true, lastSuccessAt: null, points: [] }} now={now} />);
     expect(markup).toContain('Geen volgende lesdag bekend');
-    expect(markup).toContain('Dat betekent niet dat je verder niets nodig hebt');
+    expect(markup).toContain('de opgehaalde agenda geeft hierover geen uitsluitsel');
     const unspecified = renderToStaticMarkup(<SchoolbagOverview view={{ ok: true, lastSuccessAt: now.toISOString(), points: [bagPoint({ instructions: 'Leren hoofdstuk 3' })] }} now={now} />);
     expect(unspecified).toContain('Materiaal zelf controleren');
   });
