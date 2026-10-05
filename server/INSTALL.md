@@ -54,8 +54,10 @@ Never point it at the hosting database.
 2. Create a private folder, for example `/home/example-account/schoolware-sync`, with
    a `public` child directory. Adjust the home path to the actual cPanel account.
 3. Set the subdomain's document root to that `public` directory. Upload
-   `public/sync.php` and `public/.htaccess` there. Copy `maintenance.php` to its
-   parent private directory. No other project file belongs
+   `public/sync.php` and `public/.htaccess` there. Copy `maintenance.php` to
+   `/home/example-account/maintenance.php`, the absolute private path required by the API.
+   This also supports a document root at `/home/example-account/public_html/schoolware`.
+   No other project file belongs
    in the public directory. Ensure HTTPS works before enabling the extension.
 4. Copy `config.example.php` to `/home/example-account/schoolware-sync-config.php`.
    It must be outside ALL websites' document
@@ -338,8 +340,12 @@ For an existing deployment, import `schema.sql`, then run
 `schema.sql` and must not repeat the ALTER. Existing groups receive an activity
 timestamp at upgrade time; no token, revision or ciphertext is replaced.
 
-Copy `maintenance.php` and `manage-groups.php` into the private parent directory
-alongside `public/`, then replace the API and `.htaccess`. The public allowlist
+Copy `maintenance.php` to `/home/example-account/maintenance.php` before replacing the API.
+The API uses that absolute path regardless of its document root. The private CLI
+`manage-groups.php` requires a helper in its own directory: place both in the
+account home, or also copy the helper beside an existing CLI in another private
+directory. Adjust the cron command to the CLI location. Replace `.htaccess` only
+in the dedicated API document root, never in a shared `public_html`. The public allowlist
 serves only `sync.php` and `privacy.html`; the cPanel PHP handler stays intact.
 Schedule a daily cPanel cron using the host's PHP 8.2 CLI:
 

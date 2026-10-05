@@ -44,6 +44,8 @@ def main():
             for source, destination in [(root / 'public/sync.php', public / 'sync.php'),
                                         (root / 'manage-groups.php', folder / 'manage-groups.php')]:
                 destination.write_text(source.read_text().replace(
+                    "'/home/example-account/maintenance.php'",
+                    "'" + (folder / 'maintenance.php').as_posix() + "'").replace(
                     "'/home/example-account/schoolware-sync-config.php'",
                     "'" + (folder / 'schoolware-sync-config.php').as_posix() + "'"), encoding='utf-8')
             def configure(extra=''):

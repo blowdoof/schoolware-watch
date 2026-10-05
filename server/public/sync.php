@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 // PHP 8.2 / PDO MySQL. No Schoolware transport or plaintext agenda data.
 ini_set('display_errors', '0');
-require __DIR__ . '/../maintenance.php';
+require '/home/example-account/maintenance.php';
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
