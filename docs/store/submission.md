@@ -59,7 +59,7 @@ the application cannot guarantee that those systems delete data immediately.
 | scripting (optional) | Inject the locally bundled generic notification banner only into the connected Schoolware origin after user permission. |
 | webRequest (optional) | During explicit connection setup, recognize an allowlisted agenda GET request from the explicitly selected or dedicated tab, without reading headers, cookies or bodies. Permission is revoked when discovery ends. |
 | https://*/* (optional host declaration) | Schools use different custom HTTPS domains. Request only the exact user-selected origin for agenda transport, discovery and an optional banner. No all-sites grant is requested. The endpoint and query parameters remain constrained. |
-| schoolware.bumper.be (optional host) | Exchange encrypted progress and optional encrypted participant announcements only after explicit group pairing. No agenda text or Schoolware credentials are uploaded. |
+| schoolware.bumper.be (runtime optional host grant, covered by https://*/*) | Exchange encrypted progress and optional encrypted participant announcements only after explicit group pairing. No agenda text or Schoolware credentials are uploaded. |
 
 ## Data-use declaration
 

@@ -84,7 +84,7 @@ export async function configureProgressSyncAlarm(reporter?: ActivityReporter): P
   const record = safeReporter(reporter);
   try {
     const state = await progressSync.read();
-    if (!state) {
+    if (!state || state.blocked) {
       await chrome.alarms.clear(PROGRESS_SYNC_ALARM);
       await record('alarm.configured', 'succeeded', { alarm: 'progress-sync', reason: 'disabled', registered: false }); return;
     }
@@ -161,6 +161,9 @@ export async function synchronizeProgress(scopeId: string | null, reporter?: Act
       await record('progress.sync', 'skipped', { reason: !state ? 'disabled' : 'profile-mismatch' }); return false;
     }
     const current = state;
+    if (current.blocked) {
+      await record('progress.sync', 'skipped', { reason: 'blocked' }); return false;
+    }
     if (current.registrationPending) {
       await audited(record, 'progress.registration', async () => {
         const registered = await request(current.token, { action: 'register' });
@@ -222,7 +225,7 @@ export async function synchronizeProgress(scopeId: string | null, reporter?: Act
     return changed || membersChanged;
   } catch (error) {
     await record('progress.sync', 'failed', { ...failureData(error, 'storage-error'), durationMs: Math.max(0, Date.now() - started) });
-    if (state) await progressSync.failed(state);
+    if (state) await progressSync.failed(state, error instanceof SyncFailure ? error.httpStatus : undefined);
     return false;
   }
 }

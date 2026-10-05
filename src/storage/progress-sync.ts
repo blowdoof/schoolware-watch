@@ -17,7 +17,7 @@ export class ProgressSyncRepository {
       lastSuccessAt: state?.lastSuccessAt ?? null, error: state?.error ?? false,
       ...(state?.displayName ? { displayName: state.displayName, membersError: state.membersError ?? false,
         members: (state.members ?? []).map((member) => ({ ...member, self: member.id === state.connectionId })) } : {}),
-      ...(state?.registrationPending ? { registrationPending: true } : {}) };
+      ...(state?.registrationPending ? { registrationPending: true } : {}), ...(state?.blocked ? { blocked: true } : {}) };
   }
   async connect(scopeId: string, code: string, seed: boolean, register = false, label?: string): Promise<void> {
     const pair = parsePairingCode(code);
@@ -109,11 +109,24 @@ export class ProgressSyncRepository {
       await tx.done; return accepted;
     } finally { db.close(); }
   }
-  async failed(expected: SyncState): Promise<void> {
+  async resume(): Promise<void> {
+    const db = await openHistoryDatabase(this.name);
+    try {
+      const tx = db.transaction('sync', 'readwrite');
+      const state = await tx.store.get(SYNC_STATE_KEY);
+      if (state) { delete state.blocked; await tx.store.put(state, SYNC_STATE_KEY); }
+      await tx.done;
+    } finally { db.close(); }
+  }
+  async failed(expected: SyncState, httpStatus?: number): Promise<void> {
     const db = await openHistoryDatabase(this.name);
     try {
       const tx = db.transaction('sync', 'readwrite'); const state = await tx.store.get(SYNC_STATE_KEY);
-      if (state?.connectionId === expected.connectionId && state.token === expected.token && state.key === expected.key) { state.error = true; await tx.store.put(state, SYNC_STATE_KEY); }
+      if (state?.connectionId === expected.connectionId && state.token === expected.token && state.key === expected.key) {
+        state.error = true;
+        if (httpStatus !== undefined && [401, 403, 409].includes(httpStatus)) state.blocked = true;
+        await tx.store.put(state, SYNC_STATE_KEY);
+      }
       await tx.done;
     } finally { db.close(); }
   }

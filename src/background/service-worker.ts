@@ -266,7 +266,7 @@ async function notify(scope: HistoryScope, checkId: string, now: Date, currentGe
     await log(current, 'notification.system', 'skipped', { reason: 'already-claimed' }); return;
   }
   const reopened = events.filter((event) => event.taskReopened).length;
-  await createNotification(checkId, `${added} nieuwe of opnieuw zichtbare en ${changed} gewijzigde of niet meer zichtbare agendapunten binnen ${prefs.notificationDays} dagen.${reopened ? ` ${reopened} voltooide taken weer op Bezig gezet.` : ''} Klik voor de lesdetails.`, false, current);
+  await createNotification(checkId, `${added} nieuwe of opnieuw zichtbare en ${changed} gewijzigde agendapunten binnen ${prefs.notificationDays} dagen.${reopened ? ` ${reopened} voltooide taken weer op Bezig gezet.` : ''} Klik voor de lesdetails.`, false, current);
 }
 
 async function notifyTodo(scopeId: string, now: Date, currentGeneration: number, current: Trace): Promise<void> {
@@ -310,6 +310,7 @@ async function notifyTodo(scopeId: string, now: Date, currentGeneration: number,
 async function runCheck(requestUrl: string, controller: AbortController, currentGeneration: number, current: Trace): Promise<ConnectionState> {
   await log(current, 'check', 'started');
   try {
+    requestUrl = await history.resolveProfileLink(requestUrl);
     if (!await chrome.permissions.contains({ origins: [schoolwarePermission(requestUrl)] })) {
       const state = { ...summary('permission-required'), requestUrl };
       if (generation === currentGeneration) {
@@ -336,6 +337,7 @@ async function runCheck(requestUrl: string, controller: AbortController, current
     const checkId = current.correlationId;
     if (result.status === 'success') {
       const input = createObservationInput(requestUrl, result.points, checkId, checkedAt);
+      input.allowClockRollback = true;
       input.coverage = requestCoverage(fetchUrl);
       input.legacyCoverage = requestCoverage(requestUrl);
       if (prefs.notificationsEnabled || prefs.browserNotificationsEnabled) {
@@ -476,10 +478,12 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
         await log(current, 'progress.connection', 'succeeded', { trigger: 'disconnect', reason: 'disabled' });
       }
       if (message.type === 'sync.delete') await deleteRemoteProgress(progressReporter(current, 'manual'));
+      if (message.type === 'sync.run') await progressSync.resume();
       if (message.type === 'sync.disconnect' || message.type === 'sync.delete') await chrome.permissions.remove({ origins: [SYNC_PERMISSION] });
       await configureProgressSyncAlarm(progressReporter(current, 'manual'));
       if (message.type === 'sync.create' || message.type === 'sync.connect' || message.type === 'sync.run') {
         await synchronizeProgress(connection.requestUrl, progressReporter(current, 'manual'), current);
+        await configureProgressSyncAlarm(progressReporter(current, 'manual'));
       }
       await invalidateTaskViews();
       await refreshBrowserBadge(true, current).catch(() => {});

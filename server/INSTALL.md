@@ -1,7 +1,8 @@
 # cPanel installation: schoolware.bumper.be
 
 The API requires PHP 8.2 with PDO MySQL and a dedicated MySQL/MariaDB database.
-No Docker, Node.js server, cron job or publicly exposed database port is needed.
+No Docker, Node.js server or publicly exposed database port is needed. Schedule
+the private maintenance command daily to remove expired data from idle groups.
 One database supports multiple isolated groups, each representing one pupil.
 Each group has its own random access token and client-side encryption key.
 Users create their own groups from the extension after the host administrator
@@ -24,7 +25,9 @@ Existing private configuration remains compatible. Optional settings
 `requests_per_token_minute` (default 120 per enabled group token) must be integers
 from 1 to 100000. All validated actions count, including registration retries,
 exchange, membership, deletion and operations that fail after authentication.
-Unknown tokens consume only the global bucket. Overload returns HTTP 429 with
+Unknown tokens use a separate keyed peer bucket (IPv6 /64) and never consume
+the enabled groups' global bucket. `requests_per_unknown_peer_minute` defaults
+to 120. Overload returns HTTP 429 with
 `Retry-After` until the next UTC minute. Choose limits for expected paired-device
 counts; legitimate retry bursts can be throttled too.
 
@@ -51,7 +54,8 @@ Never point it at the hosting database.
 2. Create a private folder, for example `/home/example-account/schoolware-sync`, with
    a `public` child directory. Adjust the home path to the actual cPanel account.
 3. Set the subdomain's document root to that `public` directory. Upload
-   `public/sync.php` and `public/.htaccess` there. No other project file belongs
+   `public/sync.php` and `public/.htaccess` there. Copy `maintenance.php` to its
+   parent private directory. No other project file belongs
    in the public directory. Ensure HTTPS works before enabling the extension.
 4. Copy `config.example.php` to `/home/example-account/schoolware-sync-config.php`.
    It must be outside ALL websites' document
@@ -302,8 +306,10 @@ quotas (20,000 retained records), retention cleanup and deletion are per group.
 Unknown or disabled tokens cannot read, write or delete records.
 
 `retention_days` accepts 30, 90, 180 or 365; default 90. Old server operations
-are purged during successful exchanges. With no requests, nothing triggers
-purging; use the explicit deletion control to remove inactive data immediately.
+are purged during successful exchanges. Run the private CLI `purge` command daily
+to also purge inactive groups. Without requests or scheduled maintenance, expired
+idle data can remain indefinitely. Empty groups whose `last_active_at` is older
+than the retention limit are reclaimed; their old pairing codes then lose access.
 The API bounds storage at 20,000 retained operations and accepts 50 uploads and
 200 downloads per exchange. Back up encrypted records together with the
 group/verifier database tables and private database configuration; the encryption key is only in the devices and
@@ -323,3 +329,37 @@ disposable local test server described in its header.
 Live cPanel HTTPS/header handling and two real Chrome profiles still require
 the smoke test after manual installation. Nothing is uploaded or deployed by
 the local build.
+
+## Review remediation upgrade (2026-10-05)
+
+For an existing deployment, import `schema.sql`, then run
+`migrations/20261005-maintenance.sql` once if `sw_sync_groups` has no
+`last_active_at` column. New installations already receive the column from
+`schema.sql` and must not repeat the ALTER. Existing groups receive an activity
+timestamp at upgrade time; no token, revision or ciphertext is replaced.
+
+Copy `maintenance.php` and `manage-groups.php` into the private parent directory
+alongside `public/`, then replace the API and `.htaccess`. The public allowlist
+serves only `sync.php` and `privacy.html`; the cPanel PHP handler stays intact.
+Schedule a daily cPanel cron using the host's PHP 8.2 CLI:
+
+```text
+15 3 * * * /usr/local/bin/ea-php82 /home/example-account/schoolware-sync/manage-groups.php purge
+```
+
+Adjust the executable and private path to the hosting installation. Run the
+command once privately and check cron execution; repository changes do not
+install a schedule. The command removes expired operations and participants
+across all groups, reclaims empty idle groups, and expires rate counters. Each
+group is locked separately, serializing cleanup against its authenticated writes.
+Disabled groups leave a token-verifier tombstone in `sw_sync_revoked_tokens` so
+self-registration cannot undo revocation after group cleanup. These small
+revocation records have no automatic expiry; they contain no content or device IDs.
+Only aggregate deletion counts are printed. Keep backups under a separately
+documented hosting policy; database cleanup does not erase backups.
+
+Remote deletion still preserves a group's verifier, ID, revision, enabled flag
+and last activity timestamp to keep other clients' cursors safe. It removes
+encrypted progress and participant announcements, not access credentials.
+Automatic client retries stop on HTTP 401/403/409. Check registration/access or
+restore/reconnect the cursor before explicitly retrying in settings.

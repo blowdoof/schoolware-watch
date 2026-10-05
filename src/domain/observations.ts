@@ -2,6 +2,7 @@ import { createNotificationDetails, type NotificationDetails } from './notificat
 import { isTaskCategory, type TaskStatus } from './tasks';
 import type { TodoReminderState } from './todo';
 import { brusselsWallTime } from './notification-window';
+import { normalizeAgendaText } from './agenda-normalization';
 
 export type Category = 'tests' | 'assignments' | 'review' | 'other';
 export interface Snapshot {
@@ -43,15 +44,21 @@ export interface CheckInput {
   coverage?: { minTot: string; maxVan: string };
   legacyCoverage?: { minTot: string; maxVan: string };
   notificationSelection?: { days: number; categories: Category[] };
+  /** Only a serialized fresh worker check may accept a local wall-clock rollback. */
+  allowClockRollback?: boolean;
 }
 
 const fields: (keyof Snapshot)[] = ['title', 'instructions', 'typePunt', 'startsAt',
-  'endsAt', 'validFrom', 'hidden', 'cancelled', 'recurrence'];
+  'endsAt', 'hidden', 'cancelled', 'recurrence'];
+
+const meaningfulValue = (snapshot: Snapshot, field: keyof Snapshot) =>
+  field === 'title' || field === 'instructions' ? normalizeAgendaText(snapshot[field]) : snapshot[field];
+const changedSnapshotFields = (before: Snapshot, after: Snapshot) => fields.filter((field) => meaningfulValue(before, field) !== meaningfulValue(after, field));
 
 export function compareObservations(previous: HistoryScope | null, input: CheckInput): HistoryScope {
   if (previous && previous.scopeId !== input.scopeId) throw new Error('Scope mismatch');
   if (previous?.checks.some((check) => check.checkId === input.checkId)) return previous;
-  if (previous && input.observedAt < previous.lastSuccessAt) throw new Error('Stale observation');
+  if (previous && input.observedAt < previous.lastSuccessAt && !input.allowClockRollback) throw new Error('Stale observation');
   const seen = new Set<string>();
   for (const point of input.points) {
     if (seen.has(point.sourceKey)) throw new Error('Ambiguous source identity');
@@ -65,11 +72,11 @@ export function compareObservations(previous: HistoryScope | null, input: CheckI
     counts[kind]++;
     events.push({ id: JSON.stringify([input.checkId, point.sourceKey, kind]), sourceKey: point.sourceKey,
       category: point.category, kind, observedAt: input.observedAt, before, after,
-      fields: before && after ? fields.filter((field) => before[field] !== after[field]) : [] });
+      fields: before && after ? changedSnapshotFields(before, after) : [] });
   };
   for (const point of input.points) {
     const old = items.get(point.sourceKey);
-    const changedFields = old ? fields.filter((field) => old.snapshot[field] !== point.snapshot[field]) : [];
+    const changedFields = old ? changedSnapshotFields(old.snapshot, point.snapshot) : [];
     const taskReopened = old?.taskStatus === 'done' && isTaskCategory(point.category) &&
       !point.snapshot.hidden && !point.snapshot.cancelled &&
       (!old.present || changedFields.some((field) => field !== 'validFrom'));

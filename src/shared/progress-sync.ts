@@ -26,9 +26,10 @@ export interface SyncState {
   outbox: ProgressOperation[]; remote: Record<string, { version: string; status: TaskStatus; revision: number; kind: 'manual' | 'reopen' }>;
   lastSuccessAt: string | null; error: boolean;
   registrationPending?: boolean;
+  blocked?: boolean;
   displayName?: string; members?: SyncMember[]; membersError?: boolean;
 }
-export interface SyncView { ok: boolean; enabled: boolean; pending: number; lastSuccessAt: string | null; error: boolean; pairingCode?: string; registrationPending?: boolean;
+export interface SyncView { ok: boolean; enabled: boolean; pending: number; lastSuccessAt: string | null; error: boolean; pairingCode?: string; registrationPending?: boolean; blocked?: boolean;
   displayName?: string; members?: (SyncMember & { self: boolean })[]; membersError?: boolean }
 type SimpleSyncType = 'sync.read' | 'sync.run' | 'sync.disconnect' | 'sync.delete' | 'sync.pairing';
 export type SyncMessage = { [T in SimpleSyncType]: { type: T } }[SimpleSyncType] |
@@ -64,6 +65,7 @@ export function validateSyncView(raw: unknown): SyncView | null {
       !(v.lastSuccessAt === null || (typeof v.lastSuccessAt === 'string' && Number.isFinite(Date.parse(v.lastSuccessAt)))) ||
       (v.pairingCode !== undefined && !parsePairingCode(v.pairingCode)) ||
       (v.registrationPending !== undefined && typeof v.registrationPending !== 'boolean') ||
+      (v.blocked !== undefined && typeof v.blocked !== 'boolean') ||
       (v.displayName !== undefined && (typeof v.displayName !== 'string' || normalizeSyncLabel(v.displayName) !== v.displayName)) ||
       (v.membersError !== undefined && typeof v.membersError !== 'boolean') ||
       (v.members !== undefined && (!Array.isArray(v.members) || v.members.length > 50 ||

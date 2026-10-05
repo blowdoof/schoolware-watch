@@ -105,9 +105,11 @@ creation. A detected change usually occurred between comparable successful
 checks; do not present its observation time as the exact source change time.
 Items outside a moving window are outside coverage, not disappeared.
 
-Identity is scoped by the canonical request URL, including installation, pupil,
-agenda selection, mapping and configured date window. Requests use rolling dates
-without changing this configured scope key. New source tuples outside previous
+Profile matching uses the canonical request's installation, pupil, agenda selection
+and mapping, excluding MinTot/MaxVan. The worker reuses a retained legacy scope key
+before checking, preferring its existing sharing connection then original baseline.
+Existing duplicate window scopes are retained rather than destructively merged.
+Requests use rolling dates without changing the selected legacy scope key. New source tuples outside previous
 successful coverage receive baseline events. Legacy checks without coverage use
 the original configured dates as their conservative coverage. Boundary days are
 excluded from new-item classification until boundary semantics are verified.

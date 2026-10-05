@@ -25,6 +25,16 @@ export function isSchoolwarePage(value: unknown): boolean {
 
 const parameters = ['AgendaID', 'MapAgendasOp', 'MinTot', 'MaxVan', 'CompletedTaskForLL'] as const;
 
+/** Coverage is transport configuration, never pupil identity. Preserve all other IDs. */
+export function agendaProfileKey(value: string): string | null {
+  const validated = validateAgendaRequest(value);
+  if (!validated) return null;
+  const url = new URL(validated);
+  url.searchParams.delete('MinTot');
+  url.searchParams.delete('MaxVan');
+  return url.href;
+}
+
 function isId(value: string): boolean {
   return /^\d+$/.test(value) && Number.isSafeInteger(Number(value)) && Number(value) > 0;
 }

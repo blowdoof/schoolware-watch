@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 // Run privately in cPanel Terminal, never from a public document root.
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
+require __DIR__ . '/maintenance.php';
 $pdo = null;
 try {
     $config = require '/home/example-account/schoolware-sync-config.php';
@@ -11,7 +12,11 @@ try {
         PDO::ATTR_EMULATE_PREPARES => false,
     ]);
     $command = $argv[1] ?? '';
-    if ($command === 'enable-registration' && count($argv) === 2) {
+    $pdo->exec("SET time_zone = '+00:00'");
+    if ($command === 'purge' && count($argv) === 2) {
+        $counts = purgeExpiredData($pdo, $config);
+        echo 'Expired operations: ' . $counts['operations'] . ', participants: ' . $counts['members'] . ', idle empty groups: ' . $counts['groups'] . ".\n";
+    } elseif ($command === 'enable-registration' && count($argv) === 2) {
         $enable = $pdo->prepare('INSERT INTO sw_sync_registration_settings (singleton, enabled, rate_secret) VALUES (1, 1, ?) ON DUPLICATE KEY UPDATE enabled = 1');
         $enable->execute([bin2hex(random_bytes(32))]);
         echo "Self-service group registration enabled. Existing groups are unchanged.\n";
@@ -51,7 +56,7 @@ try {
         $disable->execute([$argv[2]]);
         echo "Matching group disabled; all its devices lose access.\n";
     } else {
-        fwrite(STDERR, "Usage: php manage-groups.php enable-registration | disable-registration | create | migrate-legacy | disable GROUP_ID\n");
+        fwrite(STDERR, "Usage: php manage-groups.php purge | enable-registration | disable-registration | create | migrate-legacy | disable GROUP_ID\n");
         exit(1);
     }
 } catch (Throwable) {

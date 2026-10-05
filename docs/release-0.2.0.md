@@ -35,5 +35,8 @@ is authorized by the version bump.
   privacy policy and synthetic assets against the reviewed implementation.
 - [ ] Upload as an update of the existing store item, preserving its ID.
 
-No review has been recorded and no reviewer has been contacted by the agent.
+Matthias supplied a review of `fe1f32e` in `9be484f`; it explicitly excludes full
+review of the current feature branch. See [findings](reviews/2026-10-05-prestore-review.md)
+and [remediation](reviews/2026-10-05-remediation.md). No reviewer has been contacted
+by the agent, and the current feature branch still requires Matthias's review.
 Do not treat automated checks as Matthias's approval.

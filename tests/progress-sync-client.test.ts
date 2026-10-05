@@ -17,6 +17,19 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('bounded progress transport', () => {
+  it.each([401, 403, 409])('stops durable automatic retries after HTTP %s until explicitly resumed', async (status) => {
+    const scope = await history.record(check());
+    await progressSync.connect(scope.scopeId, `sw1.${token}.${key}`, false, status === 403);
+    const fetcher = vi.fn().mockResolvedValue(new Response('', { status }));
+    vi.stubGlobal('fetch', fetcher);
+    await synchronizeProgress(scope.scopeId);
+    expect((await progressSync.view()).blocked).toBe(true);
+    await synchronizeProgress(scope.scopeId);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    await progressSync.resume();
+    await synchronizeProgress(scope.scopeId);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
   it('shares only encrypted self-chosen names and reads participants without changing task progress', async () => {
     const scope = await history.record(check());
     await progressSync.connect(scope.scopeId, `sw1.${token}.${key}`, false, false, 'Synthetic parent');

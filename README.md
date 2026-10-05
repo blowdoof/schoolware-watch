@@ -109,8 +109,10 @@ Unchanged checks update last-seen times without duplicating content versions.
 
 Only identical source-ID tuples are compared; identity stability across checks
 is not yet proven. Changed IDs are separate observations, not automatically
-merged entities. Editing the configured URL's date window or selection starts a
-separate scope; automatically rolling request dates keep the configured scope.
+merged entities. Reconnecting the same installation, pupil and agenda selection
+from another calendar window reuses an existing retained profile, preserving
+history and progress. A different selection or installation remains isolated.
+Legacy scope keys are retained; previously duplicated window scopes are not merged.
 Newly covered days receive baseline events, rather than new-item alerts. Only
 new source tuples strictly inside previously checked coverage are classified as
 first observations. This is conservative because API boundary inclusion and

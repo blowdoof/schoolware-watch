@@ -1,4 +1,7 @@
 Options -Indexes
+<FilesMatch "^(?!sync\.php$|privacy\.html$).+">
+    Require all denied
+</FilesMatch>
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteCond %{HTTP:Authorization} .

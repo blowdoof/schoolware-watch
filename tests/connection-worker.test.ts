@@ -582,6 +582,23 @@ describe('activity correlation and local task status', () => {
 });
 
 describe('worker connection lifecycle', () => {
+  it('preserves pupil history and progress when reconnecting from another calendar week, including a clock rollback', async () => {
+    const task = { ...parsed.points[0]!, TypePunt: 1001 };
+    vi.mocked(fetchAgenda).mockResolvedValue({ ...success, count: 1, typeCounts: { tests: 0, assignments: 1, review: 0, other: 0 }, points: [task] });
+    vi.setSystemTime(new Date('2026-10-02T10:00:00Z'));
+    await dispatch({ type: 'agenda.check', requestUrl });
+    const before = validateTasksView(await dispatch({ type: 'tasks.read' }))!;
+    await dispatch({ type: 'tasks.update', itemId: before.entries[0]!.id, status: 'done' });
+    vi.setSystemTime(new Date('2026-10-02T09:00:00Z'));
+    const differentWeek = requestUrl.replace('2026-10-01', '2026-10-08').replace('2026-10-31', '2026-11-07');
+    expect(await dispatch({ type: 'agenda.check', requestUrl: differentWeek })).toMatchObject({ requestUrl: scopeId, lastCheck: { status: 'success', checkedAt: '2026-10-02T09:00:00.000Z' } });
+    const after = validateTasksView(await dispatch({ type: 'tasks.read' }))!;
+    expect(after.entries[0]!.id).toBe(before.entries[0]!.id);
+    expect(after.entries[0]!.status).toBe('done');
+    const storedScope = (await new HistoryRepository().read(scopeId)).scope!;
+    expect(storedScope.checks).toHaveLength(2);
+    expect(storedScope.events).toHaveLength(1);
+  });
   it('stores only a canonical link and summary, independently of a mounted popup', async () => {
     const result = await dispatch({ type: 'agenda.check', requestUrl });
     expect(stored[CONNECTION_KEY]).toEqual(result);

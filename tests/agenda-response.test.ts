@@ -83,6 +83,12 @@ describe('Schoolware response validation', () => {
     expect(result.points[0]?.PublicComment).toBe('<p>Synthetic public instructions</p>');
     expect(JSON.stringify(result)).not.toContain('synthetic-private-secret');
     expect(result.points[0]).not.toHaveProperty('Commentaar');
-    expect(validateAgendaResponse({ success: true, data: [{ ...first, Commentaar: '{invalid private JSON' }] }).ok).toBe(false);
+    expect(validateAgendaResponse({ success: true, data: [{ ...first, Commentaar: '{"leerlingen":"public","prive":"synthetic-secret"' }] }).ok).toBe(false);
+  });
+  it('accepts ordinary brace-prefixed instructions without guessing a structured private field', () => {
+    for (const text of ['{x} oplossen', '[a, b] tekenen']) {
+      const response = validateAgendaResponse({ success: true, data: [{ ...first, Commentaar: text }] });
+      expect(response).toMatchObject({ ok: true, points: [{ PublicComment: text }] });
+    }
   });
 });

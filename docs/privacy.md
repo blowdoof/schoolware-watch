@@ -25,6 +25,15 @@ credentials. Self-registration is opt-in and uses a random token generated in
 the extension. The encryption key never leaves the device except through a
 privately shared pairing code. Only trusted extension pages can explicitly
 request display of that code; routine status and activity logs omit it.
+
+Names are optional in the setup UI. New status/label ciphertext is padded to a
+fixed length; older unpadded records and clients can still reveal length. Device
+announcements update a last-seen timestamp roughly every minute while Chrome
+runs. Private request/registration rate identities group IPv6 addresses by /64.
+The operator's private `purge` command reaches idle groups; without an installed
+schedule, idle data can remain indefinitely. Remote erasure preserves group
+access/revision/activity metadata. Cleanup of disabled groups retains only a
+revocation verifier indefinitely so a revoked code cannot self-register again.
 Server registration counters use keyed IP digests that change each UTC hour,
 never raw IPs. Counters older than 24 hours are pruned during successful new
 group registrations. Idle counters remain until another registration or manual

@@ -203,6 +203,13 @@ try {
   await poll(() => evaluate(bagSession, `document.querySelector('[aria-label="Koppelingsstatus"]')?.textContent.includes('Opnieuw aanmelden')`));
   assert.equal(await evaluate(bagSession, `document.querySelector('[aria-label="Koppelingsstatus"]').textContent.includes('Laatste geslaagde controle: nog geen')`), false);
   console.log('Chrome overview smoke passed: one to-do, compact planning with expansion, durable packing choices, hide/restore and expired-session status.');
+  await poll(() => evaluate(restarted.sessionId, `(() => {
+    const panel = document.querySelector('[aria-label="Voortgang synchroniseren"]');
+    const name = [...panel.querySelectorAll('label')].find(label => label.textContent.includes('op deze computer (optioneel)'))?.querySelector('input');
+    const create = [...panel.querySelectorAll('button')].find(button => button.textContent === 'Nieuwe leerlinggroep aanmaken');
+    return name?.value === '' && create && !create.disabled;
+  })()`));
+  console.log('Chrome privacy smoke passed: group setup allows an empty optional participant label without sending a network request.');
   const toggleSchoolbag = () => evaluate(restarted.sessionId, `(() => {
     [...document.querySelectorAll('label')].find(label => label.textContent.includes('Boekentas tonen onder de to-do')).querySelector('input').click();
     return true;

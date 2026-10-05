@@ -47,11 +47,12 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
       const code = mode === 'first' ? `sw1.${hex(crypto.getRandomValues(new Uint8Array(32)))}.${hex(crypto.getRandomValues(new Uint8Array(32)))}` : secret.trim();
       if (!parsePairingCode(code)) throw new Error('Invalid pairing');
       const name = normalizeSyncLabel(label);
-      if (!name) throw new Error('Invalid name');
-      const next = await send(mode === 'first' ? { type: 'sync.create', code, label: name } : { type: 'sync.connect', code, seed: false, label: name });
+      if (label.trim() && !name) throw new Error('Invalid name');
+      const next = await send(mode === 'first' ? { type: 'sync.create', code, ...(name ? { label: name } : {}) } : { type: 'sync.connect', code, seed: false, ...(name ? { label: name } : {}) });
       setSecret('');
       if (mode === 'first') setPairing(code);
-      setMessage(next.error ? 'De instelling is lokaal bewaard, maar de serververbinding is nog niet gelukt. Bewaar je koppelcode; Chrome probeert het automatisch opnieuw. Nieuwe groepen kunnen tijdelijk beperkt zijn.' : 'Voortgang synchroniseren is ingeschakeld.');
+      setMessage(next.blocked ? 'De instelling is lokaal bewaard, maar de server weigert de koppeling. Bewaar je koppelcode en controleer de toegang. Automatische pogingen zijn gestopt; Nu synchroniseren probeert opnieuw.' :
+        next.error ? 'De instelling is lokaal bewaard, maar de serververbinding is nog niet gelukt. Bewaar je koppelcode; Chrome probeert het automatisch opnieuw. Nieuwe groepen kunnen tijdelijk beperkt zijn.' : 'Voortgang synchroniseren is ingeschakeld.');
     } catch { setMessage('Koppelen is niet gelukt. Voer eerst een geslaagde agendacontrole uit en controleer de koppelcode.'); }
     finally { setWorking(false); }
   }
@@ -61,7 +62,7 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
       const next = await send({ type });
       if (type !== 'sync.run') { setPairing(''); setConfirmDelete(false); setLabel(''); labelEdited.current = false; }
       setMessage(next.error ? 'Synchronisatie is niet gelukt. Je lokale voortgang blijft bewaard.' :
-        type === 'sync.run' ? 'Synchronisatie uitgevoerd.' : type === 'sync.delete' ? 'Servergegevens gewist en deze computer ontkoppeld.' : 'Deze computer is ontkoppeld; lokale voortgang blijft bewaard.');
+        type === 'sync.run' ? 'Synchronisatie uitgevoerd.' : type === 'sync.delete' ? 'Gedeelde voortgang en deelnemermeldingen gewist; deze computer is ontkoppeld. Groepstoegang en revisieteller blijven op de server.' : 'Deze computer is ontkoppeld; lokale voortgang blijft bewaard.');
     } catch { setMessage('De actie is niet gelukt. Controleer de serververbinding.'); }
     finally { setWorking(false); }
   }
@@ -93,7 +94,8 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
       Koppel alleen computers die de agenda van dezelfde leerling bekijken. Elke leerling heeft een eigen deelgroep en koppelcode; verschillende gezinnen blijven gescheiden.</p>
     {!compatible && <p role="status" className="mt-3 text-sm text-amber-800">Koppel eerst een ondersteunde agenda. Voor experimentele installaties zijn taaksoorten en gedeelde taakvoortgang nog niet bevestigd.</p>}
     {view?.enabled ? <>
-      <p className="mt-3 text-sm">{view.registrationPending ? 'Je nieuwe leerlinggroep wacht nog op registratie; Chrome probeert het automatisch opnieuw.' : 'Ingeschakeld voor de agendaselectie waarmee je hebt gekoppeld.'} {view.pending} wijzigingen wachten op verzending.</p>
+      {view.blocked && <p role="status" className="mt-3 text-sm text-amber-800">Automatische synchronisatie is gestopt: de server weigert deze koppeling. Controleer de koppelcode of vraag de beheerder om hulp. Nu synchroniseren probeert opnieuw; lokale voortgang blijft bewaard.</p>}
+      <p className="mt-3 text-sm">{view.registrationPending ? view.blocked ? 'Je nieuwe leerlinggroep is nog niet geregistreerd; automatische pogingen zijn gestopt.' : 'Je nieuwe leerlinggroep wacht nog op registratie; Chrome probeert het automatisch opnieuw.' : 'Ingeschakeld voor de agendaselectie waarmee je hebt gekoppeld.'} {view.pending} wijzigingen wachten op verzending.</p>
       <p className="mt-2 text-xs text-slate-500">{view.lastSuccessAt ? `Laatst gesynchroniseerd: ${new Date(view.lastSuccessAt).toLocaleString('nl-BE', { timeZone: 'Europe/Brussels' })}` : 'Nog geen geslaagde synchronisatie.'}</p>
       {view.error && <p role="status" className="mt-2 text-sm text-amber-800">{view.registrationPending ? 'De server is niet bereikbaar of laat tijdelijk geen nieuwe groepen toe. Je lokale voortgang blijft bewaard.' : 'De laatste poging is mislukt. Controleer je internetverbinding, koppelcode en Chrome-toestemming.'}</p>}
       <div className="mt-4 rounded-lg bg-teal-50 p-3 text-sm">
@@ -131,14 +133,14 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
           <option value="first">Eerste computer instellen</option><option value="join">Koppelen aan een bestaande computer</option>
         </select>
       </label>
-      <label className="block">Jouw naam of rol op deze computer
+      <label className="block">Jouw naam of rol op deze computer (optioneel)
         <input type="text" autoComplete="off" maxLength={48} value={label} placeholder="Bijvoorbeeld Papa of Emma"
           onChange={(event) => { labelEdited.current = true; setLabel(event.target.value); }} className="mt-1 block w-full rounded-lg border border-slate-300 p-2" />
       </label>
       {mode === 'first' ? <p>Maak automatisch een nieuwe leerlinggroep aan. Je ontvangt een koppelcode voor de andere computers. Gebruik dit eenmaal per leerling.</p> : <label className="block">Koppelcode van de eerste computer
         <input type="password" autoComplete="off" spellCheck={false} value={secret} onChange={(e) => setSecret(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-300 p-2" />
       </label>}
-      <button type="button" disabled={working || !compatible || !normalizeSyncLabel(label) || (mode !== 'first' && !parsePairingCode(secret.trim()))}
+      <button type="button" disabled={working || !compatible || (Boolean(label.trim()) && !normalizeSyncLabel(label)) || (mode !== 'first' && !parsePairingCode(secret.trim()))}
         onClick={() => { void connect(); }} className="rounded-lg bg-teal-700 px-4 py-2 font-medium text-white disabled:opacity-50">{mode === 'first' ? 'Nieuwe leerlinggroep aanmaken' : 'Koppelen'}</button>
     </div>}
     {pairing && <div className="mt-4 text-sm">

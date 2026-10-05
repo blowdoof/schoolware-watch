@@ -21,6 +21,8 @@ export function ensureLocalIdentity(scope: HistoryScope): HistoryScope {
 export async function openHistoryDatabase(name = HISTORY_DB): Promise<IDBPDatabase<HistoryDatabase>> {
   return openDB<HistoryDatabase>(name, HISTORY_VERSION, {
     upgrade(db, oldVersion, _newVersion, tx) {
+      // An aborted upgrade rejects both the open request and transaction promise.
+      void tx.done.catch(() => {});
       if (oldVersion < 3) db.createObjectStore('sync');
       if (oldVersion < 1) { db.createObjectStore('scopes', { keyPath: 'scopeId' }); db.createObjectStore('settings'); }
       if (oldVersion < 2) {
