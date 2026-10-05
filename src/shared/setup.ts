@@ -1,8 +1,12 @@
 import type { ConnectionState } from './connection';
-import type { PreferencesView } from './preferences';
+import { validateStoredPreferences, type PreferencesView } from './preferences';
 
 export const SETUP_KEY = 'schoolwareSetupComplete';
 export type SetupStep = 'connection' | 'preferences' | 'sharing';
+/** Upgrades must preserve configured installations without the new marker. */
+export function setupAlreadyConfigured(marker: unknown, connection: ConnectionState, storedPreferences: unknown): boolean {
+  return marker === true || (marker === undefined && Boolean(connection.requestUrl && validateStoredPreferences(storedPreferences)));
+}
 /** Optional sharing is never required for a complete local setup. */
 export function requiredSetupStep(connection: ConnectionState, hostPermission: boolean,
   preferences: PreferencesView, completed: boolean): SetupStep | null {

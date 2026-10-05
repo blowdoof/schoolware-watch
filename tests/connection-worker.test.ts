@@ -905,6 +905,14 @@ describe('periodic monitoring and optional notifications', () => {
 
 
 describe('agenda discovery worker integration', () => {
+  it('reattaches the banner on a successful check of the same origin after reload', async () => {
+    await dispatch({ type: 'agenda.check', requestUrl });
+    await dispatch({ type: 'preferences.save', preferences: { ...DEFAULT_PREFERENCES, browserNotificationsEnabled: true } });
+    vi.mocked(chrome.scripting.executeScript).mockClear();
+    await dispatch({ type: 'agenda.check', requestUrl });
+    expect(chrome.scripting.executeScript).toHaveBeenCalledWith({ target: { tabId: 1 }, files: ['website-alert.js'] });
+    expect(registeredScripts).toHaveLength(1);
+  });
   it('keeps a successful observation when optional banner registration fails', async () => {
     const selectedUrl = requestUrl.replace('schoolware_siw.ksgwl.be', 'synthetic.schoolware.be');
     await dispatch({ type: 'preferences.save', preferences: { ...DEFAULT_PREFERENCES, browserNotificationsEnabled: true } });

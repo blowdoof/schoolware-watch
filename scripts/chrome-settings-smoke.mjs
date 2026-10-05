@@ -66,6 +66,9 @@ try {
     if (checkGuide) {
       await poll(() => evaluate(sessionId, `document.querySelector('[aria-label="Installatiehulp"]')?.textContent.includes('Stap 1 van 3')`));
       await poll(() => evaluate(sessionId, `Boolean([...document.querySelectorAll('button')].find(button => button.textContent === 'Schoolware verbinden'))`));
+      for (const label of ['Lokale geschiedenis', 'Voortgang synchroniseren', 'Activiteitenlog']) {
+        assert.equal(await evaluate(sessionId, `Boolean(document.querySelector('[aria-label="${label}"]'))`), true);
+      }
       // Simulate a denied prompt without granting hosts or contacting Schoolware.
       await evaluate(sessionId, `(() => {
         chrome.permissions.request = async () => false;
@@ -154,7 +157,6 @@ try {
   const { targetId: bagTarget } = await command('Target.createTarget', { url: `chrome-extension://${id}/dashboard.html` });
   const { sessionId: bagSession } = await command('Target.attachToTarget', { targetId: bagTarget, flatten: true });
   await poll(() => evaluate(bagSession, `(() => {
-    [...document.querySelectorAll('button')].find(button => button.textContent === 'Later instellen')?.click();
     return document.querySelector('[aria-label="Boekentas"]')?.textContent.includes('pagina 24-34');
   })()`));
   const bag = await evaluate(bagSession, `(() => {
@@ -166,6 +168,58 @@ try {
   assert.ok(bag.text.includes('Aardrijkskunde') && bag.text.includes('Werkboek'));
   assert.ok(!bag.homeText.includes('Werkboek'), 'Same-day workbook must not appear in next-day home packing');
   console.log('Chrome schoolbag smoke passed: worker projection, both packing lists, laptop defaults and synthetic workbook page range.');
+  // The dashboard must retain its own content while setup/repair is pending.
+  assert.equal(await evaluate(bagSession, `Boolean(document.querySelector('[aria-label="Taken, toetsen en voortgang"]'))`), true);
+  assert.equal(await evaluate(restarted.sessionId, `Boolean(document.querySelector('[aria-label="Voortgang synchroniseren"]'))`), true);
+  console.log('Chrome navigation smoke passed: dashboard tasks and full settings remain available during setup.');
+  const { targetId: upgradeTarget } = await command('Target.createTarget', { url: optionsUrl });
+  const { sessionId: upgradeSession } = await command('Target.attachToTarget', { targetId: upgradeTarget, flatten: true });
+  await poll(() => evaluate(upgradeSession, `Boolean(document.querySelector('[aria-label="Automatische controle en meldingen"]'))`));
+  // Simulate the UI host-permission result; no actual permission or session is granted.
+  await evaluate(upgradeSession, `(async () => {
+    chrome.permissions.contains = async () => true;
+    const data = await chrome.storage.local.get('schoolwareConnection');
+    await chrome.storage.local.set({ schoolwareConnection: { ...data.schoolwareConnection,
+      lastCheck: { status: 'success', count: 1, checkedAt: '2026-10-05T08:00:00Z' } } });
+    return true;
+  })()`);
+  await poll(() => evaluate(upgradeSession, `!document.querySelector('[aria-label="Installatiehulp"]')`));
+  assert.equal(await evaluate(upgradeSession, `Boolean(document.querySelector('[aria-label="Lokale geschiedenis"]'))`), true);
+  console.log('Chrome upgrade smoke passed: existing connection/preferences need no new setup marker.');
+
+  // Test the bundled content script on a synthetic page with a simulated runtime.
+  // No real Schoolware tab, payload or browser session is inspected.
+  const { targetId: bannerTarget } = await command('Target.createTarget', { url: 'about:blank' });
+  const { sessionId: bannerSession } = await command('Target.attachToTarget', { targetId: bannerTarget, flatten: true });
+  await evaluate(bannerSession, `(() => {
+    globalThis.syntheticListeners = [];
+    globalThis.syntheticReports = 0;
+    globalThis.syntheticAlert = { id: '11111111-1111-4111-8111-111111111111', createdAt: '2026-10-05T08:00:00Z', added: 0, changed: 0, days: 3, test: true };
+    globalThis.syntheticView = { ok: true, enabled: true, entries: [globalThis.syntheticAlert] };
+    globalThis.schoolwareAlertAttached = true;
+    globalThis.chrome = { runtime: { id: 'synthetic-extension',
+      sendMessage: async (message) => { if (message.type === 'browser.alerts.rendered') globalThis.syntheticReports++; return globalThis.syntheticView; },
+      onMessage: { addListener: (listener) => globalThis.syntheticListeners.push(listener),
+        removeListener: (listener) => { globalThis.syntheticListeners = globalThis.syntheticListeners.filter(value => value !== listener); } } } };
+    return true;
+  })()`);
+  const bannerScript = await readFile(resolve('dist/website-alert.js'), 'utf8');
+  await evaluate(bannerSession, bannerScript);
+  await poll(() => evaluate(bannerSession, `document.querySelector('schoolware-watch-alert')?.getBoundingClientRect().height > 0`));
+  await evaluate(bannerSession, bannerScript);
+  await poll(() => evaluate(bannerSession, `globalThis.syntheticReports === 2`));
+  assert.deepEqual(await evaluate(bannerSession, `({ hosts: document.querySelectorAll('schoolware-watch-alert').length, listeners: globalThis.syntheticListeners.length })`), { hosts: 1, listeners: 1 });
+  await evaluate(bannerSession, `(() => {
+    globalThis.syntheticView = { ok: true, enabled: true, entries: [] };
+    globalThis.syntheticListeners.forEach(listener => listener({ type: 'browser.alerts.updated' }, { id: 'synthetic-extension' })); return true;
+  })()`);
+  await poll(() => evaluate(bannerSession, `!document.querySelector('schoolware-watch-alert')`));
+  await evaluate(bannerSession, `(() => {
+    globalThis.syntheticView = { ok: true, enabled: true, entries: [globalThis.syntheticAlert] };
+    globalThis.syntheticListeners.forEach(listener => listener({ type: 'browser.alerts.updated' }, { id: 'synthetic-extension' })); return true;
+  })()`);
+  await poll(() => evaluate(bannerSession, `Boolean(document.querySelector('schoolware-watch-alert'))`));
+  console.log('Chrome banner smoke passed: stale attachment recovery, single listener/host after reinjection, dismissal and redisplay.');
   if (process.argv.includes('--store-assets')) {
     const assets = resolve('artifacts/chrome-web-store');
     await mkdir(assets, { recursive: true });

@@ -355,9 +355,8 @@ async function runCheck(requestUrl: string, controller: AbortController, current
     if (retryAt) await log(current, 'retry.scheduled', 'info', { retryAt });
     if (result.status !== 'success') await log(current, 'check', 'failed', { reason: result.status });
     await ensureAlarm(current);
-    if (schoolwareOrigin(previousConnection.requestUrl) !== schoolwareOrigin(requestUrl)) {
-      await configureWebsite(prefs.browserNotificationsEnabled, current).catch(() => {});
-    }
+    // Refresh existing pages as well as persistent registration after reloads.
+    await configureWebsite(prefs.browserNotificationsEnabled, current).catch(() => {});
     if (previousConnection.requestUrl && schoolwareOrigin(previousConnection.requestUrl) !== schoolwareOrigin(requestUrl)) {
       await broadcastWebsiteAlerts(schoolwareOrigin(previousConnection.requestUrl)!).catch(() => {});
       await chrome.permissions.remove({ origins: [schoolwarePermission(previousConnection.requestUrl)] }).catch(() => false);

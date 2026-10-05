@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { requiredSetupStep } from '../src/shared/setup';
+import { requiredSetupStep, setupAlreadyConfigured } from '../src/shared/setup';
 import { EMPTY_CONNECTION, type ConnectionState } from '../src/shared/connection';
 import { DEFAULT_PREFERENCES, type PreferencesView } from '../src/shared/preferences';
 import { isSchoolwarePage, schoolwareOrigin, schoolwarePermission, validateAgendaRequest } from '../src/schoolware/agenda-request';
@@ -12,6 +12,14 @@ const preferences: PreferencesView = { ok: true, preferences: DEFAULT_PREFERENCE
   notificationPermission: false, browserPermission: false, monitoringScheduled: true, nextCheckAt: null, retryAt: null };
 
 describe('guided setup and recovery', () => {
+  it('recognizes a configured installation from before the setup marker existed', () => {
+    expect(setupAlreadyConfigured(undefined, connected, DEFAULT_PREFERENCES)).toBe(true);
+    expect(requiredSetupStep(connected, true, preferences, setupAlreadyConfigured(undefined, connected, DEFAULT_PREFERENCES))).toBeNull();
+    expect(setupAlreadyConfigured(undefined, EMPTY_CONNECTION, DEFAULT_PREFERENCES)).toBe(false);
+    expect(setupAlreadyConfigured(undefined, connected, undefined)).toBe(false);
+    expect(setupAlreadyConfigured(false, connected, DEFAULT_PREFERENCES)).toBe(false);
+    expect(setupAlreadyConfigured(undefined, connected, { invalid: true })).toBe(false);
+  });
   it('requires a successful first connection before proceeding', () => {
     expect(requiredSetupStep(EMPTY_CONNECTION, false, preferences, false)).toBe('connection');
     expect(requiredSetupStep(connected, false, preferences, false)).toBe('connection');

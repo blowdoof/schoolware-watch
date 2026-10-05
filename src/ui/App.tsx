@@ -25,7 +25,6 @@ const titles: Record<Page, string> = {
 };
 
 export function App({ page: initialPage }: { page: Page }) {
-  const [setupActive, setSetupActive] = useState(false);
   const [page, setPage] = useState(initialPage);
   const [target, setTarget] = useState(() => initialPage === 'dashboard' ? notificationTarget(window.location.search) : null);
   const [historyRevision, setHistoryRevision] = useState(0);
@@ -101,9 +100,9 @@ export function App({ page: initialPage }: { page: Page }) {
       <p className="text-xs font-bold uppercase tracking-widest text-teal-700">Schoolware Watch</p>
       <h1 className="mt-3 text-2xl font-semibold tracking-tight">{target ? 'Details bij je melding' : titles[page]}</h1>
       {helpOpen && <HelpPanel />}
-      {!target && page !== 'info' && <SetupWizard onActiveChange={setSetupActive} refreshToken={historyRevision} onChanged={() => setHistoryRevision((revision) => revision + 1)} />}
+      {!target && page !== 'info' && <SetupWizard inlineConnection={page === 'popup'} onSettings={() => navigate('options')} refreshToken={historyRevision} onChanged={() => setHistoryRevision((revision) => revision + 1)} />}
       {target ? <NotificationDetailsPanel target={target} refreshToken={historyRevision} /> : page === 'info' ?
-        <InfoPanel section={infoSection} onSectionChange={setInfoSection} onSettings={() => navigate('options')} /> : !setupActive && <>
+        <InfoPanel section={infoSection} onSectionChange={setInfoSection} onSettings={() => navigate('options')} /> : <>
       {page === 'options' ?
         <ConnectionPanel showSetup refreshToken={historyRevision} onHistoryChanged={() => setHistoryRevision((revision) => revision + 1)} /> :
         <ConnectionNotice refreshToken={historyRevision} onSettings={() => navigate('options')} navigationPending={navigationPending} />}
@@ -119,8 +118,8 @@ export function App({ page: initialPage }: { page: Page }) {
         </p>
       )}
       </>}
-      {page === 'options' && !setupActive && <ProgressSyncPanel refreshToken={historyRevision} />}
-      {page === 'options' && !setupActive && <ActivityPanel />}
+      {page === 'options' && <ProgressSyncPanel refreshToken={historyRevision} />}
+      {page === 'options' && <ActivityPanel />}
       <footer className="mt-8 border-t border-slate-200 pt-4 text-xs text-slate-500">
         <p>Een onafhankelijk project van Bumper.be</p>
         <nav aria-label="Projectinformatie" className="mt-2 flex flex-wrap gap-x-4 gap-y-2">

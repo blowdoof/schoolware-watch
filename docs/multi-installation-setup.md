@@ -25,6 +25,8 @@ compatibility is experimental, not a claim that every Schoolware school works.
 ## Guided setup
 
 The popup, dashboard and settings check connection and relevant permissions on open.
+The guide is advisory and never replaces page content. Existing connections with
+valid saved preferences are recognized even without the newer completion marker.
 First connection must succeed; first preferences are followed by optional sharing
 with the existing pairing-code system. No extra account is created. Skipping sharing
 is a complete setup. Later instellen defers only the current view. Local deletion
@@ -54,3 +56,18 @@ The isolated Chrome 154 smoke confirms the first-opening guide, simulated denied
 access without network requests, postponement, rapid settings edits, immediate
 tab closure, worker restart and synthetic schoolbag projections. It does not
 exercise a real Schoolware session or the native permission approval dialog.
+
+## Upgrade regression fixes
+
+A missing setup marker must not hide the dashboard, history, retention, sync or
+activity panels. Setup instructions remain compact; settings retain their full
+controls and the popup can still connect the active Schoolware tab directly.
+
+Website script reinjection replaces its own old host and listeners, including
+the boolean sentinel used by earlier releases. Successful checks reattach the
+banner to existing tabs as well as registering it for future loads. Synthetic
+Chrome checks cover upgrades, distinct page content during setup, reinjection,
+single-host/listener behavior and dismissal/redisplay. Banner visibility still
+requires enabled host/scripting access and an actual pending notification; the
+UI's test-banner action creates a generic synthetic example. No real Schoolware
+session or native permission approval is used by these automated checks.
