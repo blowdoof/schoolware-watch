@@ -116,8 +116,9 @@ The earlier-work section includes an "Alles als klaar markeren" button that
 marks the earlier pending selection done through one validated worker request.
 Controls stay disabled during saving. Statuses, per-item audit records and the
 sync outbox commit in one transaction; a failed item or log write rolls back
-the entire selection. Today's and future work are not included in this action.
-Open and in-progress points scheduled from today through that day are included;
+the entire selection. When a next schoolday is known, today's unfinished work
+is included in earlier work; future schoolday work is not included in this action.
+Open and in-progress points scheduled on that day are included;
 done, hidden and cancelled points are excluded. The same worker-owned status
 updates and optional progress synchronization are used as in the task list.
 

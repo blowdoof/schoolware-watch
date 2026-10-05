@@ -34,9 +34,8 @@ export function todoOverview(view: TasksView, now: Date, selectedDay: string | n
   return { today, nextDay, schoolDays, targetDay, browsing,
     upcoming: pending.filter((task) => {
       const date = task.snapshot.startsAt.slice(0, 10);
-      if (browsing) return date === targetDay;
-      return date >= today && date <= (nextDay ?? today);
+      return date === (targetDay ?? today);
     }).sort(chronological),
-    earlier: pending.filter((task) => task.snapshot.startsAt.slice(0, 10) < today).sort(chronological),
+    earlier: pending.filter((task) => task.snapshot.startsAt.slice(0, 10) < (nextDay ?? today)).sort(chronological),
   };
 }

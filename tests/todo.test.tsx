@@ -29,14 +29,14 @@ describe('agenda-based to-do horizon', () => {
     expect(selected.nextDay).toBe('2026-10-05');
     expect(selected.browsing).toBe(true);
     expect(selected.upcoming).toEqual([wednesday]);
-    expect(selected.earlier).toEqual([earlier]);
-    expect(todoOverview(candidate, now).upcoming).toEqual([today, monday]);
-    expect(todoReminderSelection(candidate, now, ['assignments'])?.pending).toBe(2);
+    expect(selected.earlier).toEqual([earlier, today]);
+    expect(todoOverview(candidate, now).upcoming).toEqual([monday]);
+    expect(todoReminderSelection(candidate, now, ['assignments'])?.pending).toBe(1);
     for (const removedOrInvalidDay of ['2026-10-01', '2026-10-03', '2026-10-06', 'invalid']) {
       const fallback = todoOverview(candidate, now, removedOrInvalidDay);
       expect(fallback.targetDay).toBe('2026-10-05');
       expect(fallback.browsing).toBe(false);
-      expect(fallback.upcoming).toEqual([today, monday]);
+      expect(fallback.upcoming).toEqual([monday]);
     }
   });
   it('reminds only after 16:00 Brussels time, for fresh known planning and selected unfinished categories', () => {
@@ -71,13 +71,29 @@ describe('agenda-based to-do horizon', () => {
     expect(todoOverview(view(days), new Date(`${today}T08:00:00Z`)).nextDay).toBe(expected);
   });
 
-  it('keeps today and Bezig, excludes completed, later, hidden, cancelled and unmarked work, and separates earlier work', () => {
+  it('keeps next-day Bezig, excludes completed, later, hidden, cancelled and unmarked work, and separates today and earlier work', () => {
     const earlier = task('2026-10-01'); const today = task('2026-10-02'); const busy = task('2026-10-05', 'in-progress');
     const hidden = task('2026-10-05'); hidden.snapshot.hidden = true;
     const cancelled = task('2026-10-05'); cancelled.snapshot.cancelled = true;
     const result = todoOverview(view(['2026-10-05'], [busy, earlier, today, task('2026-10-05', 'done'),
       task('2026-10-06'), task('2026-10-05', 'open', 2), hidden, cancelled]), new Date('2026-10-02T18:00:00Z'));
-    expect(result.upcoming).toEqual([today, busy]); expect(result.earlier).toEqual([earlier]);
+    expect(result.upcoming).toEqual([busy]); expect(result.earlier).toEqual([earlier, today]);
+  });
+
+  it('moves Monday work out of Tuesday preparation and reminder counts without completing it', () => {
+    const monday = task('2026-10-05');
+    const tuesday = task('2026-10-06', 'in-progress');
+    const candidate = view(['2026-10-05', '2026-10-06'], [monday, tuesday]);
+    candidate.agenda!.lastSuccessAt = '2026-10-05T14:00:00.000Z';
+    const now = new Date('2026-10-05T15:00:00Z');
+    const overview = todoOverview(candidate, now);
+    expect(overview.targetDay).toBe('2026-10-06');
+    expect(overview.upcoming).toEqual([tuesday]);
+    expect(overview.earlier).toEqual([monday]);
+    expect(monday.status).toBe('open');
+    expect(todoReminderSelection(candidate, now, ['assignments'])?.pending).toBe(1);
+    candidate.entries = [monday];
+    expect(todoReminderSelection(candidate, now, ['assignments'])).toBeNull();
   });
 
   it('does not invent a next day from empty, weekend-only or old-client responses', () => {
@@ -129,6 +145,17 @@ describe('agenda metadata boundary', () => {
 });
 
 describe('compact to-do display', () => {
+  it('renders today only in earlier work under a next-day heading', () => {
+    const monday = task('2026-10-05'); monday.snapshot.title = 'Synthetic Monday work';
+    const tuesday = task('2026-10-06'); tuesday.snapshot.title = 'Synthetic Tuesday work';
+    const html = renderToStaticMarkup(<TodoOverview view={view(['2026-10-05', '2026-10-06'], [monday, tuesday])}
+      now={new Date('2026-10-05T15:00:00Z')} working={false} update={async () => {}} updateMany={async () => {}} />);
+    const divider = html.indexOf('Eerder gepland, nog niet klaar');
+    expect(html).toContain('Tegen dinsdag 6 oktober');
+    expect(html).toContain('1 open of onafgewerkte taken en toetsen.');
+    expect(html.indexOf('Synthetic Tuesday work')).toBeLessThan(divider);
+    expect(html.indexOf('Synthetic Monday work')).toBeGreaterThan(divider);
+  });
   it('shows five tasks, expandable remaining and earlier work, instructions and existing controls', () => {
     const upcoming = Array.from({ length: 7 }, () => task('2026-10-05'));
     const html = renderToStaticMarkup(<TodoOverview view={view(['2026-10-05'], [...upcoming, task('2026-10-01')])}
