@@ -15,6 +15,8 @@ export function progressVersionText(snapshot: Snapshot): string {
 export async function progressVersion(snapshot: Snapshot): Promise<string> {
   return hex(await crypto.subtle.digest('SHA-256', encode(progressVersionText(snapshot))));
 }
+// REVIEW: the same raw key serves HMAC and AES-GCM (no subkeys). Without padding the
+// ciphertext length reveals 'in-progress' and label lengths.
 export async function progressItemKey(key: string, sourceKey: string): Promise<string> {
   if (!isSecret(key)) throw new Error('Invalid key');
   const cryptoKey = await crypto.subtle.importKey('raw', unhex(key), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);

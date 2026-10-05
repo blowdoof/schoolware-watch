@@ -49,7 +49,9 @@ const fields: (keyof Snapshot)[] = ['title', 'instructions', 'typePunt', 'starts
 export function compareObservations(previous: HistoryScope | null, input: CheckInput): HistoryScope {
   if (previous && previous.scopeId !== input.scopeId) throw new Error('Scope mismatch');
   if (previous?.checks.some((check) => check.checkId === input.checkId)) return previous;
+  // REVIEW: a clock stepping back blocks monitoring until lastSuccessAt has passed.
   if (previous && input.observedAt < previous.lastSuccessAt) throw new Error('Stale observation');
+  // REVIEW: one duplicate source tuple fails every check, indefinitely.
   const seen = new Set<string>();
   for (const point of input.points) {
     if (seen.has(point.sourceKey)) throw new Error('Ambiguous source identity');
@@ -67,6 +69,8 @@ export function compareObservations(previous: HistoryScope | null, input: CheckI
   };
   for (const point of input.points) {
     const old = items.get(point.sourceKey);
+    // REVIEW: a validFrom-only (GeldigVan) change emits 'changed' and may notify.
+    // No text normalization (CRLF, trailing whitespace, NBSP).
     const changedFields = old ? fields.filter((field) => old.snapshot[field] !== point.snapshot[field]) : [];
     const taskReopened = old?.taskStatus === 'done' && isTaskCategory(point.category) &&
       !point.snapshot.hidden && !point.snapshot.cancelled &&

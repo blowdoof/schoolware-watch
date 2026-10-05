@@ -263,6 +263,7 @@ async function notify(scope: HistoryScope, checkId: string, now: Date, currentGe
     await log(current, 'notification.system', 'skipped', { reason: 'already-claimed' }); return;
   }
   const reopened = events.filter((event) => event.taskReopened).length;
+  // REVIEW: text mentions items no longer visible, but disappearance detection is off (complete: false).
   await createNotification(checkId, `${added} nieuwe of opnieuw zichtbare en ${changed} gewijzigde of niet meer zichtbare agendapunten binnen ${prefs.notificationDays} dagen.${reopened ? ` ${reopened} voltooide taken weer op Bezig gezet.` : ''} Klik voor de lesdetails.`, false, current);
 }
 

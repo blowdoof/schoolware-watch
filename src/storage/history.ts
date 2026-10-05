@@ -52,6 +52,8 @@ export class HistoryRepository {
           ({ ...point, localId: oldItems.get(point.sourceKey)?.localId ?? crypto.randomUUID() })) }));
         await scopes.put(next);
         const sync = await tx.objectStore('sync').get(SYNC_STATE_KEY);
+        // REVIEW: also runs on a repeated checkId and can replace a newer manual outbox
+        // op with a stale reopen. Move under the same checkId guard as the activity block.
         if (sync?.scopeId === input.scopeId) {
           for (const event of next.events.filter((event) => event.taskReopened &&
             event.id === JSON.stringify([input.checkId, event.sourceKey, event.kind]))) {

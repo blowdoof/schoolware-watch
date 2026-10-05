@@ -4,6 +4,8 @@ import { classifyAgendaType } from './agenda-types';
 import { validateAgendaRequest } from './agenda-request';
 
 export function createObservationInput(requestUrl: string, points: AgendaPoint[], checkId: string, observedAt: string): CheckInput {
+  // REVIEW: scopeId includes MinTot/MaxVan; reconnecting from another calendar week
+  // starts a new baseline and strands task status and history in the old scope.
   const scopeId = validateAgendaRequest(requestUrl);
   if (!scopeId) throw new Error('Invalid observation scope');
   return { scopeId, checkId, observedAt, complete: false, identityVerified: false,

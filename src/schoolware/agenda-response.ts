@@ -52,6 +52,8 @@ function isSourceDate(value: unknown): value is string {
     day <= (daysInMonth[month - 1] ?? 0) && hour <= 23 && minute <= 59 && second <= 59;
 }
 
+// REVIEW: text starting with '{' or '[' that is not JSON (e.g. "{x}") returns null,
+// so every check fails until the item changes. Fall back to plain text.
 function publicComment(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   if (!value.trimStart().startsWith('{') && !value.trimStart().startsWith('[')) return value;

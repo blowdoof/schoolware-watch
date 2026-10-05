@@ -35,6 +35,8 @@ function enforceRequestLimits(PDO $pdo, array $config, string $tokenHash): void 
     }
     $window = gmdate('Y-m-d H:i:00');
     $pdo->beginTransaction();
+    // REVIEW: unknown tokens count against the global bucket; ~100 req/s with random
+    // tokens locks out every group. Prefer a keyed per-IP bucket, as registration has.
     // Lock global first, including unknown tokens. Unknown tokens never create
     // per-token rows, keeping storage bounded without storing IPs or secrets.
     $buckets = [hash('sha256', 'requests:global') => $globalLimit];
@@ -58,6 +60,8 @@ function enforceRequestLimits(PDO $pdo, array $config, string $tokenHash): void 
     $pdo->commit();
 }
 
+// REVIEW: empty or abandoned groups are never reclaimed and count toward max_groups;
+// the per-IP limit keys on the full IPv6 address (bucket by /64).
 function registerGroup(PDO $pdo, array $config, string $tokenHash): never {
     // Serialize registration quotas and inserts; the caller owns the transaction.
     $settings = $pdo->query('SELECT enabled, rate_secret FROM sw_sync_registration_settings WHERE singleton = 1 FOR UPDATE')->fetch(PDO::FETCH_ASSOC);
@@ -183,6 +187,7 @@ try {
         $delete->execute([$groupId]);
         $members = $pdo->prepare('DELETE FROM sw_sync_members WHERE group_id = ?');
         $members->execute([$groupId]);
+        // REVIEW: the group row (verifier, revision) remains; the UI says server data was erased.
         // Keep the revision counter: other clients must not skip future writes.
         $pdo->commit();
         reply(200, ['ok' => true]);
@@ -190,6 +195,8 @@ try {
     if ($body['cursor'] > $revision) {
         $pdo->rollBack(); reply(409, ['ok' => false]);
     }
+    // REVIEW: purging only runs on this group's own traffic; idle groups persist forever,
+    // contrary to the 90 days in the privacy policy. No operator purge command exists.
     $days = $config['retention_days'] ?? 90;
     if (!in_array($days, [30, 90, 180, 365], true)) throw new RuntimeException('Invalid retention');
     $cleanup = $pdo->prepare('DELETE FROM sw_sync_group_operations WHERE group_id = ? AND received_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL ? DAY)');

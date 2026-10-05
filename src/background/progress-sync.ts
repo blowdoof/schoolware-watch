@@ -161,6 +161,7 @@ export async function synchronizeProgress(scopeId: string | null, reporter?: Act
       await record('progress.sync', 'skipped', { reason: !state ? 'disabled' : 'profile-mismatch' }); return false;
     }
     const current = state;
+    // REVIEW: after a 403 this retries registration every minute with no end.
     if (current.registrationPending) {
       await audited(record, 'progress.registration', async () => {
         const registered = await request(current.token, { action: 'register' });
