@@ -1,6 +1,9 @@
 # Chrome Web Store submission pack
 
-Prepared for version 0.1.0 on 2026-10-04. Store submission is not yet performed.
+Development target: version 0.2.0, updated on 2026-10-05. The owner reports
+that 0.1.0 is approved and published. This next update is not ready for submission;
+continued testing and Matthias's external review precede any merge to main or
+release publication. See [0.2.0 release checks](../release-0.2.0.md).
 
 ## Upload assets
 
