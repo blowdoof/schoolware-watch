@@ -103,9 +103,8 @@ export function App({ page: initialPage }: { page: Page }) {
       {!target && page !== 'info' && <SetupWizard inlineConnection={page === 'popup'} onSettings={() => navigate('options')} refreshToken={historyRevision} onChanged={() => setHistoryRevision((revision) => revision + 1)} />}
       {target ? <NotificationDetailsPanel target={target} refreshToken={historyRevision} /> : page === 'info' ?
         <InfoPanel section={infoSection} onSectionChange={setInfoSection} onSettings={() => navigate('options')} /> : <>
-      {page === 'options' ?
-        <ConnectionPanel showSetup refreshToken={historyRevision} onHistoryChanged={() => setHistoryRevision((revision) => revision + 1)} /> :
-        <ConnectionNotice refreshToken={historyRevision} onSettings={() => navigate('options')} navigationPending={navigationPending} />}
+      <ConnectionNotice refreshToken={historyRevision} onSettings={() => navigate('options')} navigationPending={navigationPending} />
+      {page === 'options' && <ConnectionPanel showSetup refreshToken={historyRevision} onHistoryChanged={() => setHistoryRevision((revision) => revision + 1)} />}
       <PreferencesPanel settings={page === 'options'} refreshToken={historyRevision} onSaved={() => setHistoryRevision((revision) => revision + 1)} />
       {(page === 'popup' || page === 'dashboard') && <TodoPanel refreshToken={historyRevision} />}
       {(page === 'popup' || page === 'dashboard') && <SchoolbagPanel refreshToken={historyRevision} />}

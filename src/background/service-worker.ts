@@ -13,6 +13,7 @@ import { ActivityRepository, activityInput, type AuditContext } from '../storage
 import { type ActivityAction, type ActivityData, type ActivityPhase, type ActivityView, type ActivityReporter, type ActivityTrigger } from '../shared/activity';
 import { createTasksView, type TasksView } from '../shared/tasks';
 import { createSchoolbagView, type SchoolbagView } from '../shared/schoolbag';
+import { availablePackingChoices } from '../domain/schoolbag';
 import { isAlertId } from '../shared/browser-alerts';
 import type { Category, HistoryScope } from '../domain/observations';
 import { notificationEventSelection } from '../domain/notification-window';
@@ -485,9 +486,17 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
       return progressSync.view();
     });
   }
-  if (message.type === 'schoolbag.read') {
+  if (message.type === 'schoolbag.read' || message.type === 'schoolbag.update') {
     return serializeMutation(async () => {
       const connection = await readConnection();
+      if (message.type === 'schoolbag.update') {
+        if (!connection.requestUrl) throw new Error('Profile unavailable');
+        const agenda = createSchoolbagView((await history.read(connection.requestUrl)).scope);
+        const day = (await availablePackingChoices(agenda, new Date())).get(message.choiceId);
+        if (!day) throw new Error('Packing suggestion unavailable');
+        await history.setPackingChoice(connection.requestUrl, message.choiceId, day, message.state);
+        await invalidateTaskViews();
+      }
       return createSchoolbagView((await history.read(connection.requestUrl)).scope);
     });
   }
@@ -524,7 +533,10 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
     await log(current, 'permission.requested', 'info', { permission: message.permission, reason: message.granted ? 'granted' : 'denied' });
     return preferencesView();
   }
-  if (message.type === 'connection.read') return readConnection();
+  if (message.type === 'connection.read') {
+    const connection = await readConnection();
+    return { ...connection, lastSuccessAt: (await history.read(connection.requestUrl)).scope?.lastSuccessAt ?? null };
+  }
   if (message.type === 'history.read') return readHistory(message.category);
   if (message.type === 'preferences.read') return preferencesView();
   if (message.type === 'notifications.details') {
@@ -715,7 +727,7 @@ chrome.runtime.onMessage.addListener((raw: unknown, sender, sendResponse) => {
     else if (message.type.startsWith('browser.alerts.')) sendResponse({ ok: false, enabled: false, entries: [] });
     else if (message.type === 'notifications.test') sendResponse({ status: 'api-error', permissionLevel: 'unknown', registered: null });
     else if (message.type === 'notifications.details') sendResponse({ ok: false, status: 'missing', details: null });
-    else if (message.type === 'schoolbag.read') sendResponse({ ok: false, lastSuccessAt: null, points: [] });
+    else if (message.type === 'schoolbag.read' || message.type === 'schoolbag.update') sendResponse({ ok: false, lastSuccessAt: null, points: [] });
     else if (message.type.startsWith('tasks.')) sendResponse({ ok: false, entries: [] });
     else if (message.type.startsWith('activity.')) sendResponse({ ok: false, healthy: false, entries: [], total: 0, retentionDays: DEFAULT_RETENTION });
     else if (message.type.startsWith('history.')) sendResponse({ ...createHistoryView(null, DEFAULT_RETENTION), ok: false });

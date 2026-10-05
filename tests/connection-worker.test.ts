@@ -5,7 +5,7 @@ import { fetchAgenda, type AgendaFetchResult } from '../src/schoolware/agenda-cl
 import { validateAgendaResponse } from '../src/schoolware/agenda-response';
 import { HistoryRepository } from '../src/storage/history';
 import fixture from './fixtures/synthetic-agenda.json';
-import { CONNECTION_KEY } from '../src/shared/connection';
+import { CONNECTION_KEY, validateConnectionState } from '../src/shared/connection';
 import { requestUrl } from './fixtures/agenda-request';
 import { DEFAULT_PREFERENCES, PREFERENCES_KEY } from '../src/shared/preferences';
 import { validateAgendaRequest } from '../src/schoolware/agenda-request';
@@ -14,6 +14,8 @@ import { validateNotificationDetailsView } from '../src/shared/notification-deta
 import { ActivityRepository } from '../src/storage/activity';
 import { validateActivityView } from '../src/shared/activity';
 import { validateTasksView } from '../src/shared/tasks';
+import { availablePackingChoices, packingChoiceId, materialsFor } from '../src/domain/schoolbag';
+import { validateSchoolbagView } from '../src/shared/schoolbag';
 
 const scopeId = validateAgendaRequest(requestUrl)!;
 
@@ -117,6 +119,30 @@ beforeEach(async () => {
 });
 
 describe('schoolbag worker access', () => {
+  it('validates packing suggestions, keeps choices local to the active profile and retains last success after session expiry', async () => {
+    const lesson = { ...parsed.points[0]!, Van: '2026-10-05 09:00:00', Tot: '2026-10-05 09:50:00', TypePunt: 2, Titel: 'Synthetic lesson', PublicComment: 'Atlas meebrengen', VakNaam: 'Aardrijkskunde' };
+    vi.mocked(fetchAgenda).mockResolvedValue({ ...success, count: 1, typeCounts: { tests: 0, assignments: 0, review: 0, other: 1 }, points: [lesson] });
+    await dispatch({ type: 'agenda.check', requestUrl });
+    const agenda = validateSchoolbagView(await dispatch({ type: 'schoolbag.read' }))!;
+    const choices = await availablePackingChoices(agenda, new Date());
+    const id = choices.keys().next().value!;
+    expect(id).toMatch(/^[a-f0-9]{64}$/);
+    expect(await dispatch({ type: 'schoolbag.update', choiceId: id, state: 'packed' })).toMatchObject({ choices: [{ id, state: 'packed' }] });
+    expect(await dispatch({ type: 'schoolbag.update', choiceId: 'f'.repeat(64), state: 'hidden' })).toMatchObject({ ok: false });
+    const changed = await dispatch({ type: 'schoolbag.update', choiceId: id, state: 'hidden' });
+    expect(changed).toMatchObject({ choices: [{ id, state: 'hidden' }] });
+    expect(await dispatch({ type: 'schoolbag.update', choiceId: id, state: 'open' })).toMatchObject({ choices: [] });
+    const health = validateConnectionState(await dispatch({ type: 'connection.read' }))!;
+    vi.mocked(fetchAgenda).mockResolvedValue({ status: 'session-required', count: null });
+    await dispatch({ type: 'agenda.check', requestUrl });
+    expect(await dispatch({ type: 'connection.read' })).toMatchObject({ lastSuccessAt: health.lastSuccessAt, lastCheck: { status: 'session-required' } });
+    const material = materialsFor(agenda.points)[0]!;
+    expect(await packingChoiceId(agenda.points[0]!.day, 'school', material)).not.toBe(await packingChoiceId(agenda.points[0]!.day, 'home', material));
+    await dispatch({ type: 'schoolbag.update', choiceId: id, state: 'hidden' });
+    stored[CONNECTION_KEY] = { requestUrl: requestUrl.replace('CompletedTaskForLL=30', 'CompletedTaskForLL=40'), lastCheck: null };
+    expect(await dispatch({ type: 'schoolbag.read' })).toEqual({ ok: true, lastSuccessAt: null, points: [] });
+    expect(await dispatch({ type: 'schoolbag.update', choiceId: id, state: 'packed' })).toMatchObject({ ok: false });
+  });
   it('reads only the active profile, includes lessons, survives session errors and clears with history', async () => {
     const lesson = { ...parsed.points[0]!, TypePunt: 2, Titel: 'Synthetic lesson', PublicComment: 'Atlas meebrengen', VakNaam: 'Aardrijkskunde' };
     vi.mocked(fetchAgenda).mockResolvedValue({ ...success, count: 1, typeCounts: { tests: 0, assignments: 0, review: 0, other: 1 }, points: [lesson] });
@@ -560,7 +586,8 @@ describe('worker connection lifecycle', () => {
     const result = await dispatch({ type: 'agenda.check', requestUrl });
     expect(stored[CONNECTION_KEY]).toEqual(result);
     expect(result).toMatchObject({ lastCheck: { status: 'success', count: 2 } });
-    expect(await dispatch({ type: 'connection.read' })).toEqual(result);
+    const validated = validateConnectionState(result)!;
+    expect(await dispatch({ type: 'connection.read' })).toEqual({ ...validated, lastSuccessAt: validated.lastCheck!.checkedAt });
     expect(Object.keys(stored)).toEqual([CONNECTION_KEY, 'schoolwareMonitoringState']);
     expect(JSON.stringify(result)).not.toContain('points');
   });

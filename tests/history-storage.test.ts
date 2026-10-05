@@ -8,6 +8,27 @@ const repository = new HistoryRepository('synthetic-history-test');
 beforeEach(() => { vi.stubGlobal('indexedDB', new IDBFactory()); });
 
 describe('IndexedDB observation repository', () => {
+  it('persists packing choices across repository restarts, checks and deletion without sharing them between profiles', async () => {
+    const input = check({ observedAt: new Date().toISOString() });
+    const day = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+    const id = 'a'.repeat(64);
+    await repository.record(input);
+    await repository.setPackingChoice(input.scopeId, id, day, 'packed');
+    const restarted = new HistoryRepository('synthetic-history-test');
+    expect((await restarted.read(input.scopeId)).scope?.schoolbagChoices).toEqual([{ id, day, state: 'packed' }]);
+    await restarted.record(check({ checkId: 'synthetic-recheck', observedAt: new Date().toISOString() }));
+    expect((await repository.read(input.scopeId)).scope?.schoolbagChoices).toEqual([{ id, day, state: 'packed' }]);
+    const otherScope = 'synthetic-other-profile';
+    await repository.record(check({ scopeId: otherScope, observedAt: new Date().toISOString() }));
+    expect((await repository.read(otherScope)).scope?.schoolbagChoices).toBeUndefined();
+    await restarted.setPackingChoice(input.scopeId, id, day, 'hidden');
+    expect((await repository.read(input.scopeId)).scope?.schoolbagChoices).toEqual([{ id, day, state: 'hidden' }]);
+    await restarted.setPackingChoice(input.scopeId, id, day, 'open');
+    expect((await repository.read(input.scopeId)).scope?.schoolbagChoices).toEqual([]);
+    await repository.clearScope(input.scopeId);
+    expect((await restarted.read(input.scopeId)).scope).toBeNull();
+    await expect(restarted.setPackingChoice(input.scopeId, id, day, 'packed')).rejects.toThrow('Profile unavailable');
+  });
   it('claims each daily reminder channel atomically, preserves it across checks/restarts and isolates/deletes profile state', async () => {
     const now = new Date('2026-10-02T14:00:00.000Z');
     const input = check({ observedAt: now.toISOString() });

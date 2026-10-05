@@ -1,6 +1,7 @@
 import { createNotificationDetails, type NotificationDetails } from './notification-details';
 import { isTaskCategory, type TaskStatus } from './tasks';
 import type { TodoReminderState } from './todo';
+import { brusselsWallTime } from './notification-window';
 
 export type Category = 'tests' | 'assignments' | 'review' | 'other';
 export interface Snapshot {
@@ -33,6 +34,7 @@ export interface HistoryScope {
   scopeId: string; baselineAt: string | null; lastSuccessAt: string;
   localId?: string;
   todoReminder?: TodoReminderState;
+  schoolbagChoices?: { id: string; day: string; state: 'packed' | 'hidden' }[];
   items: ObservedItem[]; events: ObservationEvent[]; checks: RecordedCheck[];
 }
 export interface CheckInput {
@@ -111,6 +113,7 @@ export function compareObservations(previous: HistoryScope | null, input: CheckI
   return { scopeId: input.scopeId,
     ...(previous?.localId ? { localId: previous.localId } : {}),
     ...(previous?.todoReminder ? { todoReminder: previous.todoReminder } : {}),
+    ...(previous?.schoolbagChoices ? { schoolbagChoices: previous.schoolbagChoices.filter((choice) => choice.day >= brusselsWallTime(new Date(input.observedAt)).slice(0, 10)) } : {}),
     baselineAt: previous?.baselineAt ?? (input.points.length ? input.observedAt : null),
     lastSuccessAt: input.observedAt, items: [...items.values()],
     events: [...(previous?.events ?? []), ...events],

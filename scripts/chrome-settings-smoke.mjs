@@ -143,6 +143,15 @@ try {
       request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
     });
     const tx = db.transaction('scopes', 'readwrite');
+    const laterItems = Array.from({ length: 6 }, (_, index) => {
+      do { date.setUTCDate(date.getUTCDate() + 1); } while ([0, 6].includes(date.getUTCDay()));
+      const laterDay = date.toISOString().slice(0, 10);
+      return { sourceKey: 'synthetic-planning-' + index, localId: crypto.randomUUID(), category: 'assignments', present: true,
+        taskStatus: 'open', firstSeenAt: now.toISOString(), lastSeenAt: now.toISOString(),
+        snapshot: { title: 'Synthetic later planning ' + (index + 1), instructions: '', typePunt: 1001,
+          startsAt: laterDay + ' 09:00:00', endsAt: laterDay + ' 09:50:00', validFrom: laterDay + ' 00:00:00',
+          hidden: false, cancelled: false, recurrence: '' } };
+    });
     tx.objectStore('scopes').put({ scopeId, localId: crypto.randomUUID(), baselineAt: now.toISOString(),
       lastSuccessAt: now.toISOString(), events: [], checks: [], items: [{ sourceKey: 'synthetic-bag-point',
         localId: crypto.randomUUID(), category: 'assignments', present: true, taskStatus: 'open',
@@ -150,7 +159,7 @@ try {
         lesson: { key: 'synthetic-lesson', subject: 'Aardrijkskunde', room: '' },
         snapshot: { title: 'Synthetic workbook task', instructions: 'Werkboek pagina 24-34', typePunt: 1001,
           startsAt: day + ' 09:00:00', endsAt: day + ' 09:50:00', validFrom: day + ' 00:00:00',
-          hidden: false, cancelled: false, recurrence: '' } }] });
+          hidden: false, cancelled: false, recurrence: '' } }, ...laterItems] });
     await new Promise((resolve, reject) => { tx.oncomplete = resolve; tx.onabort = () => reject(tx.error); });
     db.close(); return true;
   })()`);
@@ -170,6 +179,30 @@ try {
   console.log('Chrome schoolbag smoke passed: worker projection, both packing lists, laptop defaults and synthetic workbook page range.');
   assert.equal(await evaluate(bagSession, `Boolean(document.querySelector('[aria-label="To-do voor de volgende schooldag"]').compareDocumentPosition(document.querySelector('[aria-label="Boekentas"]')) & Node.DOCUMENT_POSITION_FOLLOWING)`), true);
   assert.equal(await evaluate(bagSession, `Boolean(document.querySelector('[aria-label="Boekentas"]').compareDocumentPosition(document.querySelector('[aria-label="Taken, toetsen en voortgang"]')) & Node.DOCUMENT_POSITION_FOLLOWING)`), true);
+  assert.equal(await evaluate(bagSession, `document.querySelectorAll('[aria-label="To-do voor de volgende schooldag"]').length`), 1);
+  assert.equal(await evaluate(bagSession, `document.querySelector('[aria-label="Taken, toetsen en voortgang"]').textContent.includes('Synthetic later planning 6')`), false);
+  await evaluate(bagSession, `([...document.querySelectorAll('button')].find(button => button.textContent.includes('Verder vooruit kijken'))).click()`);
+  await poll(() => evaluate(bagSession, `document.querySelector('[aria-label="Taken, toetsen en voortgang"]').textContent.includes('Synthetic later planning 6')`));
+  const packedSelector = '[aria-label="Aardrijkskunde Werkboek ingepakt"]';
+  await poll(() => evaluate(bagSession, `document.querySelector('${packedSelector}') && !document.querySelector('${packedSelector}').disabled`));
+  await evaluate(bagSession, `document.querySelector('${packedSelector}').click()`);
+  await poll(() => evaluate(bagSession, `document.querySelector('${packedSelector}')?.checked && !document.querySelector('${packedSelector}').disabled`));
+  await command('Page.reload', {}, bagSession);
+  await poll(() => evaluate(bagSession, `document.querySelector('${packedSelector}')?.checked && !document.querySelector('${packedSelector}').disabled`));
+  await evaluate(bagSession, `document.querySelector('${packedSelector}').closest('li').querySelector('button').click()`);
+  await poll(() => evaluate(bagSession, `!document.querySelector('${packedSelector}') && document.querySelector('[aria-label="Boekentas"]').textContent.includes('Verborgen suggesties tonen (1)')`));
+  await evaluate(bagSession, `[...document.querySelectorAll('button')].find(button => button.textContent.includes('Verborgen suggesties tonen')).click()`);
+  await poll(() => evaluate(bagSession, `document.querySelector('${packedSelector}') && !document.querySelector('${packedSelector}').disabled`));
+  await evaluate(bagSession, `document.querySelector('${packedSelector}').closest('li').querySelector('button').click()`);
+  await poll(() => evaluate(bagSession, `!document.querySelector('[aria-label="Boekentas"]').textContent.includes('Terugzetten')`));
+  await evaluate(bagSession, `(async () => {
+    const { schoolwareConnection: connection } = await chrome.storage.local.get('schoolwareConnection');
+    await chrome.storage.local.set({ schoolwareConnection: { ...connection, lastCheck: { status: 'session-required', count: null, checkedAt: new Date().toISOString() } } });
+    return true;
+  })()`);
+  await poll(() => evaluate(bagSession, `document.querySelector('[aria-label="Koppelingsstatus"]')?.textContent.includes('Opnieuw aanmelden')`));
+  assert.equal(await evaluate(bagSession, `document.querySelector('[aria-label="Koppelingsstatus"]').textContent.includes('Laatste geslaagde controle: nog geen')`), false);
+  console.log('Chrome overview smoke passed: one to-do, compact planning with expansion, durable packing choices, hide/restore and expired-session status.');
   const toggleSchoolbag = () => evaluate(restarted.sessionId, `(() => {
     [...document.querySelectorAll('label')].find(label => label.textContent.includes('Boekentas tonen onder de to-do')).querySelector('input').click();
     return true;

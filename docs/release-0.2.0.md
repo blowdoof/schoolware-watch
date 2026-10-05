@@ -11,6 +11,10 @@ is authorized by the version bump.
   history, including upgrades from a configured 0.1.0 installation.
 - [ ] Verify real Schoolware login, exact-site consent, connection confirmation,
   session recovery and Chrome restart.
+- [ ] Confirm last-success status after session expiry, daily packing choices,
+  hidden suggestion recovery, changed instructions and compact planning expansion.
+- [ ] Find an external parent for another installation before treating multi-school
+  support as verified; the owner will arrange this candidate.
 - [ ] Verify Schoolware test banners, actual change alerts and to-do reminders,
   including extension reload with an existing Schoolware tab.
 - [ ] Verify optional encrypted progress pairing and propagation between two

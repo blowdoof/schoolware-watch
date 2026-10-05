@@ -8,6 +8,7 @@ import { SYNC_STATE_KEY } from '../shared/progress-sync';
 import { MAX_TASK_UPDATES, createTasksView } from '../shared/tasks';
 import { todoReminderSelection } from '../domain/todo';
 import type { Category } from '../domain/observations';
+import { brusselsWallTime } from '../domain/notification-window';
 
 export { HISTORY_DB, HISTORY_VERSION, openHistoryDatabase } from './database';
 
@@ -156,6 +157,26 @@ export class HistoryRepository {
 
   async setTaskStatus(scopeId: string, itemId: string, status: TaskStatus, trace: AuditContext): Promise<void> {
     await this.setTaskStatuses(scopeId, [itemId], status, trace);
+  }
+
+  async setPackingChoice(scopeId: string, id: string, day: string, state: 'packed' | 'hidden' | 'open'): Promise<void> {
+    if (!/^[a-f0-9]{64}$/.test(id) || !/^\d{4}-\d{2}-\d{2}$/.test(day) || !['packed', 'hidden', 'open'].includes(state)) throw new Error('Invalid packing choice');
+    const db = await openHistoryDatabase(this.name);
+    try {
+      const tx = db.transaction('scopes', 'readwrite');
+      const done = tx.done;
+      void done.catch(() => {});
+      try {
+        const scope = await tx.store.get(scopeId);
+        if (!scope) throw new Error('Profile unavailable');
+        const choices = (scope.schoolbagChoices ?? []).filter((choice) => choice.id !== id && choice.day >= brusselsWallTime(new Date()).slice(0, 10));
+        if (state !== 'open') choices.push({ id, day, state });
+        if (choices.length > 5000) throw new Error('Packing choice limit');
+        scope.schoolbagChoices = choices;
+        await tx.store.put(scope);
+        await done;
+      } catch (error) { try { tx.abort(); } catch { /* Already completed. */ } await done.catch(() => {}); throw error; }
+    } finally { db.close(); }
   }
 
   async setTaskStatuses(scopeId: string, itemIds: string[], status: TaskStatus, trace: AuditContext): Promise<void> {

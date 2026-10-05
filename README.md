@@ -301,3 +301,23 @@ preferences are upgraded. Explicitly saved visibility choices are preserved.
 Use **Boekentas tonen onder de to-do** in settings to change visibility.
 The panel appears below the to-do overview and above dashboard planning; changing
 the setting immediately updates open extension views without deleting history.
+
+Connection status in the popup, dashboard and settings shows the latest check
+outcome and the last successful observation independently. Session expiry prompts
+the parent to sign in again without erasing history; network errors do not imply
+expired credentials. A saved connection alone does not prove a working session.
+
+Packing suggestions can be marked as packed or hidden, with a restore control.
+These choices are stored only in the existing local IndexedDB profile, separately
+for each selected day and packing direction. SHA-256 fingerprints of the suggestion
+and its source evidence invalidate choices when instructions change, without
+duplicating agenda text in packing metadata. Choices are not progress updates and
+are never synchronized. Past choices are pruned during successful observations;
+profile deletion and history retention remove their enclosing profile. No schema
+upgrade or additional permission is needed.
+
+Upcoming planning initially shows five positively known agenda days and at most
+20 tasks. Parents can expand by five days or show more tasks. Ongoing tasks and
+observed weekend deadlines remain eligible; unknown dates are not assumed to be
+school holidays. Earlier/all-task selections remain available. The dashboard has
+one to-do overview, followed by the optional schoolbag and planning.

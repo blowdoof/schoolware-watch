@@ -3,11 +3,12 @@ import type { BagAgenda, BagPoint } from '../domain/schoolbag';
 import { isTaskStatus } from '../domain/tasks';
 import { isAlertId } from './browser-alerts';
 
-export interface SchoolbagView extends BagAgenda { ok: boolean }
+export interface SchoolbagView extends BagAgenda { ok: boolean; choices?: { id: string; day: string; state: 'packed' | 'hidden' }[] }
 
 /** Latest active selection only: stale retained points cannot invent requirements. */
 export function createSchoolbagView(scope: HistoryScope | null): SchoolbagView {
   return { ok: true, lastSuccessAt: scope?.lastSuccessAt ?? null,
+    ...(scope?.schoolbagChoices ? { choices: scope.schoolbagChoices } : {}),
     points: (scope?.items ?? []).filter((item) => item.localId && item.present && !item.snapshot.hidden &&
       !item.snapshot.cancelled && item.lastSeenAt === scope?.lastSuccessAt).map((item) => ({
       id: item.localId!, day: item.snapshot.startsAt.slice(0, 10), subject: item.lesson?.subject ?? '',
@@ -19,7 +20,7 @@ export function createSchoolbagView(scope: HistoryScope | null): SchoolbagView {
 export function validateSchoolbagView(raw: unknown): SchoolbagView | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const view = raw as Record<string, unknown>;
-  if (Object.keys(view).length !== 3 || typeof view.ok !== 'boolean' || !Array.isArray(view.points) ||
+  if (!Object.keys(view).every((key) => ['ok', 'points', 'lastSuccessAt', 'choices'].includes(key)) || typeof view.ok !== 'boolean' || !Array.isArray(view.points) ||
       !(view.lastSuccessAt === null || (typeof view.lastSuccessAt === 'string' &&
         /^\d{4}-\d{2}-\d{2}T/.test(view.lastSuccessAt) && Number.isFinite(Date.parse(view.lastSuccessAt))))) return null;
   const points: BagPoint[] = [];
@@ -39,5 +40,18 @@ export function validateSchoolbagView(raw: unknown): SchoolbagView | null {
       instructions: point.instructions, category: point.category as Category, typePunt: point.typePunt, status: point.status });
   }
   if (view.lastSuccessAt === null && points.length) return null;
-  return { ok: view.ok, points, lastSuccessAt: view.lastSuccessAt as string | null };
+  let choices: SchoolbagView['choices'];
+  if (Object.hasOwn(view, 'choices')) {
+    if (!Array.isArray(view.choices) || view.choices.length > 5000) return null;
+    choices = [];
+    for (const entry of view.choices) {
+      if (!entry || typeof entry !== 'object' || Object.keys(entry).length !== 3 ||
+          typeof entry.id !== 'string' || !/^[a-f0-9]{64}$/.test(entry.id) || choices.some((choice) => choice.id === entry.id) ||
+          typeof entry.day !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(entry.day) ||
+          !Number.isFinite(Date.parse(`${entry.day}T00:00:00Z`)) || new Date(`${entry.day}T00:00:00Z`).toISOString().slice(0, 10) !== entry.day ||
+          !['packed', 'hidden'].includes(entry.state)) return null;
+      choices.push({ id: entry.id, day: entry.day, state: entry.state });
+    }
+  }
+  return { ok: view.ok, points, lastSuccessAt: view.lastSuccessAt as string | null, ...(choices ? { choices } : {}) };
 }

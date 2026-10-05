@@ -3,25 +3,27 @@ import { useTasks } from './useTasks';
 import { TaskControls } from './TaskControls';
 import { displaySnapshotValue, snapshotLabels } from './agenda-presentation';
 import { hasAgendaMarker, isPastTask } from '../domain/tasks';
-import { TodoOverview } from './TodoPanel';
 import { useNow } from './useNow';
+import { planningWindow } from '../domain/planning';
 
 export function TasksPanel({ refreshToken }: { refreshToken: number }) {
-  const { view, working, error, update, updateMany, available } = useTasks(refreshToken);
+  const { view, working, error, update, available } = useTasks(refreshToken);
   const [hideDone, setHideDone] = useState(false);
   const [planning, setPlanning] = useState('upcoming');
-  const [limit, setLimit] = useState(50);
+  const [limit, setLimit] = useState(20);
+  const [dayLimit, setDayLimit] = useState(5);
   const now = useNow();
   if (!available) return null;
   const entries = view?.entries.filter((task) => hasAgendaMarker(task.snapshot.typePunt) && (!hideDone || task.status !== 'done') &&
     (planning === 'all' || (planning === 'upcoming' ? !isPastTask(task.snapshot.endsAt, now) : isPastTask(task.snapshot.endsAt, now)))) ?? [];
+  const { days, cutoffDay } = planningWindow(view?.agenda?.days ?? [], entries.map((task) => task.snapshot), now, dayLimit);
+  const visibleEntries = planning === 'upcoming' ? entries.filter((task) => cutoffDay !== null && task.snapshot.startsAt.slice(0, 10) <= cutoffDay) : entries;
   return <>
-    <TodoOverview view={view} now={now} working={working} update={update} updateMany={updateMany} />
     <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" aria-label="Taken, toetsen en voortgang">
     <h2 className="text-lg font-semibold">Taken, toetsen en voortgang</h2>
     <p className="mt-2 text-sm text-slate-600">Vink Bezig of Klaar aan. Uitvinken zet de taak weer open. Een gewijzigde of opnieuw verschenen voltooide taak gaat automatisch terug naar Bezig. Deze status blijft lokaal en wijzigt niets in Schoolware.</p>
     <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
-      <label>Planning <select value={planning} onChange={(event) => { setPlanning(event.target.value); setLimit(50); }} className="ml-2 rounded-lg border border-slate-300 p-2">
+      <label>Planning <select value={planning} onChange={(event) => { setPlanning(event.target.value); setLimit(20); setDayLimit(5); }} className="ml-2 rounded-lg border border-slate-300 p-2">
         <option value="upcoming">Nog gepland</option><option value="past">Eerdere taken</option><option value="all">Alle taken</option>
       </select></label>
       <label className="flex items-center gap-2"><input type="checkbox" checked={hideDone} onChange={(event) => setHideDone(event.target.checked)} />Verberg afgeronde taken</label>
@@ -30,8 +32,9 @@ export function TasksPanel({ refreshToken }: { refreshToken: number }) {
     {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
     {!view ? <p className="mt-4 text-sm">Taken laden…</p> : <>
       <p className="mt-3 text-xs text-slate-500">{entries.length} taken in deze selectie. Alleen punten met een vlagje of sterretje.</p>
+      {planning === 'upcoming' && <p className="mt-2 text-xs text-slate-500">Eerst de komende {Math.min(dayLimit, days.length)} bekende schooldagen. Lege dagen bewijzen niet dat er geen les is.</p>}
       {!entries.length && <p className="mt-3 text-sm">Geen taken in deze selectie.</p>}
-      <ol className="mt-4 space-y-3">{entries.slice(0, limit).map((task) => <li key={task.id} className="rounded-xl border border-slate-200 p-4">
+      <ol className="mt-4 space-y-3">{visibleEntries.slice(0, limit).map((task) => <li key={task.id} className="rounded-xl border border-slate-200 p-4">
         <details className="group">
           <summary className="cursor-pointer rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-teal-700">
             <span className="text-xs text-slate-500">{task.category === 'tests' ? 'Toets - ' : task.category === 'review' ? 'Met sterretje · ' : ''}{task.subject}{task.room ? ` · ${task.room}` : ''}</span>
@@ -60,7 +63,8 @@ export function TasksPanel({ refreshToken }: { refreshToken: number }) {
         <TaskControls status={task.status} disabled={working} onChange={(status) => { void update(task.id, status); }} />
         {task.updatedAt && <p className="mt-2 text-xs text-slate-500">Status gewijzigd: {new Date(task.updatedAt).toLocaleString('nl-BE', { timeZone: 'Europe/Brussels' })}</p>}
       </li>)}</ol>
-      {entries.length > limit && <button type="button" onClick={() => setLimit(limit + 50)} className="mt-4 text-sm font-medium text-teal-700">Meer taken tonen</button>}
+      {visibleEntries.length > limit && <button type="button" onClick={() => setLimit(limit + 20)} className="mt-4 mr-4 text-sm font-medium text-teal-700">Meer taken tonen</button>}
+      {planning === 'upcoming' && days.length > dayLimit && <button type="button" onClick={() => { setDayLimit(dayLimit + 5); setLimit(limit + 20); }} className="mt-4 text-sm font-medium text-teal-700">Verder vooruit kijken (+5 schooldagen)</button>}
     </>}
   </section></>;
 }

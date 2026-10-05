@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { agendaText, materialsFor, schoolbagOverview, type BagPoint } from '../src/domain/schoolbag';
+import { agendaText, materialsFor, packingChoiceId, schoolbagOverview, type BagPoint } from '../src/domain/schoolbag';
 import { createSchoolbagView, validateSchoolbagView } from '../src/shared/schoolbag';
 import { SchoolbagOverview } from '../src/ui/SchoolbagPanel';
 import { compareObservations } from '../src/domain/observations';
@@ -15,6 +15,22 @@ function bagPoint(overrides: Partial<BagPoint> = {}): BagPoint {
 const now = new Date('2026-10-04T12:00:00Z');
 
 describe('local schoolbag suggestions', () => {
+  it('invalidates packing choices when evidence changes and isolates days and directions', async () => {
+    const point = bagPoint();
+    const material = materialsFor([point])[0]!;
+    const id = await packingChoiceId(point.day, 'school', material);
+    expect(await packingChoiceId(point.day, 'school', materialsFor([point])[0]!)).toBe(id);
+    expect(await packingChoiceId('2026-10-06', 'school', material)).not.toBe(id);
+    expect(await packingChoiceId(point.day, 'home', material)).not.toBe(id);
+    expect(await packingChoiceId(point.day, 'school', materialsFor([{ ...point, instructions: 'Boek pagina 35-40' }])[0]!)).not.toBe(id);
+    expect(await packingChoiceId(point.day, 'school', { ...material, sources: material.sources.map((source) => ({ ...source, day: '2026-10-06' })) })).not.toBe(id);
+    const combined = materialsFor([point, bagPoint({ instructions: 'Boek pagina 40-45' })])[0]!;
+    expect(await packingChoiceId(point.day, 'school', combined)).toBe(await packingChoiceId(point.day, 'school', { ...combined, sources: [...combined.sources].reverse() }));
+    expect(validateConnectionMessage({ type: 'schoolbag.update', choiceId: id, state: 'hidden' })).toEqual({ type: 'schoolbag.update', choiceId: id, state: 'hidden' });
+    expect(validateConnectionMessage({ type: 'schoolbag.update', choiceId: id, state: 'done' })).toBeNull();
+    expect(validateConnectionMessage({ type: 'schoolbag.update', choiceId: id, state: 'packed', scopeId: 'other' })).toBeNull();
+    expect(validateSchoolbagView({ ok: true, points: [], lastSuccessAt: null, choices: [{ id, day: point.day, state: 'hidden' }, { id, day: point.day, state: 'packed' }] })).toBeNull();
+  });
   it('enables schoolbag by default and preserves explicit choices when upgrading preferences', () => {
     expect(DEFAULT_PREFERENCES.schoolbagEnabled).toBe(true);
     const legacy = { ...DEFAULT_PREFERENCES, intervalMinutes: 30, notificationsEnabled: true };
