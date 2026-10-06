@@ -5,6 +5,26 @@ Version 0.2.0 is a development target, not an approved release. Continue all
 work on features/multi-school-onboarding; no merge to main or publication
 is authorized by the version bump.
 
+## Store update candidate prepared on 2026-10-06
+
+The owner requested a multi-school Store update candidate and simpler progress
+sharing. The candidate remains 0.2.0, higher than published 0.1.0. The listing now
+describes supported parent-agenda installations without a KSGWL-only restriction,
+while disclosing that authenticated cross-school integration remains untested.
+Public KOHa and Molenland frontends confirm identical standard type ranges.
+
+Explicitly copying an invitation provides the existing public Store install URL,
+instructions and permanent pairing code as separate message text. No credential
+is added to a URL or landing page, and copying does not send a message or admit a
+device automatically. No new backend, permissions or protocol are introduced.
+The future approved-device invitation protocol remains a separate proposal.
+
+Owner reports on 2026-10-06 confirm logout detection on a new check, subsequent
+login recovery without reconnecting, and successful deployed progress exchange
+after the activity-column migration. Other-school live integration and two-device
+propagation are still pending. Matthias must review the final complete branch
+before merge/publication; no Store upload or publication is performed here.
+
 ## Acceptance before merging
 
 - [ ] Continue owner testing of the complete dashboard, settings, schoolbag and

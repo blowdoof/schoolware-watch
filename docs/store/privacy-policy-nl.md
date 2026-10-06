@@ -1,6 +1,6 @@
 # Privacyverklaring Schoolware Watch
 
-Laatst bijgewerkt: 5 oktober 2026. Versie: 0.2.0 (bron voor de volgende update).
+Laatst bijgewerkt: 6 oktober 2026. Versie: 0.2.0 (bron voor de volgende update).
 
 Schoolware Watch is een onafhankelijk project van Bumper.be. Contact:
 [info@bumper.be](mailto:info@bumper.be). Het is geen officieel product van
@@ -49,6 +49,12 @@ digests; registratielimieten gebruiken per uur wisselende, met een geheime sleut
 IP-verwijzingen (IPv6 per /64). De applicatie logt geen ruwe IP-adressen, headers of payloads.
 Nieuwe versleutelde berichten gebruiken een vaste opgevulde lengte. Oudere
 berichten kunnen door hun lengte nog iets over de taakstatus of naamlengte verraden.
+
+Je kunt zelf een privé-uitnodiging kopiëren naar het klembord. Dit bericht bevat
+de openbare Store-installatielink, instructies en de bestaande koppelcode. De code
+staat niet in de URL. Schoolware Watch verstuurt het bericht niet; jij kiest de
+ontvanger en het kanaal. Je e-mail- of chatdienst verwerkt het bericht volgens
+haar eigen voorwaarden. Deel de uitnodiging alleen met een vertrouwde deelnemer.
 
 Iedereen met de volledige koppelcode kan de groep lezen, wijzigen en gedeelde
 gegevens wissen. Zelfgekozen namen zijn niet geverifieerd. Er zijn geen

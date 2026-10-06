@@ -1,5 +1,11 @@
 # Release readiness and distribution
 
+Current status (2026-10-06): 0.1.0 is published. Prepare the 0.2.0 candidate on
+`features/multi-school-onboarding`; Matthias's full branch review is required
+before merging or publishing. The 2026-10-04 notes below are historical, not
+current main-merge authorization. See [current update procedure](store/update-0.2.0.md)
+and [release gates](release-0.2.0.md).
+
 Status: 2026-10-04. The owner has authorized integration into local `main`
 for continued testing. Public release remains a separate checkpoint.
 
@@ -29,14 +35,19 @@ be checked against normal school days.
   Hosting/WAF controls and throttling behavior still need deployment verification.
 - Verify automatic new/change alerts separately from the owner-confirmed visible
   to-do system notification and Schoolware banner.
-- Keep the verified origin restriction explicit. The current extension supports
-  the inspected Schoolware installation, not arbitrary schools.
+- State the validated agenda contract explicitly. Standard task ranges have now
+  been checked in public frontends from two other school groups; authenticated
+  cross-school transport remains untested. Do not claim universal compatibility.
 
 The owner explicitly authorized the local main merge while the remaining
 acceptance checks stay open. This is an integration checkpoint, not public-release
 approval. Store submission and remote publication are separate actions.
 
 ## Proposed invitation flow (not implemented)
+
+The current implementation adds explicit clipboard sharing of a public Store URL,
+instructions and the existing pairing code as separate text. It does not implement
+the admission protocol below; do not describe it as an expiring or approved invite.
 
 The inviter is the person sharing their own progress group. Approval must be
 performed by that person, not by the extension publisher or a central operator.

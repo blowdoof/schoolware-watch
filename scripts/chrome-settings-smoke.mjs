@@ -210,6 +210,40 @@ try {
     return name?.value === '' && create && !create.disabled;
   })()`));
   console.log('Chrome privacy smoke passed: group setup allows an empty optional participant label without sending a network request.');
+  await evaluate(restarted.sessionId, `(async () => {
+    const { schoolwareConnection: connection } = await chrome.storage.local.get('schoolwareConnection');
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('schoolware-watch-history', 3);
+      request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+    });
+    const tx = db.transaction('sync', 'readwrite');
+    tx.objectStore('sync').put({ connectionId: crypto.randomUUID(), scopeId: connection.requestUrl,
+      token: 'a'.repeat(64), key: 'b'.repeat(64), cursor: 0, head: 0, outbox: [], remote: {},
+      lastSuccessAt: null, error: false }, 'progressSync');
+    await new Promise((resolve, reject) => { tx.oncomplete = resolve; tx.onerror = reject; });
+    db.close(); return true;
+  })()`);
+  await command('Page.reload', {}, restarted.sessionId);
+  await poll(() => evaluate(restarted.sessionId, `Boolean([...document.querySelectorAll('button')].find(button => button.textContent === 'Uitnodiging kopiëren'))`));
+  await evaluate(restarted.sessionId, `(() => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => { throw new Error('Synthetic denied clipboard'); } } });
+    [...document.querySelectorAll('button')].find(button => button.textContent === 'Uitnodiging kopiëren').click(); return true;
+  })()`);
+  await poll(() => evaluate(restarted.sessionId, `document.body.textContent.includes('Automatisch kopiëren is niet gelukt')`));
+  assert.equal(await evaluate(restarted.sessionId, `(() => {
+    const text = document.querySelector('[aria-label="Voortgang synchroniseren"] textarea')?.value ?? '';
+    return text.includes('chromewebstore.google.com/detail/phngkgibiapcabhnfjafkfibjobgkkaf') &&
+      text.includes('sw1.' + 'a'.repeat(64) + '.' + 'b'.repeat(64)) && text.includes('Koppelen aan een bestaande computer');
+  })()`), true);
+  await evaluate(restarted.sessionId, `(async () => {
+    [...document.querySelectorAll('button')].find(button => button.textContent === 'Uitnodiging verbergen').click();
+    const db = await new Promise(resolve => { const request = indexedDB.open('schoolware-watch-history', 3); request.onsuccess = () => resolve(request.result); });
+    const tx = db.transaction('sync', 'readwrite'); tx.objectStore('sync').delete('progressSync');
+    await new Promise(resolve => { tx.oncomplete = resolve; }); db.close(); return true;
+  })()`);
+  await command('Page.reload', {}, restarted.sessionId);
+  await poll(() => evaluate(restarted.sessionId, `Boolean([...document.querySelectorAll('button')].find(button => button.textContent === 'Nieuwe leerlinggroep aanmaken'))`));
+  console.log('Chrome invitation smoke passed: existing pairing, public Store URL, private copy fallback and hide control.');
   const toggleSchoolbag = () => evaluate(restarted.sessionId, `(() => {
     [...document.querySelectorAll('label')].find(label => label.textContent.includes('Boekentas tonen onder de to-do')).querySelector('input').click();
     return true;

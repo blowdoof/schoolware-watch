@@ -1,6 +1,6 @@
 # Chrome Web Store submission pack
 
-Development target: version 0.2.0, updated on 2026-10-05. The owner reports
+Development target: version 0.2.0, updated on 2026-10-06. The owner reports
 that 0.1.0 is approved and published. This next update is not ready for submission;
 continued testing and Matthias's external review precede any merge to main or
 release publication. See [0.2.0 release checks](../release-0.2.0.md).
@@ -75,9 +75,11 @@ exempt uploaded data from disclosure. Do not claim legal certification here.
 
 ## Reviewer test instructions
 
-The verified installation is https://schoolware_siw.ksgwl.be. Other installations
-are experimental and must expose the same validated agenda contract; task-type
-classification and shared task progress remain unavailable there. Normal monitoring
+The installation tested with a real account is https://schoolware_siw.ksgwl.be.
+Other installations must expose the same validated agenda contract. Standard
+type ranges were confirmed in public KOHa and Molenland frontends; task-type
+classification and opt-in shared task progress now work across validated origins.
+Authenticated cross-school integration is still untested. Normal monitoring
 requires an authorized parent account at the selected installation and a valid session.
 No real parent's credentials are supplied. Without a connection reviewers can
 inspect settings, privacy, permissions and the explicitly synthetic system
@@ -102,17 +104,25 @@ unconfirmed. Synthetic screenshots do not prove real Schoolware authorization.
 
 ## Publication handoff
 
-Register/setup the developer account, upload the ZIP as a new item, complete
-Store Listing, Privacy, Distribution and Test Instructions, then submit for
-review. Account payment, identity verification and signing policy declarations
-belong to the account holder. Submission does not guarantee approval.
+Use the existing published item `phngkgibiapcabhnfjafkfibjobgkkaf`; do not create
+a new item. After Matthias's full feature-branch review and owner release
+authorization, use Package → Upload New Package with the complete ZIP whose
+manifest is at the root. Version 0.2.0 is greater than the published 0.1.0.
+Update Store Listing, Privacy practices and Test Instructions to match the
+multi-school implementation and optional progress invitation. Keep distribution
+public. Submit for review and disable automatic publication to stage the reviewed
+update until final acceptance. Submission does not guarantee approval.
 
 Store installation usually has a different extension ID from an unpacked build.
 Existing unpacked IndexedDB/history do not automatically transfer. Reconnect
 Schoolware in the store build; a trusted progress pairing may be re-used separately.
 Avoid running both copies with notifications enabled during transition.
 
-Official sources checked on 2026-10-04:
+Official update workflow checked on 2026-10-06:
+
+- https://developer.chrome.com/docs/webstore/update
+
+Additional preparation sources checked on 2026-10-04:
 
 - https://developer.chrome.com/docs/webstore/register
 - https://developer.chrome.com/docs/webstore/publish

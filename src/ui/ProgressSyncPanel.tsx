@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { validateAgendaRequest } from '../schoolware/agenda-request';
 import { validateConnectionState } from '../shared/connection';
 import { hex } from '../domain/progress-sync';
+import { progressInvitation } from '../shared/progress-invitation';
 import { SYNC_PERMISSION, parsePairingCode, normalizeSyncLabel, validateSyncView, type SyncMessage, type SyncView } from '../shared/progress-sync';
 
 export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { refreshToken: number; initialMode?: 'first' | 'join' }) {
@@ -11,6 +12,7 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
   const [mode, setMode] = useState(initialMode);
   const [secret, setSecret] = useState('');
   const [pairing, setPairing] = useState('');
+  const [invitation, setInvitation] = useState('');
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -27,7 +29,7 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
       const next = validateSyncView(raw);
       if (mounted && next?.ok) {
         setView(next);
-        if (!next.enabled) setPairing('');
+        if (!next.enabled) { setPairing(''); setInvitation(''); }
         if (next.enabled && !labelEdited.current) setLabel(next.displayName ?? '');
       }
     }).catch(() => {});
@@ -60,7 +62,7 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
     setWorking(true); setMessage('');
     try {
       const next = await send({ type });
-      if (type !== 'sync.run') { setPairing(''); setConfirmDelete(false); setLabel(''); labelEdited.current = false; }
+      if (type !== 'sync.run') { setPairing(''); setInvitation(''); setConfirmDelete(false); setLabel(''); labelEdited.current = false; }
       setMessage(next.error ? 'Synchronisatie is niet gelukt. Je lokale voortgang blijft bewaard.' :
         type === 'sync.run' ? 'Synchronisatie uitgevoerd.' : type === 'sync.delete' ? 'Gedeelde voortgang en deelnemermeldingen gewist; deze computer is ontkoppeld. Groepstoegang en revisieteller blijven op de server.' : 'Deze computer is ontkoppeld; lokale voortgang blijft bewaard.');
     } catch { setMessage('De actie is niet gelukt. Controleer de serververbinding.'); }
@@ -72,6 +74,20 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
       const next = await send({ type: 'sync.pairing' });
       if (next.pairingCode) setPairing(next.pairingCode);
     } catch { setMessage('De koppelcode kon niet worden opgehaald.'); }
+    finally { setWorking(false); }
+  }
+  async function copyInvitation() {
+    setWorking(true); setMessage('');
+    try {
+      const next = await send({ type: 'sync.pairing' });
+      if (!next.pairingCode) throw new Error('Not paired');
+      const text = progressInvitation(next.pairingCode);
+      setInvitation(text);
+      try {
+        await navigator.clipboard.writeText(text);
+        setMessage('Uitnodiging gekopieerd. Plak het bericht in je e-mail of chat en stuur het alleen naar iemand die dezelfde leerling volgt.');
+      } catch { setMessage('Automatisch kopiëren is niet gelukt. Selecteer en kopieer hieronder het uitnodigingsbericht.'); }
+    } catch { setMessage('De uitnodiging kon niet worden gemaakt. Controleer of deze computer nog gekoppeld is.'); }
     finally { setWorking(false); }
   }
   async function saveName(value: string) {
@@ -120,6 +136,7 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
       <div className="mt-3 flex flex-wrap gap-3 text-sm">
         <button type="button" disabled={working} onClick={() => { void act('sync.run'); }} className="rounded-lg border border-slate-300 px-3 py-2">Nu synchroniseren</button>
         <button type="button" disabled={working} onClick={() => { void showPairing(); }} className="rounded-lg border border-slate-300 px-3 py-2">Koppelcode tonen</button>
+        <button type="button" disabled={working} onClick={() => { void copyInvitation(); }} className="rounded-lg border border-teal-300 px-3 py-2 text-teal-800">Uitnodiging kopiëren</button>
         <button type="button" disabled={working} onClick={() => { void act('sync.disconnect'); }} className="rounded-lg border border-slate-300 px-3 py-2">Deze computer ontkoppelen</button>
       </div>
       <details className="mt-4 text-sm"><summary className="cursor-pointer text-red-700">Gedeelde servergegevens wissen</summary>
@@ -142,6 +159,13 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
       </label>}
       <button type="button" disabled={working || !compatible || (Boolean(label.trim()) && !normalizeSyncLabel(label)) || (mode !== 'first' && !parsePairingCode(secret.trim()))}
         onClick={() => { void connect(); }} className="rounded-lg bg-teal-700 px-4 py-2 font-medium text-white disabled:opacity-50">{mode === 'first' ? 'Nieuwe leerlinggroep aanmaken' : 'Koppelen'}</button>
+    </div>}
+    {invitation && <div className="mt-4 text-sm">
+      <label className="block font-medium">Privé-uitnodiging met installatielink en koppelcode
+        <textarea readOnly rows={10} value={invitation} onFocus={(event) => event.currentTarget.select()} className="mt-2 block w-full rounded-lg border border-slate-300 p-2 text-xs" />
+      </label>
+      <p className="mt-2 text-xs text-slate-500">Iedereen met deze code kan de gedeelde voortgang lezen en wijzigen. Controleer de ontvanger voordat je het bericht verstuurt.</p>
+      <button type="button" onClick={() => setInvitation('')} className="mt-2 text-teal-700">Uitnodiging verbergen</button>
     </div>}
     {pairing && <div className="mt-4 text-sm">
       <label className="block font-medium">Bewaar deze koppelcode privé en voer hem op de tweede computer in.
