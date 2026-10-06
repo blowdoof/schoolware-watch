@@ -25,6 +25,7 @@ export interface SyncState {
   connectionId: string; scopeId: string; token: string; key: string; cursor: number; head: number;
   outbox: ProgressOperation[]; remote: Record<string, { version: string; status: TaskStatus; revision: number; kind: 'manual' | 'reopen' }>;
   lastSuccessAt: string | null; error: boolean;
+  hasAppliedRemote?: boolean;
   registrationPending?: boolean;
   blocked?: boolean;
   displayName?: string; members?: SyncMember[]; membersError?: boolean;

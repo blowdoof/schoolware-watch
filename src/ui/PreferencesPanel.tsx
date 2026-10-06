@@ -194,6 +194,7 @@ export function PreferencesPanel({ settings, refreshToken, onSaved }: {
               onChange={(event) => change({ browserNotificationsEnabled: event.target.checked })} />Banner op de Schoolware-webpagina</label>
             <label className="flex items-center gap-2"><input type="checkbox" checked={draft.todoRemindersEnabled}
               onChange={(event) => change({ todoRemindersEnabled: event.target.checked })} />Dagelijkse to-do herinnering vanaf 16 uur</label>
+            <p className="text-xs leading-5 text-slate-500">Systeemmeldingen melden ook ontvangen wijzigingen in gedeelde taakstatussen. Deze meldingen bevatten geen namen of taaktitels. De eerste synchronisatie geeft geen melding over bestaande voortgang.</p>
             <p className="text-xs leading-5 text-slate-500">Na een geslaagde agendacontrole krijg je maximaal één to-do herinnering per dag via elk ingeschakeld meldingskanaal.
               Ze volgt de geselecteerde categorieën en kijkt naar de volgende bekende schooldag in je agenda. Chrome moet draaien; zonder open taken of bekende volgende schooldag komt er geen herinnering.</p>
             <p className="text-xs leading-5 text-slate-500">De banner verschijnt alleen op je gekoppelde Schoolware-website en toont algemene aantallen.

@@ -118,7 +118,7 @@ export function App({ page: initialPage }: { page: Page }) {
       )}
       </>}
       {page === 'options' && <ProgressSyncPanel refreshToken={historyRevision} />}
-      {page === 'options' && <ActivityPanel />}
+      {page === 'options' && <ActivityPanel refreshToken={historyRevision} />}
       <footer className="mt-8 border-t border-slate-200 pt-4 text-xs text-slate-500">
         <p>Een onafhankelijk project van Bumper.be</p>
         <nav aria-label="Projectinformatie" className="mt-2 flex flex-wrap gap-x-4 gap-y-2">

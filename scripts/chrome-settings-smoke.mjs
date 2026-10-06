@@ -177,6 +177,29 @@ try {
   assert.ok(bag.text.includes('Aardrijkskunde') && bag.text.includes('Werkboek'));
   assert.ok(!bag.homeText.includes('Werkboek'), 'Same-day workbook must not appear in next-day home packing');
   console.log('Chrome schoolbag smoke passed: worker projection, both packing lists, laptop defaults and synthetic workbook page range.');
+  const { targetId: livePopupTarget } = await command('Target.createTarget', { url: `chrome-extension://${id}/popup.html` });
+  const { sessionId: livePopupSession } = await command('Target.attachToTarget', { targetId: livePopupTarget, flatten: true });
+  await poll(() => evaluate(livePopupSession, `document.body.textContent.includes('Synthetic workbook task')`));
+  await evaluate(restarted.sessionId, `(async () => {
+    const view = await chrome.runtime.sendMessage({ type: 'tasks.read' });
+    const item = view.entries.find(item => item.snapshot.title === 'Synthetic workbook task');
+    await chrome.runtime.sendMessage({ type: 'tasks.update', itemId: item.id, status: 'in-progress' });
+    return true;
+  })()`);
+  const busyTaskVisible = `(() => {
+    const item = [...document.querySelectorAll('li')].find(li => li.textContent.includes('Synthetic workbook task') && li.querySelector('input[type="checkbox"]'));
+    return Boolean(item && [...item.querySelectorAll('label')].find(label => label.textContent.includes('Bezig'))?.querySelector('input')?.checked);
+  })()`;
+  await poll(() => evaluate(bagSession, busyTaskVisible));
+  await poll(() => evaluate(livePopupSession, busyTaskVisible));
+  await poll(() => evaluate(restarted.sessionId, `document.querySelector('[aria-label="Activiteitenlog"]')?.textContent.includes('task.status')`));
+  await evaluate(restarted.sessionId, `(async () => {
+    const view = await chrome.runtime.sendMessage({ type: 'tasks.read' });
+    await chrome.runtime.sendMessage({ type: 'tasks.update', itemId: view.entries.find(item => item.snapshot.title === 'Synthetic workbook task').id, status: 'open' });
+    return true;
+  })()`);
+  await command('Target.closeTarget', { targetId: livePopupTarget });
+  console.log('Chrome live progress smoke passed: existing popup, dashboard and settings log update without reload.');
   assert.equal(await evaluate(bagSession, `Boolean(document.querySelector('[aria-label="To-do voor de volgende schooldag"]').compareDocumentPosition(document.querySelector('[aria-label="Boekentas"]')) & Node.DOCUMENT_POSITION_FOLLOWING)`), true);
   assert.equal(await evaluate(bagSession, `Boolean(document.querySelector('[aria-label="Boekentas"]').compareDocumentPosition(document.querySelector('[aria-label="Taken, toetsen en voortgang"]')) & Node.DOCUMENT_POSITION_FOLLOWING)`), true);
   assert.equal(await evaluate(bagSession, `document.querySelectorAll('[aria-label="To-do voor de volgende schooldag"]').length`), 1);

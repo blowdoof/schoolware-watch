@@ -11,7 +11,7 @@ export const ACTIVITY_ACTIONS = ['worker.started', 'worker.installed', 'browser.
   'banner.published', 'banner.rendered', 'banner.opened', 'banner.dismissed', 'banner.broadcast', 'website.script',
   'preferences.saved', 'permission.changed', 'permission.requested', 'task.status', 'log.exported',
   'progress.sync', 'progress.registration', 'progress.exchange', 'progress.apply', 'progress.members',
-  'progress.leave', 'progress.delete', 'progress.connection', 'progress.name', 'notification.todo', 'connection.discovery'] as const;
+  'progress.leave', 'progress.delete', 'progress.connection', 'progress.name', 'notification.todo', 'notification.progress', 'connection.discovery'] as const;
 export type ActivityAction = typeof ACTIVITY_ACTIONS[number];
 export type ActivityPhase = 'started' | 'succeeded' | 'failed' | 'skipped' | 'info';
 export type ActivityContext = 'worker' | 'popup' | 'options' | 'dashboard' | 'schoolware' | 'alarm' | 'system';

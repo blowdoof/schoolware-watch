@@ -162,6 +162,8 @@ export class ProgressSyncRepository {
             }
           }
           if (changed) await tx.objectStore('scopes').put(scope);
+          current.hasAppliedRemote = true;
+          await tx.objectStore('sync').put(current, SYNC_STATE_KEY);
         }
         await done; return changed;
       } catch (error) { try { tx.abort(); } catch { /* Completed. */ } await done.catch(() => {}); throw error; }

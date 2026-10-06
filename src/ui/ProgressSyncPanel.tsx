@@ -202,6 +202,7 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
       <button type="button" onClick={() => setPairing('')} className="mt-2 text-teal-700">Koppelcode verbergen</button>
     </div>}
     <p className="mt-4 text-xs leading-5 text-slate-500">Bij een open Chrome wordt ongeveer elke minuut gecontroleerd. Een vinkje wordt direct aangeboden; offline wijzigingen wachten lokaal.
+      Open extensievensters werken automatisch bij zodra wijzigingen ontvangen zijn. Ingeschakelde systeemmeldingen melden ontvangen statuswijzigingen met algemene tekst; de eerste synchronisatie blijft stil.
       Bij gelijktijdige wijzigingen geldt de laatst door de server ontvangen wijziging. Bestaande afmeldingen worden alleen van de eerste computer overgenomen.
       Gewijzigde bron-ID’s kunnen voorlopig niet worden gekoppeld. Alleen overeenkomende inhoudsversies delen voortgang.</p>
     {message && <p role="status" className="mt-3 text-sm">{message}</p>}

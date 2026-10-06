@@ -7,6 +7,7 @@ import { progressSync, synchronizeProgress, configureProgressSyncAlarm, deleteRe
 import { encryptProgress, progressItemKey, progressVersion } from '../src/domain/progress-sync';
 import { validateActivityInput, type ActivityReporter } from '../src/shared/activity';
 import { check, point } from './fixtures/observations';
+import { DEFAULT_PREFERENCES } from '../src/shared/preferences';
 
 const token = 'a'.repeat(64); const key = 'b'.repeat(64); const code = `sw1.${token}.${key}`;
 const history = new HistoryRepository(); const activity = new ActivityRepository();
@@ -20,6 +21,29 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('private progress activity', () => {
+  it('notifies a later remote edit once, with no replay notification after a restart', async () => {
+    const scope = await history.record(check()); await progressSync.connect(scope.scopeId, code, false);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(empty()));
+    await synchronizeProgress(scope.scopeId);
+    expect((await progressSync.read())!.hasAppliedRemote).toBe(true);
+    const create = vi.fn().mockResolvedValue('accepted');
+    Object.assign(chrome, {
+      storage: { local: { get: vi.fn().mockResolvedValue({ schoolwarePreferences: { ...DEFAULT_PREFERENCES, notificationsEnabled: true } }) } },
+      notifications: { create }, runtime: { getURL: (path: string) => path },
+    });
+    const id = crypto.randomUUID(); const item = await progressItemKey(key, point.sourceKey);
+    const version = await progressVersion(point.snapshot);
+    const encrypted = await encryptProgress(key, id, { item, version, status: 'done', kind: 'manual' });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ ok: true, acknowledged: [], cursor: 1, head: 1,
+      operations: [{ id, revision: 1, ...encrypted }] })));
+    const trace = audit(); const report: ActivityReporter = (action, phase, data) => activity.append(activityInput(trace, action, phase, data));
+    expect(await synchronizeProgress(scope.scopeId, report, trace)).toBe(true);
+    expect(create).toHaveBeenCalledTimes(1);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ ok: true, acknowledged: [], cursor: 1, head: 1, operations: [] })));
+    expect(await synchronizeProgress(scope.scopeId, report, trace)).toBe(false);
+    expect(create).toHaveBeenCalledTimes(1);
+    expect((await activity.read()).entries.filter(entry => entry.action === 'notification.progress' && entry.phase === 'succeeded')).toHaveLength(1);
+  });
   it('records an incoming edit and all sync stages with one correlation, without remote identifiers, names or secrets', async () => {
     const scope = await history.record(check());
     await progressSync.connect(scope.scopeId, code, false, false, 'Synthetic private parent');
@@ -173,8 +197,10 @@ describe('private progress activity', () => {
     const beforeLogs = await activity.read();
     await expect(progressSync.apply(scope.scopeId, { ...trace, correlationId: 'invalid' })).rejects.toThrow();
     expect((await history.read(scope.scopeId)).scope!.items[0]!.taskStatus).toBe('open');
+    expect((await progressSync.read())!.hasAppliedRemote).toBeUndefined();
     expect(await activity.read()).toEqual(beforeLogs);
     expect(await progressSync.apply(scope.scopeId, trace)).toBe(true);
+    expect((await progressSync.read())!.hasAppliedRemote).toBe(true);
     expect(await progressSync.apply(scope.scopeId, trace)).toBe(false);
     expect((await activity.read()).entries.filter((entry) => entry.data.reason === 'remote-sync')).toHaveLength(1);
   });

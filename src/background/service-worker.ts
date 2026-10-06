@@ -796,7 +796,7 @@ chrome.permissions.onAdded.addListener((permissions) => {
 function notificationCorrelation(id: string): string | null {
   if (!id.startsWith(NOTIFICATION_PREFIX)) return null;
   const suffix = id.slice(NOTIFICATION_PREFIX.length);
-  const correlation = suffix.startsWith('test-') ? suffix.slice(5) : suffix;
+  const correlation = suffix.startsWith('test-') ? suffix.slice(5) : suffix.startsWith('progress-') ? suffix.slice(9) : suffix;
   return isAlertId(correlation) ? correlation : null;
 }
 
@@ -805,8 +805,9 @@ function registerNotificationListener(): void {
   chrome.notifications.onClicked.addListener((id) => {
     if (!id.startsWith(NOTIFICATION_PREFIX)) return;
     const suffix = id.slice(NOTIFICATION_PREFIX.length);
+    const progress = suffix.startsWith('progress-') && isAlertId(suffix.slice(9));
     const target = suffix === 'test' || (suffix.startsWith('test-') && isNotificationTarget(suffix.slice(5))) ? 'test' : suffix;
-    if (!isNotificationTarget(target)) return;
+    if (!progress && !isNotificationTarget(target)) return;
     const current = trace('system', notificationCorrelation(id) ?? crypto.randomUUID());
     void (async () => {
       await initialization;
@@ -814,7 +815,7 @@ function registerNotificationListener(): void {
       if (existing.entries[0]?.profileId) current.profileId = existing.entries[0].profileId;
       if (existing.total) await log(current, 'notification.clicked', 'info', { test: target === 'test' });
       try {
-        await chrome.tabs.create({ url: chrome.runtime.getURL(notificationPage(target)) });
+        await chrome.tabs.create({ url: chrome.runtime.getURL(progress ? 'dashboard.html' : notificationPage(target)) });
         await chrome.notifications.clear(id);
         if (existing.total) await log(current, 'notification.cleared', 'succeeded', { test: target === 'test' });
       } catch { await log(current, 'notification.clicked', 'failed', { reason: 'api-error' }); }

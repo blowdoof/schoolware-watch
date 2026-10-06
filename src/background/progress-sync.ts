@@ -4,6 +4,7 @@ import { SYNC_URL, SYNC_PERMISSION, isRemoteProgress, isSyncMember, type SyncSta
 import { isAlertId } from '../shared/browser-alerts';
 import type { ActivityAction, ActivityData, ActivityReason, ActivityReporter } from '../shared/activity';
 import type { AuditContext } from '../storage/activity';
+import { notifyProgressChange } from './progress-notifications';
 
 export const PROGRESS_SYNC_ALARM = 'schoolware-progress-sync';
 export const progressSync = new ProgressSyncRepository();
@@ -214,6 +215,8 @@ export async function synchronizeProgress(scopeId: string | null, reporter?: Act
     } else {
       changed = await audited(record, 'progress.apply', () => progressSync.apply(current.scopeId, audit),
         (applied) => ({ reason: applied ? 'success' : 'unchanged', applied }));
+      if (changed) await notifyProgressChange(audit?.correlationId ?? crypto.randomUUID(),
+        !(current.hasAppliedRemote ?? (current.lastSuccessAt !== null && current.cursor === current.head)), record);
     }
     const membersChanged = await synchronizeMembers(current, record);
     const after = await progressSync.read();
