@@ -2,13 +2,14 @@
 
 Prepared on 2026-10-06. Existing item ID:
 `phngkgibiapcabhnfjafkfibjobgkkaf`. Published version according to the owner:
-0.1.0. Candidate: 0.2.0. Keep all work on `features/multi-school-onboarding`.
-Full Matthias review remains required before merge and publication. This document
-does not certify review completion or authorize an agent deployment.
+0.1.0. Update package: 0.2.0. On 2026-10-06 the owner authorized merging the
+complete feature branch into main and deferred Matthias's review until later.
+Review completion is not claimed. This document is the owner's Store handoff;
+no agent Store upload or publication is performed.
 
 ## Package and listing
 
-Build the final reviewed commit using `npm run build`. Zip all files inside
+Build the final main commit using `npm run build`. Zip all files inside
 `dist`, including unchanged files, with `manifest.json` at the ZIP root. Exclude
 server files, configuration, tests, real pupil data and pairing codes. The local
 candidate ZIP and synthetic Store images are under `artifacts/chrome-web-store`.
@@ -42,10 +43,10 @@ because that update adds discovery/activeTab capabilities.
 6. Keep the existing public distribution. Save all tabs and resolve dashboard
    validation errors. Do not invent a test Schoolware account or supply a real
    parent's credentials; explain the authorized-account requirement.
-7. After the required review and release authorization, choose Submit for Review.
+7. Once the owner has checked the dashboard declarations, choose Submit for Review.
    Deferred publication is optional: disable automatic publication if you want a
-   final manual release decision after Google's approval. Enable it if Matthias's
-   review and all owner acceptance checks are complete before submission and the
+   final manual release decision after Google's approval. Enable it if the
+   owner acceptance checks are complete before submission and the
    owner wants the approved version to become available immediately.
 8. If deferred publication was selected, perform final acceptance after Google's
    approval and publish manually. Otherwise, approval triggers publication.

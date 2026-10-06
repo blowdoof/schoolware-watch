@@ -1,9 +1,10 @@
 # Chrome Web Store submission pack
 
-Development target: version 0.2.0, updated on 2026-10-06. The owner reports
-that 0.1.0 is approved and published. This next update is not ready for submission;
-continued testing and Matthias's external review precede any merge to main or
-release publication. See [0.2.0 release checks](../release-0.2.0.md).
+Update package: version 0.2.0, updated on 2026-10-06. The owner reports
+that 0.1.0 is approved and published. The owner authorized merging the complete
+feature branch into main and deferred Matthias's external review until later.
+No review completion or agent Store publication is claimed.
+See [0.2.0 release checks](../release-0.2.0.md) for outstanding live checks.
 
 ## Upload assets
 
@@ -105,14 +106,14 @@ unconfirmed. Synthetic screenshots do not prove real Schoolware authorization.
 ## Publication handoff
 
 Use the existing published item `phngkgibiapcabhnfjafkfibjobgkkaf`; do not create
-a new item. After Matthias's full feature-branch review and owner release
-authorization, use Package → Upload New Package with the complete ZIP whose
+a new item. Following the owner's authorized merge and deferred external review,
+use Package → Upload New Package with the complete ZIP whose
 manifest is at the root. Version 0.2.0 is greater than the published 0.1.0.
 Update Store Listing, Privacy practices and Test Instructions to match the
 multi-school implementation and optional progress invitation. Keep distribution
 public. Deferred publication is an optional final release checkpoint. Automatic
-publication may be enabled when the required reviewer and owner acceptance have
-completed before submission. Submission does not guarantee approval.
+publication may be enabled when the owner is ready for release before submission.
+Submission does not guarantee approval.
 
 Store installation usually has a different extension ID from an unpacked build.
 Existing unpacked IndexedDB/history do not automatically transfer. Reconnect

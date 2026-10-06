@@ -1,9 +1,9 @@
 # Release readiness and distribution
 
-Current status (2026-10-06): 0.1.0 is published. Prepare the 0.2.0 candidate on
-`features/multi-school-onboarding`; Matthias's full branch review is required
-before merging or publishing. The 2026-10-04 notes below are historical, not
-current main-merge authorization. See [current update procedure](store/update-0.2.0.md)
+Current status (2026-10-06): 0.1.0 is published. The owner authorized merging the
+complete 0.2.0 feature branch into main and pushing it, deferring Matthias's review
+until later. Review completion is not claimed. The 2026-10-04 notes below are
+historical. See [current update procedure](store/update-0.2.0.md)
 and [release gates](release-0.2.0.md).
 
 Status: 2026-10-04. The owner has authorized integration into local `main`

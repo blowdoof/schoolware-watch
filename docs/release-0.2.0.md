@@ -1,5 +1,16 @@
 # Version 0.2.0 development and review
 
+## Owner authorization superseding earlier release gates
+
+On 2026-10-06, after the progress notification changes, the owner explicitly
+authorized merging the complete feature branch into main and pushing it. The
+owner deferred Matthias's review until later and requested the Store update
+handoff. Earlier requirements below for a pre-merge Matthias review are historical
+and superseded by this instruction. Review completion is not claimed. Real
+two-device acceptance and authenticated cross-school testing remain outstanding.
+No agent Store upload or publication is performed; the owner receives the package
+and instructions to submit the existing item.
+
 Recorded on 2026-10-05. Version 0.1.0 is published according to the owner.
 Version 0.2.0 is a development target, not an approved release. Continue all
 work on features/multi-school-onboarding; no merge to main or publication
