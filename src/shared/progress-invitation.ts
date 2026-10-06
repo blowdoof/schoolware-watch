@@ -2,6 +2,16 @@ import { parsePairingCode } from './progress-sync';
 
 export const STORE_URL = 'https://chromewebstore.google.com/detail/phngkgibiapcabhnfjafkfibjobgkkaf';
 
+/** Public installation recommendation, independent of any pupil or sync group. */
+export function extensionInvitation(): string {
+  return `Schoolware Watch helpt je Schoolware-agendawijzigingen, taken en boekentas op te volgen.
+
+Je kunt de extensie zelf installeren in Google Chrome op een computer:
+${STORE_URL}
+
+Meld je aan met je eigen Schoolware-account, open je eigen leerlingagenda en koppel die via het extensie-icoon. Zo kun je de extensie zelfstandig gebruiken en testen. Dit bericht bevat alleen de installatielink en geeft geen toegang tot mijn leerlingvoortgang of gegevens.`;
+}
+
 /** Explicitly shared text, never a credential-bearing URL or automatic join. */
 export function progressInvitation(code: string): string {
   if (!parsePairingCode(code)) throw new Error('Invalid pairing code');

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { validateAgendaRequest } from '../schoolware/agenda-request';
 import { validateConnectionState } from '../shared/connection';
 import { hex } from '../domain/progress-sync';
-import { progressInvitation } from '../shared/progress-invitation';
+import { extensionInvitation, progressInvitation } from '../shared/progress-invitation';
 import { SYNC_PERMISSION, parsePairingCode, normalizeSyncLabel, validateSyncView, type SyncMessage, type SyncView } from '../shared/progress-sync';
 
 export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { refreshToken: number; initialMode?: 'first' | 'join' }) {
@@ -13,6 +13,7 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
   const [secret, setSecret] = useState('');
   const [pairing, setPairing] = useState('');
   const [invitation, setInvitation] = useState('');
+  const [publicInvitation, setPublicInvitation] = useState('');
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -77,7 +78,7 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
     finally { setWorking(false); }
   }
   async function copyInvitation() {
-    setWorking(true); setMessage('');
+    setWorking(true); setMessage(''); setPublicInvitation('');
     try {
       const next = await send({ type: 'sync.pairing' });
       if (!next.pairingCode) throw new Error('Not paired');
@@ -88,6 +89,16 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
         setMessage('Uitnodiging gekopieerd. Plak het bericht in je e-mail of chat en stuur het alleen naar iemand die dezelfde leerling volgt.');
       } catch { setMessage('Automatisch kopiëren is niet gelukt. Selecteer en kopieer hieronder het uitnodigingsbericht.'); }
     } catch { setMessage('De uitnodiging kon niet worden gemaakt. Controleer of deze computer nog gekoppeld is.'); }
+    finally { setWorking(false); }
+  }
+  async function shareExtension() {
+    setWorking(true); setMessage(''); setInvitation(''); setPairing('');
+    const text = extensionInvitation();
+    setPublicInvitation(text);
+    try {
+      await navigator.clipboard.writeText(text);
+      setMessage('Installatiebericht gekopieerd. Je kunt het vrij delen; het bevat alleen de installatielink en geen koppelcode.');
+    } catch { setMessage('Automatisch kopiëren is niet gelukt. Kopieer hieronder het openbare installatiebericht.'); }
     finally { setWorking(false); }
   }
   async function saveName(value: string) {
@@ -106,6 +117,17 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
   if (!available) return null;
   return <section aria-label="Voortgang synchroniseren" className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
     <h2 className="font-semibold">Voortgang delen tussen computers</h2>
+    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <div className="rounded-lg border border-slate-200 p-3 text-sm">
+        <button type="button" disabled={working} onClick={() => { void shareExtension(); }} className="rounded-lg border border-slate-300 px-3 py-2 font-medium">Extensie delen</button>
+        <p className="mt-2 text-xs leading-5 text-slate-600">Deel alleen de installatielink. De ontvanger gebruikt of test de extensie zelfstandig met een eigen Schoolware-account.</p>
+      </div>
+      <div className="rounded-lg border border-teal-200 bg-teal-50 p-3 text-sm">
+        <button type="button" disabled={working || !view?.enabled} onClick={() => { void copyInvitation(); }} className="rounded-lg border border-teal-300 px-3 py-2 font-medium text-teal-800 disabled:opacity-50">Leerlingvoortgang delen</button>
+        <p className="mt-2 text-xs leading-5 text-slate-600">Privé-uitnodiging met koppelcode voor dezelfde leerling. De ontvanger kan gedeelde taakstatussen lezen en wijzigen; agenda-inhoud blijft lokaal.</p>
+        {!view?.enabled && <p className="mt-1 text-xs text-slate-600">Maak hieronder eerst een leerlinggroep aan of koppel een bestaande groep.</p>}
+      </div>
+    </div>
     <p className="mt-2 text-sm leading-6 text-slate-600">Deel Open, Bezig en Klaar via schoolware.bumper.be. Titels, instructies en Schoolware-inloggegevens blijven lokaal.
       Koppel alleen computers die de agenda van dezelfde leerling bekijken. Elke leerling heeft een eigen deelgroep en koppelcode; verschillende gezinnen blijven gescheiden.</p>
     {!compatible && <p role="status" className="mt-3 text-sm text-amber-800">Koppel eerst een ondersteunde Schoolware-agenda en voer een geslaagde controle uit om voortgang te delen.</p>}
@@ -136,7 +158,6 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
       <div className="mt-3 flex flex-wrap gap-3 text-sm">
         <button type="button" disabled={working} onClick={() => { void act('sync.run'); }} className="rounded-lg border border-slate-300 px-3 py-2">Nu synchroniseren</button>
         <button type="button" disabled={working} onClick={() => { void showPairing(); }} className="rounded-lg border border-slate-300 px-3 py-2">Koppelcode tonen</button>
-        <button type="button" disabled={working} onClick={() => { void copyInvitation(); }} className="rounded-lg border border-teal-300 px-3 py-2 text-teal-800">Uitnodiging kopiëren</button>
         <button type="button" disabled={working} onClick={() => { void act('sync.disconnect'); }} className="rounded-lg border border-slate-300 px-3 py-2">Deze computer ontkoppelen</button>
       </div>
       <details className="mt-4 text-sm"><summary className="cursor-pointer text-red-700">Gedeelde servergegevens wissen</summary>
@@ -159,6 +180,12 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
       </label>}
       <button type="button" disabled={working || !compatible || (Boolean(label.trim()) && !normalizeSyncLabel(label)) || (mode !== 'first' && !parsePairingCode(secret.trim()))}
         onClick={() => { void connect(); }} className="rounded-lg bg-teal-700 px-4 py-2 font-medium text-white disabled:opacity-50">{mode === 'first' ? 'Nieuwe leerlinggroep aanmaken' : 'Koppelen'}</button>
+    </div>}
+    {publicInvitation && <div className="mt-4 text-sm">
+      <label className="block font-medium">Openbaar installatiebericht — alleen de extensie
+        <textarea readOnly rows={6} value={publicInvitation} onFocus={(event) => event.currentTarget.select()} className="mt-2 block w-full rounded-lg border border-slate-300 p-2 text-xs" />
+      </label>
+      <button type="button" onClick={() => setPublicInvitation('')} className="mt-2 text-teal-700">Installatiebericht verbergen</button>
     </div>}
     {invitation && <div className="mt-4 text-sm">
       <label className="block font-medium">Privé-uitnodiging met installatielink en koppelcode

@@ -110,8 +110,9 @@ authorization, use Package → Upload New Package with the complete ZIP whose
 manifest is at the root. Version 0.2.0 is greater than the published 0.1.0.
 Update Store Listing, Privacy practices and Test Instructions to match the
 multi-school implementation and optional progress invitation. Keep distribution
-public. Submit for review and disable automatic publication to stage the reviewed
-update until final acceptance. Submission does not guarantee approval.
+public. Deferred publication is an optional final release checkpoint. Automatic
+publication may be enabled when the required reviewer and owner acceptance have
+completed before submission. Submission does not guarantee approval.
 
 Store installation usually has a different extension ID from an unpacked build.
 Existing unpacked IndexedDB/history do not automatically transfer. Reconnect

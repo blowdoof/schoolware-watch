@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { progressInvitation, STORE_URL } from '../src/shared/progress-invitation';
+import { extensionInvitation, progressInvitation, STORE_URL } from '../src/shared/progress-invitation';
 
 describe('private progress invitation', () => {
+  it('keeps public installation sharing separate from group access', () => {
+    const publicText = extensionInvitation();
+    expect(publicText.match(/https:\/\/\S+/g)).toEqual([STORE_URL]);
+    expect(publicText).not.toContain('sw1.');
+    expect(publicText).not.toContain('Koppelen aan een bestaande computer');
+    expect(publicText).toContain('zelfstandig gebruiken en testen');
+    expect(publicText).toContain('geen toegang');
+  });
   it('includes a public install URL and separate code with explicit existing-group instructions', () => {
     const code = `sw1.${'a'.repeat(64)}.${'b'.repeat(64)}`;
     const text = progressInvitation(code);

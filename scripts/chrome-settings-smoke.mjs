@@ -210,6 +210,17 @@ try {
     return name?.value === '' && create && !create.disabled;
   })()`));
   console.log('Chrome privacy smoke passed: group setup allows an empty optional participant label without sending a network request.');
+  assert.equal(await evaluate(restarted.sessionId, `Boolean([...document.querySelectorAll('button')].find(button => button.textContent === 'Leerlingvoortgang delen')?.disabled)`), true);
+  await evaluate(restarted.sessionId, `(() => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => { throw new Error('Synthetic denied clipboard'); } } });
+    [...document.querySelectorAll('button')].find(button => button.textContent === 'Extensie delen').click(); return true;
+  })()`);
+  await poll(() => evaluate(restarted.sessionId, `document.body.textContent.includes('openbare installatiebericht')`));
+  assert.equal(await evaluate(restarted.sessionId, `(() => {
+    const text = document.querySelector('[aria-label="Voortgang synchroniseren"] textarea')?.value ?? '';
+    return text.includes('chromewebstore.google.com/detail/phngkgibiapcabhnfjafkfibjobgkkaf') && !text.includes('sw1.') &&
+      !text.includes('Koppelen aan een bestaande computer');
+  })()`), true);
   await evaluate(restarted.sessionId, `(async () => {
     const { schoolwareConnection: connection } = await chrome.storage.local.get('schoolwareConnection');
     const db = await new Promise((resolve, reject) => {
@@ -224,10 +235,10 @@ try {
     db.close(); return true;
   })()`);
   await command('Page.reload', {}, restarted.sessionId);
-  await poll(() => evaluate(restarted.sessionId, `Boolean([...document.querySelectorAll('button')].find(button => button.textContent === 'Uitnodiging kopiëren'))`));
+  await poll(() => evaluate(restarted.sessionId, `Boolean([...document.querySelectorAll('button')].find(button => button.textContent === 'Leerlingvoortgang delen' && !button.disabled))`));
   await evaluate(restarted.sessionId, `(() => {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => { throw new Error('Synthetic denied clipboard'); } } });
-    [...document.querySelectorAll('button')].find(button => button.textContent === 'Uitnodiging kopiëren').click(); return true;
+    [...document.querySelectorAll('button')].find(button => button.textContent === 'Leerlingvoortgang delen').click(); return true;
   })()`);
   await poll(() => evaluate(restarted.sessionId, `document.body.textContent.includes('Automatisch kopiëren is niet gelukt')`));
   assert.equal(await evaluate(restarted.sessionId, `(() => {
@@ -243,7 +254,7 @@ try {
   })()`);
   await command('Page.reload', {}, restarted.sessionId);
   await poll(() => evaluate(restarted.sessionId, `Boolean([...document.querySelectorAll('button')].find(button => button.textContent === 'Nieuwe leerlinggroep aanmaken'))`));
-  console.log('Chrome invitation smoke passed: existing pairing, public Store URL, private copy fallback and hide control.');
+  console.log('Chrome sharing smoke passed: separate public installation and private progress actions, pairing requirement and copy fallback.');
   const toggleSchoolbag = () => evaluate(restarted.sessionId, `(() => {
     [...document.querySelectorAll('label')].find(label => label.textContent.includes('Boekentas tonen onder de to-do')).querySelector('input').click();
     return true;

@@ -15,7 +15,8 @@ Wat kun je ermee?
 - Optioneel algemene systeemmeldingen en een banner op Schoolware ontvangen.
 - Je bewaartermijn instellen en lokale gegevens verwijderen.
 - Optioneel versleutelde voortgang delen met andere gekoppelde toestellen via de Bumper.be-dienst.
-- Een privé-uitnodiging kopiëren met de installatielink en koppelcode voor een andere ouder die dezelfde leerling volgt.
+- Extensie delen: kopieer alleen de installatielink zodat iemand de extensie zelfstandig kan gebruiken of testen.
+- Leerlingvoortgang delen: kopieer een privé-uitnodiging met koppelcode voor een andere ouder die dezelfde leerling volgt.
 
 Agenda-inhoud, instructies en geschiedenis blijven lokaal. Schoolware-wachtwoorden, sessiecookies en authenticatietokens worden niet door de extensie opgeslagen. Er zijn geen advertenties, analytics of telemetrie. Bij optionele voortgangsdeling worden versleutelde statussen en eventueel zelfgekozen deelnemerlabels verstuurd; geen agendatitels of instructies. De server verwerkt ook verbindingsmetadata. Deel een koppelcode uitsluitend met iemand die je vertrouwt.
 

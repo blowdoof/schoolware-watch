@@ -43,9 +43,13 @@ because that update adds discovery/activeTab capabilities.
    validation errors. Do not invent a test Schoolware account or supply a real
    parent's credentials; explain the authorized-account requirement.
 7. After the required review and release authorization, choose Submit for Review.
-   Disable automatic publication after approval to retain a final release gate.
-8. When Google approves, perform final acceptance and publish the reviewed update
-   manually. The draft/review submission itself does not replace the live version.
+   Deferred publication is optional: disable automatic publication if you want a
+   final manual release decision after Google's approval. Enable it if Matthias's
+   review and all owner acceptance checks are complete before submission and the
+   owner wants the approved version to become available immediately.
+8. If deferred publication was selected, perform final acceptance after Google's
+   approval and publish manually. Otherwise, approval triggers publication.
+   The draft/review submission itself does not replace the live version.
 
 Version 0.2.0 is higher than 0.1.0; if the Store already contains a later uploaded
 version, increment all version metadata and rebuild before another upload.
@@ -55,7 +59,11 @@ history automatically. Avoid running both copies simultaneously.
 
 ## Private progress invitation
 
-After pairing, use Settings → Uitnodiging kopiëren. Paste the message into the
+Settings contains two clearly distinct actions. Extensie delen copies only the
+public installation URL and independent setup instructions, without querying
+pairing credentials; it also works before joining a group. Leerlingvoortgang delen
+requires a paired group and copies a private invitation. After pairing, use
+Settings → Leerlingvoortgang delen. Paste the message into the
 chosen private email/chat. Recipients install from the existing Store URL, connect
 their own authorized account to the same pupil and choose the existing-computer
 join option. They must explicitly grant sync access and confirm pairing.
