@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { recordPermissionResult } from './permission-log';
-import { SCHOOLWARE_PERMISSION, validateAgendaRequest } from '../schoolware/agenda-request';
-import { DISCOVERY_PERMISSIONS, validateDiscoveryView, type DiscoveryMessage, type DiscoveryView } from '../shared/agenda-discovery';
+import { SCHOOLWARE_ORIGIN, schoolwareOrigin, schoolwarePermission, isSchoolwarePage, validateAgendaRequest } from '../schoolware/agenda-request';
+import { discoveryPermissions, validateDiscoveryView, type DiscoveryMessage, type DiscoveryView } from '../shared/agenda-discovery';
 import { EMPTY_CONNECTION, validateConnectionState, type CheckStatus, type ConnectionMessage,
   type ConnectionState } from '../shared/connection';
 
@@ -36,7 +36,20 @@ export function ConnectionPanel({ showSetup, refreshToken, onHistoryChanged }: {
   const [loading, setLoading] = useState(extensionAvailable);
   const [error, setError] = useState('');
   const [discovery, setDiscovery] = useState<DiscoveryView>({ status: 'idle', id: null });
+  const [candidate, setCandidate] = useState<{ origin: string; tabId: number } | null>(null);
+  const [schoolAddress, setSchoolAddress] = useState('');
   const [confirmedId, setConfirmedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!extensionAvailable || !chrome.tabs?.query) return;
+    let mounted = true;
+    void chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+      if (mounted && tab?.id !== undefined && isSchoolwarePage(tab.url)) {
+        setCandidate({ origin: schoolwareOrigin(tab.url)!, tabId: tab.id });
+      }
+    }).catch(() => {});
+    return () => { mounted = false; };
+  }, [extensionAvailable]);
 
   useEffect(() => {
     if (!extensionAvailable) return;
@@ -78,7 +91,7 @@ export function ConnectionPanel({ showSetup, refreshToken, onHistoryChanged }: {
     setWorking(true);
     try {
       // Request host access directly in the user gesture, before other awaits.
-      const granted = await chrome.permissions.request({ origins: [SCHOOLWARE_PERMISSION] });
+      const granted = await chrome.permissions.request({ origins: [schoolwarePermission(url)] });
       await recordPermissionResult('schoolware', granted);
       if (!granted) {
         setError('Er is geen toestemming gegeven voor toegang tot Schoolware.');
@@ -109,13 +122,18 @@ export function ConnectionPanel({ showSetup, refreshToken, onHistoryChanged }: {
 
   async function discover(type: 'connection.discovery.start' | 'connection.discovery.cancel') {
     setWorking(true); setError(''); setConfirmedId(null);
+    const selectedOrigin = candidate?.origin ?? schoolwareOrigin(schoolAddress || connection.requestUrl || SCHOOLWARE_ORIGIN);
+    if (type === 'connection.discovery.start' && !selectedOrigin) {
+      setError('Gebruik het HTTPS-adres van je Schoolware-website.'); setWorking(false); return;
+    }
     try {
       if (type === 'connection.discovery.start') {
-        const granted = await chrome.permissions.request(DISCOVERY_PERMISSIONS);
+        const granted = await chrome.permissions.request(discoveryPermissions(selectedOrigin!));
         await recordPermissionResult('schoolware', granted);
         if (!granted) { setError('Geef toestemming om je agenda in Schoolware te herkennen.'); return; }
       }
-      const view = validateDiscoveryView(await chrome.runtime.sendMessage({ type } satisfies DiscoveryMessage));
+      const view = validateDiscoveryView(await chrome.runtime.sendMessage(type === 'connection.discovery.start' ?
+        { type, origin: selectedOrigin!, ...(candidate ? { tabId: candidate.tabId } : {}) } satisfies DiscoveryMessage : { type } satisfies DiscoveryMessage));
       if (!view || view.status === 'error' || view.status === 'permission-required') throw new Error('Discovery unavailable');
       setDiscovery(view);
     } catch { setError('Schoolware kon niet worden geopend. Herlaad de extensie en probeer opnieuw.'); }
@@ -148,8 +166,19 @@ export function ConnectionPanel({ showSetup, refreshToken, onHistoryChanged }: {
             <p className="font-semibold">Je agenda is al gekoppeld aan Schoolware Watch.</p>
             <p>Gebruik Nu controleren om de gekoppelde agenda opnieuw op te halen.</p>
           </div> : <p className="mt-2 text-sm leading-6 text-slate-600">Schoolware is nog niet verbonden. Log in bij Schoolware in deze browser om je agenda te koppelen.</p>}
+          {connection.requestUrl && schoolwareOrigin(connection.requestUrl) !== SCHOOLWARE_ORIGIN && <p role="status" className="mt-3 text-sm text-amber-800">Nieuwe schoolinstallatie: ophalen en geschiedenis worden gecontroleerd op het ondersteunde agendaformaat. Taken en toetsen volgen de standaard Schoolware-typecodes. Controleer bij het eerste gebruik of de agenda en leerling overeenkomen met Schoolware.</p>}
           {(showSetup || !connection.requestUrl) && <div className="mt-4 space-y-3 text-sm">
             <p>{connection.requestUrl ? 'Wil je een andere agenda of leerling volgen? Klik op Andere agenda koppelen.' : 'Verbind met Schoolware, meld je aan en open de agenda van de gewenste leerling. Keer daarna terug naar dit scherm om de koppeling te bevestigen.'}</p>
+            {candidate ? <p className="rounded-lg bg-teal-50 p-3">Schoolware-adres uit je geopende tabblad: <strong>{candidate.origin}</strong>.
+              <button type="button" className="ml-2 underline" onClick={() => setCandidate(null)}>Andere website kiezen</button></p> : <>
+              <p>Open je Schoolware-website, meld je aan en klik daar op het extensie-icoon. Het schooladres wordt dan automatisch overgenomen.</p>
+              <label className="block">Of vul je Schoolware-adres in
+                <input type="url" value={schoolAddress} onChange={(event) => setSchoolAddress(event.target.value)}
+                  placeholder={schoolwareOrigin(connection.requestUrl) ?? SCHOOLWARE_ORIGIN} disabled={working}
+                  className="mt-1 block w-full rounded-lg border border-slate-300 p-2" />
+              </label>
+              <p className="text-xs text-slate-500">Chrome vraagt alleen toegang tot de gekozen website. Zonder adres gebruiken we de huidige koppeling of de Wetteren-Lede-installatie.</p>
+            </>}
             <button type="button" disabled={working} onClick={() => { void discover('connection.discovery.start'); }}
               className="rounded-lg bg-teal-700 px-4 py-2 font-medium text-white disabled:opacity-50">
               {connection.requestUrl ? 'Andere agenda koppelen' : 'Schoolware verbinden'}
@@ -174,7 +203,7 @@ export function ConnectionPanel({ showSetup, refreshToken, onHistoryChanged }: {
                 <p id="agenda-help" className="mt-1 text-xs leading-5 text-slate-500">
                   Kopieer in Schoolware bij Network → AgendaPunt → Headers alleen de Request URL.
                   De agenda- en leerlingselectie wordt overgenomen; de gecontroleerde periode schuift mee met vandaag.
-                  Deze koppeling ondersteunt schoolware_siw.ksgwl.be.
+                  Andere installaties zijn experimenteel; uitsluitend het verwachte AgendaPunt-formaat wordt aanvaard.
                 </p>
                 <textarea id="agenda-url" value={requestUrl} onChange={(event) => setRequestUrl(event.target.value)}
                   aria-describedby="agenda-help" rows={4} spellCheck={false} autoComplete="off" disabled={working}

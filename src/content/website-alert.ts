@@ -2,9 +2,13 @@ import { browserAlertsText, validateBrowserAlertsView, type BrowserAlertsView } 
 
 // This isolated-world script only creates its own generic UI. It never reads
 // page text/forms, accesses connection storage, or bridges page-window messages.
-const state = globalThis as typeof globalThis & { schoolwareAlertAttached?: boolean };
-if (!state.schoolwareAlertAttached) {
-  state.schoolwareAlertAttached = true;
+const state = globalThis as typeof globalThis & { schoolwareAlertCleanup?: () => void };
+// Reinjection must replace stale listeners after an extension reload. A boolean
+// sentinel can otherwise leave the page attached to an invalidated runtime.
+state.schoolwareAlertCleanup?.();
+document.querySelector('schoolware-watch-alert')?.remove();
+{
+  let disposed = false;
   const host = document.createElement('schoolware-watch-alert');
   const shadow = host.attachShadow({ mode: 'closed' });
   const sheet = new CSSStyleSheet();
@@ -76,6 +80,7 @@ if (!state.schoolwareAlertAttached) {
   }
 
   async function refresh() {
+    if (disposed) return;
     const current = ++revision;
     try {
       const raw: unknown = await chrome.runtime.sendMessage({ type: 'browser.alerts.read' });
@@ -84,12 +89,20 @@ if (!state.schoolwareAlertAttached) {
     } catch { if (current === revision) { host.remove(); previous = ''; } }
   }
 
-  chrome.runtime.onMessage.addListener((message: unknown, sender) => {
+  const updated = (message: unknown, sender: chrome.runtime.MessageSender) => {
     if (sender.id === chrome.runtime.id && !sender.tab && message && typeof message === 'object' &&
         Object.keys(message).length === 1 && (message as Record<string, unknown>).type === 'browser.alerts.updated') void refresh();
-  });
+  };
+  chrome.runtime.onMessage.addListener(updated);
   // Also hide an existing banner when the page is revisited after permissions
   // were revoked and the worker can no longer send tab invalidations.
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) void refresh(); });
+  const visible = () => { if (!document.hidden) void refresh(); };
+  document.addEventListener('visibilitychange', visible);
+  state.schoolwareAlertCleanup = () => {
+    disposed = true; revision++;
+    try { chrome.runtime.onMessage.removeListener(updated); } catch { /* A prior runtime may already be invalid. */ }
+    document.removeEventListener('visibilitychange', visible);
+    host.remove();
+  };
   void refresh();
 }

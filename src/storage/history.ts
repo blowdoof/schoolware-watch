@@ -8,6 +8,8 @@ import { SYNC_STATE_KEY } from '../shared/progress-sync';
 import { MAX_TASK_UPDATES, createTasksView } from '../shared/tasks';
 import { todoReminderSelection } from '../domain/todo';
 import type { Category } from '../domain/observations';
+import { brusselsWallTime } from '../domain/notification-window';
+import { agendaProfileKey, validateAgendaRequest } from '../schoolware/agenda-request';
 
 export { HISTORY_DB, HISTORY_VERSION, openHistoryDatabase } from './database';
 
@@ -20,6 +22,24 @@ export function retentionCutoff(now: string, days: number): string {
 
 export class HistoryRepository {
   constructor(private readonly name = HISTORY_DB) {}
+
+  /** Reuse legacy scope keys so old progress, local IDs and history stay intact. */
+  async resolveProfileLink(requestUrl: string): Promise<string> {
+    const validated = validateAgendaRequest(requestUrl);
+    const profile = agendaProfileKey(requestUrl);
+    if (!validated || !profile) throw new Error('Invalid profile');
+    const db = await openHistoryDatabase(this.name);
+    try {
+      const tx = db.transaction(['scopes', 'sync', 'settings'], 'readonly');
+      const days = await tx.objectStore('settings').get('retentionDays') ?? DEFAULT_RETENTION;
+      const cutoff = retentionCutoff(new Date().toISOString(), days);
+      const candidates = (await tx.objectStore('scopes').getAll()).filter((scope) => scope.lastSuccessAt >= cutoff && agendaProfileKey(scope.scopeId) === profile);
+      const sync = await tx.objectStore('sync').get(SYNC_STATE_KEY);
+      await tx.done;
+      return candidates.find((scope) => scope.scopeId === sync?.scopeId)?.scopeId ??
+        candidates.sort((a, b) => (a.baselineAt ?? a.lastSuccessAt).localeCompare(b.baselineAt ?? b.lastSuccessAt) || a.scopeId.localeCompare(b.scopeId))[0]?.scopeId ?? validated;
+    } finally { db.close(); }
+  }
 
   async record(input: CheckInput, signal?: AbortSignal, audit?: AuditContext): Promise<HistoryScope> {
     const versions = new Map(await Promise.all(input.points.map(async (point) => [point.sourceKey, await progressVersion(point.snapshot)] as const)));
@@ -52,7 +72,7 @@ export class HistoryRepository {
           ({ ...point, localId: oldItems.get(point.sourceKey)?.localId ?? crypto.randomUUID() })) }));
         await scopes.put(next);
         const sync = await tx.objectStore('sync').get(SYNC_STATE_KEY);
-        if (sync?.scopeId === input.scopeId) {
+        if (sync?.scopeId === input.scopeId && !previous?.checks.some((check) => check.checkId === input.checkId)) {
           for (const event of next.events.filter((event) => event.taskReopened &&
             event.id === JSON.stringify([input.checkId, event.sourceKey, event.kind]))) {
             sync.outbox = sync.outbox.filter((operation) => operation.sourceKey !== event.sourceKey);
@@ -156,6 +176,26 @@ export class HistoryRepository {
 
   async setTaskStatus(scopeId: string, itemId: string, status: TaskStatus, trace: AuditContext): Promise<void> {
     await this.setTaskStatuses(scopeId, [itemId], status, trace);
+  }
+
+  async setPackingChoice(scopeId: string, id: string, day: string, state: 'packed' | 'hidden' | 'open'): Promise<void> {
+    if (!/^[a-f0-9]{64}$/.test(id) || !/^\d{4}-\d{2}-\d{2}$/.test(day) || !['packed', 'hidden', 'open'].includes(state)) throw new Error('Invalid packing choice');
+    const db = await openHistoryDatabase(this.name);
+    try {
+      const tx = db.transaction('scopes', 'readwrite');
+      const done = tx.done;
+      void done.catch(() => {});
+      try {
+        const scope = await tx.store.get(scopeId);
+        if (!scope) throw new Error('Profile unavailable');
+        const choices = (scope.schoolbagChoices ?? []).filter((choice) => choice.id !== id && choice.day >= brusselsWallTime(new Date()).slice(0, 10));
+        if (state !== 'open') choices.push({ id, day, state });
+        if (choices.length > 5000) throw new Error('Packing choice limit');
+        scope.schoolbagChoices = choices;
+        await tx.store.put(scope);
+        await done;
+      } catch (error) { try { tx.abort(); } catch { /* Already completed. */ } await done.catch(() => {}); throw error; }
+    } finally { db.close(); }
   }
 
   async setTaskStatuses(scopeId: string, itemIds: string[], status: TaskStatus, trace: AuditContext): Promise<void> {

@@ -11,16 +11,16 @@ export const ACTIVITY_ACTIONS = ['worker.started', 'worker.installed', 'browser.
   'banner.published', 'banner.rendered', 'banner.opened', 'banner.dismissed', 'banner.broadcast', 'website.script',
   'preferences.saved', 'permission.changed', 'permission.requested', 'task.status', 'log.exported',
   'progress.sync', 'progress.registration', 'progress.exchange', 'progress.apply', 'progress.members',
-  'progress.leave', 'progress.delete', 'progress.connection', 'progress.name', 'notification.todo', 'connection.discovery'] as const;
+  'progress.leave', 'progress.delete', 'progress.connection', 'progress.name', 'notification.todo', 'notification.progress', 'connection.discovery'] as const;
 export type ActivityAction = typeof ACTIVITY_ACTIONS[number];
 export type ActivityPhase = 'started' | 'succeeded' | 'failed' | 'skipped' | 'info';
 export type ActivityContext = 'worker' | 'popup' | 'options' | 'dashboard' | 'schoolware' | 'alarm' | 'system';
-export const ACTIVITY_REQUESTS = ['ui.open', 'sync.read', 'sync.run', 'sync.create', 'sync.connect', 'sync.disconnect', 'sync.delete', 'sync.pairing', 'connection.read', 'connection.clear', 'history.read', 'history.clear', 'history.retention',
+export const ACTIVITY_REQUESTS = ['setup.complete', 'ui.open', 'sync.read', 'sync.run', 'sync.create', 'sync.connect', 'sync.disconnect', 'sync.delete', 'sync.pairing', 'connection.read', 'connection.clear', 'history.read', 'history.clear', 'history.retention',
   'sync.name',
   'connection.discovery.start', 'connection.discovery.read', 'connection.discovery.cancel', 'connection.discovery.confirm',
   'preferences.read', 'preferences.save', 'notifications.test', 'notifications.details', 'browser.alerts.read',
   'browser.alerts.dismiss', 'browser.alerts.test', 'browser.alerts.open', 'browser.alerts.rendered', 'agenda.check',
-  'schoolbag.read', 'tasks.read', 'tasks.update', 'tasks.updateMany', 'activity.read', 'activity.clear', 'activity.exported', 'permission.result'] as const;
+  'schoolbag.read', 'schoolbag.update', 'tasks.read', 'tasks.update', 'tasks.updateMany', 'activity.read', 'activity.clear', 'activity.exported', 'permission.result'] as const;
 export const ACTIVITY_REASONS = ['success', 'session-required', 'redirected', 'api-failure', 'invalid-response',
   'network-error', 'timeout', 'http-error', 'rate-limited', 'invalid-request', 'permission-required', 'busy', 'storage-error',
   'api-error', 'blocked', 'accepted', 'denied', 'granted', 'unavailable', 'disabled', 'backoff', 'no-events',
@@ -34,7 +34,7 @@ export interface ActivityData {
   reason?: ActivityReason; count?: number; added?: number; changed?: number; days?: number; durationMs?: number;
   baselineCount?: number; categoryExcludedCount?: number; outsideWindowCount?: number; inactiveCount?: number;
   intervalMinutes?: number; retryAt?: string; scheduledAt?: string; registered?: boolean; test?: boolean; byUser?: boolean;
-  monitoringEnabled?: boolean; notificationsEnabled?: boolean; browserNotificationsEnabled?: boolean; todoRemindersEnabled?: boolean;
+  monitoringEnabled?: boolean; notificationsEnabled?: boolean; browserNotificationsEnabled?: boolean; todoRemindersEnabled?: boolean; schoolbagEnabled?: boolean;
   newColor?: string; changedColor?: string; categories?: Category[]; failedCount?: number;
   from?: TaskStatus; to?: TaskStatus; fields?: (keyof Snapshot)[];
   trigger?: ActivityTrigger; alarm?: 'agenda' | 'progress-sync' | 'agenda-discovery';
@@ -94,7 +94,7 @@ export function validateActivityInput(value: unknown): ActivityInput | null {
     if (!['agenda', 'progress-sync', 'agenda-discovery'].includes(value.data.alarm as string)) return null;
     data.alarm = value.data.alarm as NonNullable<ActivityData['alarm']>;
   }
-  for (const key of ['registered', 'test', 'byUser', 'monitoringEnabled', 'notificationsEnabled', 'browserNotificationsEnabled', 'todoRemindersEnabled', 'applied', 'membersUpdated', 'hasMore'] as const) {
+  for (const key of ['registered', 'test', 'byUser', 'monitoringEnabled', 'notificationsEnabled', 'browserNotificationsEnabled', 'todoRemindersEnabled', 'schoolbagEnabled', 'applied', 'membersUpdated', 'hasMore'] as const) {
     if (Object.hasOwn(value.data, key)) { if (typeof value.data[key] !== 'boolean') return null; data[key] = value.data[key]; }
   }
   for (const key of ['newColor', 'changedColor'] as const) {

@@ -1,5 +1,29 @@
 # Optional self-hosted progress synchronization
 
+## Live views, notifications and audit limits
+
+Local edits are offered immediately; the receiving computer polls approximately
+every minute while Chrome is running. This is polling, not a server push service;
+sleep, offline operation and server errors can delay delivery. Worker broadcasts
+refresh open popup, dashboard and settings views after applied changes. No manual
+reload is required. The activity panel also refreshes after those broadcasts.
+
+The existing opt-in system-notification setting covers received task-status
+changes. A successful application produces one generic notification per sync
+batch, without titles, pupil identities or participant names. Clicking opens the
+current dashboard. Initial group hydration is silent, including paginated initial
+downloads; a durable local marker distinguishes later changes. Replays, unchanged
+statuses, own echoed edits and participant heartbeat changes do not notify.
+Disabled permission and delivery errors are logged; delivery failure never rolls
+back progress. This does not add progress alerts to the Schoolware webpage banner.
+
+The local bounded activity log records each local edit and each applied remote
+status transition atomically with its old/new status, local item ID and timestamp,
+along with exchange stages and notification outcomes. It is not an exhaustive
+server audit: intermediate remote operations can be collapsed to the final status,
+and the protocol does not identify the person who changed a task. Retention and
+the 20,000-entry limit still apply. No audit payload is uploaded to the service.
+
 All sync invocations and remote stages have privacy-preserving local activity
 records, including automatic minute-alarm runs and their success/failure. See
 [activity diagnostics](activity-and-tasks.md) for stage names, counts, safe

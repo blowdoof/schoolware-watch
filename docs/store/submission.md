@@ -1,6 +1,10 @@
 # Chrome Web Store submission pack
 
-Prepared for version 0.1.0 on 2026-10-04. Store submission is not yet performed.
+Update package: version 0.2.0, updated on 2026-10-06. The owner reports
+that 0.1.0 is approved and published. The owner authorized merging the complete
+feature branch into main and deferred Matthias's external review until later.
+No review completion or agent Store publication is claimed.
+See [0.2.0 release checks](../release-0.2.0.md) for outstanding live checks.
 
 ## Upload assets
 
@@ -51,11 +55,12 @@ the application cannot guarantee that those systems delete data immediately.
 | --- | --- |
 | storage | Store the user-confirmed agenda connection, settings and monitoring state locally; no Chrome storage sync is used. Agenda history and task progress use local IndexedDB. |
 | alarms | Coordinate periodic agenda checks, retries, temporary discovery expiry and opt-in progress exchange after service-worker suspension. |
+| activeTab | Temporarily read the current tab URL when the user clicks the extension icon to identify a possible Schoolware origin; no unrelated browsing history is retained. |
 | notifications (optional) | User-enabled generic change/to-do notifications. No pupil names or agenda titles appear in system notification text. |
-| scripting (optional) | Inject the locally bundled generic notification banner only into the supported Schoolware origin after user permission. |
-| webRequest (optional) | During explicit connection setup, recognize an allowlisted agenda GET request from the dedicated tab, without reading headers, cookies or bodies. Permission is revoked when discovery ends. |
-| schoolware_siw.ksgwl.be (optional host) | Fetch the confirmed agenda endpoint using the browser's existing session; recognize the connection and optionally display the Schoolware banner. No other Schoolware installations are supported. |
-| schoolware.bumper.be (optional host) | Exchange encrypted progress and optional encrypted participant announcements only after explicit group pairing. No agenda text or Schoolware credentials are uploaded. |
+| scripting (optional) | Inject the locally bundled generic notification banner only into the connected Schoolware origin after user permission. |
+| webRequest (optional) | During explicit connection setup, recognize an allowlisted agenda GET request from the explicitly selected or dedicated tab, without reading headers, cookies or bodies. Permission is revoked when discovery ends. |
+| https://*/* (optional host declaration) | Schools use different custom HTTPS domains. Request only the exact user-selected origin for agenda transport, discovery and an optional banner. No all-sites grant is requested. The endpoint and query parameters remain constrained. |
+| schoolware.bumper.be (runtime optional host grant, covered by https://*/*) | Exchange encrypted progress and optional encrypted participant announcements only after explicit group pairing. No agenda text or Schoolware credentials are uploaded. |
 
 ## Data-use declaration
 
@@ -71,13 +76,20 @@ exempt uploaded data from disclosure. Do not claim legal certification here.
 
 ## Reviewer test instructions
 
-This extension supports only https://schoolware_siw.ksgwl.be. Normal monitoring
-requires an authorized parent account at that installation and a valid session.
+The installation tested with a real account is https://schoolware_siw.ksgwl.be.
+Other installations must expose the same validated agenda contract. Standard
+type ranges were confirmed in public KOHa and Molenland frontends; task-type
+classification and opt-in shared task progress now work across validated origins.
+Authenticated cross-school integration is still untested. Normal monitoring
+requires an authorized parent account at the selected installation and a valid session.
 No real parent's credentials are supplied. Without a connection reviewers can
 inspect settings, privacy, permissions and the explicitly synthetic system
 notification preview after granting the optional notifications permission.
 
-Connection flow: choose Schoolware verbinden, grant optional installation access,
+Connection flow: sign in at the school website, click the extension icon to use
+the current site (or enter its address in settings), choose Schoolware verbinden
+and grant exact-origin access. The first-opening guide also covers preferences
+and optional pairing with an existing progress group. Then
 sign in at Schoolware, open the relevant agenda, return and confirm the selection.
 The initial successful response is a baseline; later checks compare local
 observations. Login/session failures preserve history. Logout and PC-restart
@@ -93,17 +105,26 @@ unconfirmed. Synthetic screenshots do not prove real Schoolware authorization.
 
 ## Publication handoff
 
-Register/setup the developer account, upload the ZIP as a new item, complete
-Store Listing, Privacy, Distribution and Test Instructions, then submit for
-review. Account payment, identity verification and signing policy declarations
-belong to the account holder. Submission does not guarantee approval.
+Use the existing published item `phngkgibiapcabhnfjafkfibjobgkkaf`; do not create
+a new item. Following the owner's authorized merge and deferred external review,
+use Package → Upload New Package with the complete ZIP whose
+manifest is at the root. Version 0.2.0 is greater than the published 0.1.0.
+Update Store Listing, Privacy practices and Test Instructions to match the
+multi-school implementation and optional progress invitation. Keep distribution
+public. Deferred publication is an optional final release checkpoint. Automatic
+publication may be enabled when the owner is ready for release before submission.
+Submission does not guarantee approval.
 
 Store installation usually has a different extension ID from an unpacked build.
 Existing unpacked IndexedDB/history do not automatically transfer. Reconnect
 Schoolware in the store build; a trusted progress pairing may be re-used separately.
 Avoid running both copies with notifications enabled during transition.
 
-Official sources checked on 2026-10-04:
+Official update workflow checked on 2026-10-06:
+
+- https://developer.chrome.com/docs/webstore/update
+
+Additional preparation sources checked on 2026-10-04:
 
 - https://developer.chrome.com/docs/webstore/register
 - https://developer.chrome.com/docs/webstore/publish

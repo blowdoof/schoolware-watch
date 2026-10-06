@@ -1,4 +1,4 @@
-/** Minimal source fields; identity and TypePunt semantics are not yet verified. */
+/** Minimal source fields; identity relationships and response completeness remain unverified. */
 export interface AgendaPoint {
   ID: number;
   AgendaID: number;
@@ -60,7 +60,10 @@ function publicComment(value: unknown): string | null {
     if (!isRecord(parsed)) return null;
     if (!Object.hasOwn(parsed, 'leerlingen')) return '';
     return typeof parsed.leerlingen === 'string' ? parsed.leerlingen : null;
-  } catch { return null; }
+  } catch {
+    // A malformed serialized object may contain non-pupil fields. Fail closed.
+    return /^\s*\{\s*"/.test(value) ? null : value;
+  }
 }
 
 /** Validate all items before returning any; errors contain no source values. */

@@ -1,7 +1,7 @@
 import { openHistoryDatabase, HISTORY_DB } from './database';
 import { SYNC_STATE_KEY, parsePairingCode, normalizeSyncLabel, type SyncState, type SyncView, type SyncMember } from '../shared/progress-sync';
 import { progressItemKey, progressVersion, progressVersionText } from '../domain/progress-sync';
-import { hasAgendaMarker } from '../domain/tasks';
+import { hasAgendaMarker, isTaskCategory } from '../domain/tasks';
 import type { TaskStatus } from '../domain/tasks';
 import { activityInput, appendActivity, type AuditContext } from './activity';
 
@@ -17,7 +17,7 @@ export class ProgressSyncRepository {
       lastSuccessAt: state?.lastSuccessAt ?? null, error: state?.error ?? false,
       ...(state?.displayName ? { displayName: state.displayName, membersError: state.membersError ?? false,
         members: (state.members ?? []).map((member) => ({ ...member, self: member.id === state.connectionId })) } : {}),
-      ...(state?.registrationPending ? { registrationPending: true } : {}) };
+      ...(state?.registrationPending ? { registrationPending: true } : {}), ...(state?.blocked ? { blocked: true } : {}) };
   }
   async connect(scopeId: string, code: string, seed: boolean, register = false, label?: string): Promise<void> {
     const pair = parsePairingCode(code);
@@ -27,7 +27,7 @@ export class ProgressSyncRepository {
     try {
       const scope = await db.get('scopes', scopeId);
       if (!scope) throw new Error('Check agenda first');
-      const outbox = seed ? await Promise.all(scope.items.filter((item) => item.present && hasAgendaMarker(item.snapshot.typePunt) &&
+      const outbox = seed ? await Promise.all(scope.items.filter((item) => item.present && isTaskCategory(item.category) && hasAgendaMarker(item.snapshot.typePunt) &&
         !item.snapshot.hidden && !item.snapshot.cancelled && item.taskStatus && item.taskStatus !== 'open').map(async (item) =>
         ({ id: crypto.randomUUID(), sourceKey: item.sourceKey, version: await progressVersion(item.snapshot), status: item.taskStatus!, kind: 'manual' as const }))) : [];
       const tx = db.transaction(['sync', 'scopes'], 'readwrite');
@@ -109,11 +109,24 @@ export class ProgressSyncRepository {
       await tx.done; return accepted;
     } finally { db.close(); }
   }
-  async failed(expected: SyncState): Promise<void> {
+  async resume(): Promise<void> {
+    const db = await openHistoryDatabase(this.name);
+    try {
+      const tx = db.transaction('sync', 'readwrite');
+      const state = await tx.store.get(SYNC_STATE_KEY);
+      if (state) { delete state.blocked; await tx.store.put(state, SYNC_STATE_KEY); }
+      await tx.done;
+    } finally { db.close(); }
+  }
+  async failed(expected: SyncState, httpStatus?: number): Promise<void> {
     const db = await openHistoryDatabase(this.name);
     try {
       const tx = db.transaction('sync', 'readwrite'); const state = await tx.store.get(SYNC_STATE_KEY);
-      if (state?.connectionId === expected.connectionId && state.token === expected.token && state.key === expected.key) { state.error = true; await tx.store.put(state, SYNC_STATE_KEY); }
+      if (state?.connectionId === expected.connectionId && state.token === expected.token && state.key === expected.key) {
+        state.error = true;
+        if (httpStatus !== undefined && [401, 403, 409].includes(httpStatus)) state.blocked = true;
+        await tx.store.put(state, SYNC_STATE_KEY);
+      }
       await tx.done;
     } finally { db.close(); }
   }
@@ -123,9 +136,9 @@ export class ProgressSyncRepository {
       const state = await db.get('sync', SYNC_STATE_KEY);
       const before = await db.get('scopes', scopeId);
       if (!state || state.scopeId !== scopeId || !before || state.cursor < state.head) return false;
-      const matches = await Promise.all(before.items.filter((item) => item.present && hasAgendaMarker(item.snapshot.typePunt) &&
+      const matches = await Promise.all(before.items.filter((item) => item.present && isTaskCategory(item.category) && hasAgendaMarker(item.snapshot.typePunt) &&
         !item.snapshot.hidden && !item.snapshot.cancelled).map(async (item) => {
-        const version = await progressVersion(item.snapshot); const key = await progressItemKey(state.key, item.sourceKey);
+        const version = await progressVersion(item.snapshot); const key = await progressItemKey(state.key, item.sourceKey, new URL(state.scopeId).origin);
         return { sourceKey: item.sourceKey, text: progressVersionText(item.snapshot), remoteKey: `${key}.${version}` };
       }));
       const tx = db.transaction(['scopes', 'sync', 'activity'], 'readwrite');
@@ -149,6 +162,8 @@ export class ProgressSyncRepository {
             }
           }
           if (changed) await tx.objectStore('scopes').put(scope);
+          current.hasAppliedRemote = true;
+          await tx.objectStore('sync').put(current, SYNC_STATE_KEY);
         }
         await done; return changed;
       } catch (error) { try { tx.abort(); } catch { /* Completed. */ } await done.catch(() => {}); throw error; }

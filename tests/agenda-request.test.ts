@@ -16,7 +16,7 @@ describe('request boundary', () => {
 
   it.each([
     requestUrl.replace('https:', 'http:'),
-    requestUrl.replace('schoolware_siw.ksgwl.be', 'schoolware_siw.ksgwl.be.example.com'),
+    requestUrl.replace('schoolware_siw.ksgwl.be', 'localhost'),
     requestUrl.replace('AgendaPunt?', 'OtherResource?'),
     requestUrl.replace('https://', 'https://user:password@'),
     `${requestUrl}#fragment`, `${requestUrl}&token=synthetic-secret`,

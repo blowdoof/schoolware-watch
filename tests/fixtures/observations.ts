@@ -1,3 +1,4 @@
+import { requestUrl } from './agenda-request';
 import type { CheckInput, ObservationPoint } from '../../src/domain/observations';
 
 export const point: ObservationPoint = { sourceKey: 'synthetic-source-1', category: 'assignments',
@@ -6,7 +7,7 @@ export const point: ObservationPoint = { sourceKey: 'synthetic-source-1', catego
     hidden: false, cancelled: false, recurrence: '' } };
 
 export function check(overrides: Partial<CheckInput> = {}): CheckInput {
-  return { scopeId: 'synthetic-profile-and-window', checkId: 'synthetic-check-1',
+  return { scopeId: requestUrl, checkId: 'synthetic-check-1',
     observedAt: '2026-10-02T08:00:00.000Z', points: [structuredClone(point)], complete: false,
     identityVerified: false, ...overrides };
 }

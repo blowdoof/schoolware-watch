@@ -73,14 +73,17 @@ Only the following sanitized mapping is retained; the response is not committed.
 
 | TypePunt | Week-view marker | Category |
 | --- | --- | --- |
-| 100, 101 | Red flag | Tests |
-| 1001, 1002 | Orange flag | Assignments |
+| 100–999 | Test range (100/101 observed with red flags) | Tests |
+| 1000–1999 | Assignment range (1001/1002 observed with orange flags) | Assignments |
 | 9 | Star | Review (marked content, without asserting test/assignment meaning) |
 | 1, 2 | No task/test marker | Other (lesson information) |
 | Other values | Unverified | Other |
 
-This mapping applies only to the inspected installation. Marker meanings beyond
-these observed types remain unverified. Titles are never used for classification.
+On 2026-10-06 the public frontends of KOHa and Scholen Molenland confirmed the
+complete numeric category ranges, including lower bounds and exclusive upper
+bounds. They now apply to validated installations. Activities (2000–2999) remain
+Other. Titles are never used for classification. See
+[public source comparison](reviews/2026-10-06-public-schoolware-type-codes.md).
 The task/test overview excludes unmarked lesson information, including legacy
 TypePunt 2 entries previously classified as review. The next successful check
 refreshes stored categories without deleting existing history or task progress.

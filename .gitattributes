@@ -1,0 +1,10 @@
+* text=auto
+*.ts text eol=lf
+*.tsx text eol=lf
+*.mjs text eol=lf
+*.php text eol=lf
+*.sql text eol=lf
+*.md text eol=lf
+*.html text eol=lf
+*.py text eol=lf
+THIRD-PARTY-NOTICES.txt text eol=lf

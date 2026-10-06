@@ -14,7 +14,7 @@ import { validateOpenPageMessage, type OpenPageMessage } from './navigation';
 
 export type CheckStatus = FetchStatus | 'permission-required' | 'busy' | 'storage-error';
 export interface CheckSummary { status: CheckStatus; checkedAt: string; count: number | null; typeCounts?: AgendaTypeCounts }
-export interface ConnectionState { requestUrl: string | null; lastCheck: CheckSummary | null }
+export interface ConnectionState { requestUrl: string | null; lastCheck: CheckSummary | null; lastSuccessAt?: string | null }
 export const EMPTY_CONNECTION: ConnectionState = { requestUrl: null, lastCheck: null };
 export const CONNECTION_KEY = 'schoolwareConnection';
 
@@ -23,6 +23,7 @@ const statuses: CheckStatus[] = ['success', 'session-required', 'redirected', 'a
   'invalid-request', 'permission-required', 'busy', 'storage-error'];
 
 export type ConnectionMessage = SyncMessage | DiscoveryMessage | OpenPageMessage
+  | { type: 'setup.complete' }
   | { type: 'connection.read' }
   | { type: 'connection.clear' }
   | { type: 'history.read'; category?: Category | 'all' }
@@ -38,6 +39,7 @@ export type ConnectionMessage = SyncMessage | DiscoveryMessage | OpenPageMessage
   | { type: 'notifications.details'; target: string }
   | { type: 'tasks.read' }
   | { type: 'schoolbag.read' }
+  | { type: 'schoolbag.update'; choiceId: string; state: 'packed' | 'hidden' | 'open' }
   | { type: 'tasks.update'; itemId: string; status: TaskStatus }
   | { type: 'tasks.updateMany'; itemIds: string[]; status: TaskStatus }
   | { type: 'activity.read'; limit?: number; correlationId?: string; itemId?: string }
@@ -56,6 +58,11 @@ export function validateConnectionMessage(value: unknown): ConnectionMessage | n
   if (discovery) return discovery;
   if (!value || typeof value !== 'object') return null;
   const message = value as Record<string, unknown>;
+  if (message.type === 'schoolbag.update' && Object.keys(message).length === 3 &&
+      typeof message.choiceId === 'string' && /^[a-f0-9]{64}$/.test(message.choiceId) &&
+      ['packed', 'hidden', 'open'].includes(message.state as string)) {
+    return { type: 'schoolbag.update', choiceId: message.choiceId, state: message.state as 'packed' | 'hidden' | 'open' };
+  }
   if (message.type === 'permission.result' && Object.keys(message).length === 3 &&
       ['notifications', 'browser', 'schoolware'].includes(message.permission as string) && typeof message.granted === 'boolean') {
     return { type: 'permission.result', permission: message.permission as 'notifications' | 'browser' | 'schoolware', granted: message.granted };
@@ -89,7 +96,7 @@ export function validateConnectionMessage(value: unknown): ConnectionMessage | n
   if (message.type === 'notifications.details' && Object.keys(message).length === 2 && isNotificationTarget(message.target)) {
     return { type: 'notifications.details', target: message.target };
   }
-  if (['connection.read', 'connection.clear', 'history.clear', 'preferences.read', 'notifications.test',
+  if (['setup.complete', 'connection.read', 'connection.clear', 'history.clear', 'preferences.read', 'notifications.test',
     'browser.alerts.read', 'browser.alerts.dismiss', 'browser.alerts.test', 'browser.alerts.open', 'tasks.read', 'schoolbag.read', 'activity.clear'].includes(message.type as string) && Object.keys(message).length === 1) {
     return { type: message.type } as ConnectionMessage;
   }
@@ -115,9 +122,12 @@ export function validateConnectionMessage(value: unknown): ConnectionMessage | n
 export function validateConnectionState(value: unknown): ConnectionState | null {
   if (!value || typeof value !== 'object') return null;
   const state = value as Record<string, unknown>;
+  if (Object.hasOwn(state, 'lastSuccessAt') && state.lastSuccessAt !== null &&
+      !(typeof state.lastSuccessAt === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(state.lastSuccessAt) && Number.isFinite(Date.parse(state.lastSuccessAt)))) return null;
+  const success = Object.hasOwn(state, 'lastSuccessAt') ? { lastSuccessAt: state.lastSuccessAt as string | null } : {};
   const requestUrl = state.requestUrl === null ? null : validateAgendaRequest(state.requestUrl);
   if (state.requestUrl !== null && !requestUrl) return null;
-  if (state.lastCheck === null) return { requestUrl, lastCheck: null };
+  if (state.lastCheck === null) return { requestUrl, lastCheck: null, ...success };
   if (!state.lastCheck || typeof state.lastCheck !== 'object') return null;
   const check = state.lastCheck as Record<string, unknown>;
   if (!statuses.includes(check.status as CheckStatus) || typeof check.checkedAt !== 'string' ||
@@ -139,7 +149,7 @@ export function validateConnectionState(value: unknown): ConnectionState | null 
     if (Object.values(typeCounts).reduce((sum, count) => sum + count, 0) !== check.count) return null;
     lastCheck.typeCounts = typeCounts;
   }
-  return { requestUrl, lastCheck };
+  return { requestUrl, lastCheck, ...success };
 }
 
 export function isExtensionPage(sender: { id?: string; url?: string }, extensionId: string): boolean {

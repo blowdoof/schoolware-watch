@@ -37,7 +37,7 @@ export function TodoOverview({ view, now, working, update, updateMany }: {
       <p className="mt-1 text-sm font-medium" aria-live="polite">{overview.targetDay ? `Tegen ${dateLabel(overview.targetDay)}` : 'Voor vandaag'}</p>
       <p className="mt-2 text-xs leading-5 text-slate-600">{overview.browsing ?
         'Open en Bezig voor de gekozen schooldag in je agenda.' : overview.nextDay ?
-        'Open en Bezig voor vandaag en de volgende bekende schooldag in je agenda.' :
+        'Open en Bezig voor de volgende bekende schooldag in je agenda. Taken van vandaag staan bij eerder gepland.' :
         'Nog geen volgende schooldag gevonden in de ingelezen agenda. Controleer je agenda opnieuw; een lege periode bewijst geen vakantie.'}</p>
       <p className="mt-2 text-sm">{overview.upcoming.length ? `${overview.upcoming.length} open of onafgewerkte taken en toetsen.` :
         'Geen open of onafgewerkte taken gevonden voor deze periode.'}</p>

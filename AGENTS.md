@@ -56,6 +56,9 @@ Use TypeScript, React, Vite, Tailwind CSS, IndexedDB, Chrome Alarms, and Vitest.
 - Document unresolved API assumptions and required permissions.
 
 ## Scope and Git
+- Always commit and push on the single active feature branch for the current work; include all current project changes on that branch and never push directly to `main`.
+- Keep `main` and branches created by other contributors. Remove obsolete project-owned feature branches only after verifying their work is included in the active branch.
+- Require Matthias's external review and resolution of blocking findings before merging to `main` or publishing the next release. Review completion does not itself authorize merging or publication.
 - Keep changes focused on the approved task.
 - Do not publish, push, deploy, or upload artifacts unless authorized.
 - Inspect staged changes for private data before committing.

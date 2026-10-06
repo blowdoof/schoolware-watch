@@ -1,11 +1,11 @@
 const questions = [
   {
     question: 'Wanneer krijg ik een to-do herinnering?',
-    answer: 'Vanaf 16 uur, na een geslaagde agendacontrole, krijg je maximaal één herinnering per dag via elk ingeschakeld meldingskanaal. Ze telt Open en Bezig tot de volgende bekende schooldag en volgt je geselecteerde categorieën. De melding toont alleen een aantal en een datum; een klik opent het actuele to-do overzicht. De Schoolware-banner werkt het aantal bij en verdwijnt zodra de taken klaar zijn. Je kunt de herinnering uitschakelen bij Instellingen. Chrome moet draaien en je Schoolware-sessie moet geldig zijn.',
+    answer: 'Vanaf 16 uur, na een geslaagde agendacontrole, krijg je maximaal één herinnering per dag via elk ingeschakeld meldingskanaal. Ze telt Open en Bezig voor de volgende bekende schooldag en volgt je geselecteerde categorieën. De melding toont alleen een aantal en een datum; een klik opent het actuele to-do overzicht. De Schoolware-banner werkt het aantal bij en verdwijnt zodra de taken klaar zijn. Je kunt de herinnering uitschakelen bij Instellingen. Chrome moet draaien en je Schoolware-sessie moet geldig zijn.',
   },
   {
     question: 'Welke taken staan in de to-do lijst?',
-    answer: 'De to-do lijst toont Open en Bezig voor vandaag tot en met de volgende bekende weekdag met punten in je ingelezen Schoolware-agenda. Klaar verdwijnt uit deze lijst; oudere onafgewerkte taken staan apart. Weekends worden overgeslagen en lege agendadagen ook, zodat vrije dagen de planning volgen. Een lege of onvolledige agenda bewijst geen vakantie. Als er geen volgende dag bekend is, controleer je agenda opnieuw. De agendadatum geldt als planningsdatum, niet als bevestigde inleverdeadline.',
+    answer: 'De to-do lijst toont Open en Bezig voor de gekozen schooldag, standaard de volgende bekende weekdag met punten in je ingelezen Schoolware-agenda. Klaar verdwijnt uit deze lijst; onafgewerkte taken van vandaag en eerder staan apart bij Eerder gepland, nog niet klaar. Weekends worden overgeslagen en lege agendadagen ook, zodat vrije dagen de planning volgen. Een lege of onvolledige agenda bewijst geen vakantie. Als er geen volgende dag bekend is, toont de lijst vandaag en controleer je agenda opnieuw. De agendadatum geldt als planningsdatum, niet als bevestigde inleverdeadline.',
   },
   {
     question: 'Hoe start ik met Schoolware Watch?',

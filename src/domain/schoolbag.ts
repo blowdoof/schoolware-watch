@@ -12,11 +12,31 @@ export interface BagMaterial {
 }
 export interface BagAgenda { points: BagPoint[]; lastSuccessAt: string | null }
 
+/** Evidence changes invalidate packing choices without persisting duplicate agenda text. */
+export async function packingChoiceId(day: string, direction: 'school' | 'home', material: BagMaterial | null): Promise<string> {
+  const evidence = material ? [material.key, material.uncertain,
+    material.sources.map((source) => JSON.stringify([source.id, source.day, source.title, source.text])).sort()] : ['laptop'];
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify([day, direction, evidence])));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+export async function availablePackingChoices(agenda: BagAgenda, now: Date): Promise<Map<string, string>> {
+  const choices = new Map<string, string>();
+  const overview = schoolbagOverview(agenda, now);
+  for (const day of overview.days) {
+    const selected = schoolbagOverview(agenda, now, day);
+    for (const [direction, materials] of [['school', selected.school], ['home', selected.homework]] as const) {
+      for (const material of [null, ...materials]) choices.set(await packingChoiceId(day, direction, material), day);
+    }
+  }
+  return choices;
+}
+
 const materialNames: [RegExp, string][] = [
   [/\b(?:werkboek(?:en)?|cahier)\b/iu, 'Werkboek'],
   [/\b(?:handboek(?:en)?|leerboek(?:en)?)\b/iu, 'Handboek'],
   [/\bboek(?:en)?\b/iu, 'Boek'], [/\bcursus\b/iu, 'Cursus'],
-  [/\bschrift(?:en)?\b/iu, 'Schrift'], [/\b(?:ringmap|map(?:pen)?)\b/iu, 'Map'],
+  [/\bschrift(?:en)?\b/iu, 'Schrift'], [/\b(?:ringmap(?:pen|jes?)?|map(?:pen|jes?)?)\b/iu, 'Map'],
   [/\batlas\b/iu, 'Atlas'], [/\bwoordenboek\b/iu, 'Woordenboek'],
   [/\b(?:rekenmachine|calculator)\b/iu, 'Rekenmachine'],
   [/\bgeodriehoek\b/iu, 'Geodriehoek'], [/\bpasser\b/iu, 'Passer'],
@@ -82,7 +102,7 @@ export function schoolbagOverview(agenda: BagAgenda, now: Date, selectedDay: str
   const targetDay = selectedDay && days.includes(selectedDay) ? selectedDay : defaultDay;
   const schoolPoints = agenda.points.filter((point) => point.day === targetDay);
   const homeDay = targetDay ? days.find((day) => day > targetDay) ?? null : null;
-  const homework = agenda.points.filter((point) => point.day === homeDay && point.status !== 'done' && hasAgendaMarker(point.typePunt));
+  const homework = agenda.points.filter((point) => point.day === homeDay && point.status !== 'done' && point.category !== 'other' && hasAgendaMarker(point.typePunt));
   return { today, nextDay, days, targetDay, homeDay, school: materialsFor(schoolPoints), homework: materialsFor(homework),
     schoolPoints, homeworkPoints: homework };
 }

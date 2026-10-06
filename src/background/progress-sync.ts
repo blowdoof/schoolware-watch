@@ -4,6 +4,7 @@ import { SYNC_URL, SYNC_PERMISSION, isRemoteProgress, isSyncMember, type SyncSta
 import { isAlertId } from '../shared/browser-alerts';
 import type { ActivityAction, ActivityData, ActivityReason, ActivityReporter } from '../shared/activity';
 import type { AuditContext } from '../storage/activity';
+import { notifyProgressChange } from './progress-notifications';
 
 export const PROGRESS_SYNC_ALARM = 'schoolware-progress-sync';
 export const progressSync = new ProgressSyncRepository();
@@ -84,7 +85,7 @@ export async function configureProgressSyncAlarm(reporter?: ActivityReporter): P
   const record = safeReporter(reporter);
   try {
     const state = await progressSync.read();
-    if (!state) {
+    if (!state || state.blocked) {
       await chrome.alarms.clear(PROGRESS_SYNC_ALARM);
       await record('alarm.configured', 'succeeded', { alarm: 'progress-sync', reason: 'disabled', registered: false }); return;
     }
@@ -161,6 +162,9 @@ export async function synchronizeProgress(scopeId: string | null, reporter?: Act
       await record('progress.sync', 'skipped', { reason: !state ? 'disabled' : 'profile-mismatch' }); return false;
     }
     const current = state;
+    if (current.blocked) {
+      await record('progress.sync', 'skipped', { reason: 'blocked' }); return false;
+    }
     if (current.registrationPending) {
       await audited(record, 'progress.registration', async () => {
         const registered = await request(current.token, { action: 'register' });
@@ -174,7 +178,7 @@ export async function synchronizeProgress(scopeId: string | null, reporter?: Act
       // IDs survive retries; a fresh nonce does not change operation identity.
       const pending = current.outbox.slice(0, 50);
       const operations = await Promise.all(pending.map(async (operation) => {
-        const item = await progressItemKey(current.key, operation.sourceKey);
+        const item = await progressItemKey(current.key, operation.sourceKey, new URL(current.scopeId).origin);
         return { id: operation.id, ...await encrypt(current.key, operation.id,
           { item, version: operation.version, status: operation.status, kind: operation.kind }) };
       }));
@@ -211,6 +215,8 @@ export async function synchronizeProgress(scopeId: string | null, reporter?: Act
     } else {
       changed = await audited(record, 'progress.apply', () => progressSync.apply(current.scopeId, audit),
         (applied) => ({ reason: applied ? 'success' : 'unchanged', applied }));
+      if (changed) await notifyProgressChange(audit?.correlationId ?? crypto.randomUUID(),
+        !(current.hasAppliedRemote ?? (current.lastSuccessAt !== null && current.cursor === current.head)), record);
     }
     const membersChanged = await synchronizeMembers(current, record);
     const after = await progressSync.read();
@@ -222,7 +228,7 @@ export async function synchronizeProgress(scopeId: string | null, reporter?: Act
     return changed || membersChanged;
   } catch (error) {
     await record('progress.sync', 'failed', { ...failureData(error, 'storage-error'), durationMs: Math.max(0, Date.now() - started) });
-    if (state) await progressSync.failed(state);
+    if (state) await progressSync.failed(state, error instanceof SyncFailure ? error.httpStatus : undefined);
     return false;
   }
 }

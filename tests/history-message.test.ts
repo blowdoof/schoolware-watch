@@ -19,7 +19,7 @@ describe('history message boundary', () => {
     const view = createHistoryView(scope, 90);
     expect(validateHistoryView(view)).toEqual(view);
     expect(JSON.stringify(view)).not.toContain('synthetic-source-1');
-    expect(JSON.stringify(view)).not.toContain('synthetic-profile-and-window');
+    expect(JSON.stringify(view)).not.toContain(check().scopeId);
     expect(createHistoryView(scope, 90, 'tests').eventCount).toBe(0);
     expect(createHistoryView(scope, 90, 'assignments').eventCount).toBe(1);
     expect(validateHistoryView({ ...view, entries: [{ ...view.entries[0], kind: 'untrusted' }] })).toBeNull();

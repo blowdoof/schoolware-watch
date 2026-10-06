@@ -5,7 +5,7 @@ import { fetchAgenda, type AgendaFetchResult } from '../src/schoolware/agenda-cl
 import { validateAgendaResponse } from '../src/schoolware/agenda-response';
 import { HistoryRepository } from '../src/storage/history';
 import fixture from './fixtures/synthetic-agenda.json';
-import { CONNECTION_KEY } from '../src/shared/connection';
+import { CONNECTION_KEY, validateConnectionState } from '../src/shared/connection';
 import { requestUrl } from './fixtures/agenda-request';
 import { DEFAULT_PREFERENCES, PREFERENCES_KEY } from '../src/shared/preferences';
 import { validateAgendaRequest } from '../src/schoolware/agenda-request';
@@ -14,6 +14,8 @@ import { validateNotificationDetailsView } from '../src/shared/notification-deta
 import { ActivityRepository } from '../src/storage/activity';
 import { validateActivityView } from '../src/shared/activity';
 import { validateTasksView } from '../src/shared/tasks';
+import { availablePackingChoices, packingChoiceId, materialsFor } from '../src/domain/schoolbag';
+import { validateSchoolbagView } from '../src/shared/schoolbag';
 
 const scopeId = validateAgendaRequest(requestUrl)!;
 
@@ -117,6 +119,30 @@ beforeEach(async () => {
 });
 
 describe('schoolbag worker access', () => {
+  it('validates packing suggestions, keeps choices local to the active profile and retains last success after session expiry', async () => {
+    const lesson = { ...parsed.points[0]!, Van: '2026-10-05 09:00:00', Tot: '2026-10-05 09:50:00', TypePunt: 2, Titel: 'Synthetic lesson', PublicComment: 'Atlas meebrengen', VakNaam: 'Aardrijkskunde' };
+    vi.mocked(fetchAgenda).mockResolvedValue({ ...success, count: 1, typeCounts: { tests: 0, assignments: 0, review: 0, other: 1 }, points: [lesson] });
+    await dispatch({ type: 'agenda.check', requestUrl });
+    const agenda = validateSchoolbagView(await dispatch({ type: 'schoolbag.read' }))!;
+    const choices = await availablePackingChoices(agenda, new Date());
+    const id = choices.keys().next().value!;
+    expect(id).toMatch(/^[a-f0-9]{64}$/);
+    expect(await dispatch({ type: 'schoolbag.update', choiceId: id, state: 'packed' })).toMatchObject({ choices: [{ id, state: 'packed' }] });
+    expect(await dispatch({ type: 'schoolbag.update', choiceId: 'f'.repeat(64), state: 'hidden' })).toMatchObject({ ok: false });
+    const changed = await dispatch({ type: 'schoolbag.update', choiceId: id, state: 'hidden' });
+    expect(changed).toMatchObject({ choices: [{ id, state: 'hidden' }] });
+    expect(await dispatch({ type: 'schoolbag.update', choiceId: id, state: 'open' })).toMatchObject({ choices: [] });
+    const health = validateConnectionState(await dispatch({ type: 'connection.read' }))!;
+    vi.mocked(fetchAgenda).mockResolvedValue({ status: 'session-required', count: null });
+    await dispatch({ type: 'agenda.check', requestUrl });
+    expect(await dispatch({ type: 'connection.read' })).toMatchObject({ lastSuccessAt: health.lastSuccessAt, lastCheck: { status: 'session-required' } });
+    const material = materialsFor(agenda.points)[0]!;
+    expect(await packingChoiceId(agenda.points[0]!.day, 'school', material)).not.toBe(await packingChoiceId(agenda.points[0]!.day, 'home', material));
+    await dispatch({ type: 'schoolbag.update', choiceId: id, state: 'hidden' });
+    stored[CONNECTION_KEY] = { requestUrl: requestUrl.replace('CompletedTaskForLL=30', 'CompletedTaskForLL=40'), lastCheck: null };
+    expect(await dispatch({ type: 'schoolbag.read' })).toEqual({ ok: true, lastSuccessAt: null, points: [] });
+    expect(await dispatch({ type: 'schoolbag.update', choiceId: id, state: 'packed' })).toMatchObject({ ok: false });
+  });
   it('reads only the active profile, includes lessons, survives session errors and clears with history', async () => {
     const lesson = { ...parsed.points[0]!, TypePunt: 2, Titel: 'Synthetic lesson', PublicComment: 'Atlas meebrengen', VakNaam: 'Aardrijkskunde' };
     vi.mocked(fetchAgenda).mockResolvedValue({ ...success, count: 1, typeCounts: { tests: 0, assignments: 0, review: 0, other: 1 }, points: [lesson] });
@@ -556,11 +582,29 @@ describe('activity correlation and local task status', () => {
 });
 
 describe('worker connection lifecycle', () => {
+  it('preserves pupil history and progress when reconnecting from another calendar week, including a clock rollback', async () => {
+    const task = { ...parsed.points[0]!, TypePunt: 1001 };
+    vi.mocked(fetchAgenda).mockResolvedValue({ ...success, count: 1, typeCounts: { tests: 0, assignments: 1, review: 0, other: 0 }, points: [task] });
+    vi.setSystemTime(new Date('2026-10-02T10:00:00Z'));
+    await dispatch({ type: 'agenda.check', requestUrl });
+    const before = validateTasksView(await dispatch({ type: 'tasks.read' }))!;
+    await dispatch({ type: 'tasks.update', itemId: before.entries[0]!.id, status: 'done' });
+    vi.setSystemTime(new Date('2026-10-02T09:00:00Z'));
+    const differentWeek = requestUrl.replace('2026-10-01', '2026-10-08').replace('2026-10-31', '2026-11-07');
+    expect(await dispatch({ type: 'agenda.check', requestUrl: differentWeek })).toMatchObject({ requestUrl: scopeId, lastCheck: { status: 'success', checkedAt: '2026-10-02T09:00:00.000Z' } });
+    const after = validateTasksView(await dispatch({ type: 'tasks.read' }))!;
+    expect(after.entries[0]!.id).toBe(before.entries[0]!.id);
+    expect(after.entries[0]!.status).toBe('done');
+    const storedScope = (await new HistoryRepository().read(scopeId)).scope!;
+    expect(storedScope.checks).toHaveLength(2);
+    expect(storedScope.events).toHaveLength(1);
+  });
   it('stores only a canonical link and summary, independently of a mounted popup', async () => {
     const result = await dispatch({ type: 'agenda.check', requestUrl });
     expect(stored[CONNECTION_KEY]).toEqual(result);
     expect(result).toMatchObject({ lastCheck: { status: 'success', count: 2 } });
-    expect(await dispatch({ type: 'connection.read' })).toEqual(result);
+    const validated = validateConnectionState(result)!;
+    expect(await dispatch({ type: 'connection.read' })).toEqual({ ...validated, lastSuccessAt: validated.lastCheck!.checkedAt });
     expect(Object.keys(stored)).toEqual([CONNECTION_KEY, 'schoolwareMonitoringState']);
     expect(JSON.stringify(result)).not.toContain('points');
   });
@@ -905,6 +949,90 @@ describe('periodic monitoring and optional notifications', () => {
 
 
 describe('agenda discovery worker integration', () => {
+  it('reattaches the banner on a successful check of the same origin after reload', async () => {
+    await dispatch({ type: 'agenda.check', requestUrl });
+    await dispatch({ type: 'preferences.save', preferences: { ...DEFAULT_PREFERENCES, browserNotificationsEnabled: true } });
+    vi.mocked(chrome.scripting.executeScript).mockClear();
+    await dispatch({ type: 'agenda.check', requestUrl });
+    expect(chrome.scripting.executeScript).toHaveBeenCalledWith({ target: { tabId: 1 }, files: ['website-alert.js'] });
+    expect(registeredScripts).toHaveLength(1);
+  });
+  it('keeps a successful observation when optional banner registration fails', async () => {
+    const selectedUrl = requestUrl.replace('schoolware_siw.ksgwl.be', 'synthetic.schoolware.be');
+    await dispatch({ type: 'preferences.save', preferences: { ...DEFAULT_PREFERENCES, browserNotificationsEnabled: true } });
+    vi.mocked(chrome.scripting.getRegisteredContentScripts).mockRejectedValue(new Error('Synthetic registration failure'));
+    expect(await dispatch({ type: 'agenda.check', requestUrl: selectedUrl })).toMatchObject({ lastCheck: { status: 'success' } });
+    expect(await dispatch({ type: 'history.read' })).toMatchObject({ itemCount: 2 });
+  });
+  it('requires permission for the selected destination even when the original school is allowed', async () => {
+    const selectedUrl = requestUrl.replace('schoolware_siw.ksgwl.be', 'synthetic.schoolware.be');
+    vi.mocked(chrome.permissions.contains).mockImplementation(async (request) =>
+      !request.origins?.includes('https://synthetic.schoolware.be/*'));
+    expect(await dispatch({ type: 'agenda.check', requestUrl: selectedUrl })).toMatchObject({ lastCheck: { status: 'permission-required' } });
+    expect(fetchAgenda).not.toHaveBeenCalled();
+    expect(alarm).toBeUndefined();
+  });
+  it('uses the chosen installation for transport, alarms and banner permissions', async () => {
+    const origin = 'https://synthetic.schoolware.be';
+    const selectedUrl = requestUrl.replace('https://schoolware_siw.ksgwl.be', origin);
+    await dispatch({ type: 'agenda.check', requestUrl });
+    await dispatch({ type: 'preferences.save', preferences: { ...DEFAULT_PREFERENCES, browserNotificationsEnabled: true } });
+    await dispatch({ type: 'agenda.check', requestUrl: selectedUrl });
+    expect(new URL(String(vi.mocked(fetchAgenda).mock.calls.at(-1)![0])).origin).toBe(origin);
+    expect(chrome.permissions.contains).toHaveBeenCalledWith({ origins: [`${origin}/*`] });
+    expect(registeredScripts[0]?.matches).toEqual([`${origin}/*`]);
+    expect(chrome.permissions.remove).toHaveBeenCalledWith({ origins: ['https://schoolware_siw.ksgwl.be/*'] });
+    expect(alarm).toBeDefined();
+    const otherWebsite = { ...sender, url: 'https://schoolware_siw.ksgwl.be/webouders/start.html', tab: { id: 1 }, frameId: 0 };
+    const reply = await new Promise((resolve) => listener({ type: 'browser.alerts.read' }, otherWebsite, resolve));
+    expect(reply).toMatchObject({ enabled: false, entries: [] });
+    expect(await dispatch({ type: 'history.read' })).toMatchObject({ itemCount: 2, entries: [{ kind: 'baseline' }, { kind: 'baseline' }] });
+  });
+  it('projects standard subtype ranges and pairs progress on another installation without sharing agenda content', async () => {
+    const selectedUrl = requestUrl.replace('https://schoolware_siw.ksgwl.be', 'https://synthetic.schoolware.be');
+    const types = [999, 1000, 1999, 2000, 2];
+    vi.mocked(fetchAgenda).mockResolvedValue({ ...success, count: types.length,
+      typeCounts: { tests: 1, assignments: 2, review: 0, other: 2 },
+      points: types.map((TypePunt, index) => ({ ...parsed.points[0]!, ID: 42000000000 + index, TypePunt })) });
+    await dispatch({ type: 'agenda.check', requestUrl: selectedUrl });
+    const tasks = validateTasksView(await dispatch({ type: 'tasks.read' }))!;
+    expect(tasks.entries.map((entry) => entry.snapshot.typePunt).sort((a, b) => a - b)).toEqual([999, 1000, 1999]);
+    const fetcher = vi.fn(async (_url: string, options: RequestInit) => {
+      const body = JSON.parse(options.body as string);
+      expect(body.action).toBe('exchange');
+      expect(options.body).not.toContain('synthetic.schoolware.be');
+      return Response.json({ ok: true, acknowledged: body.operations.map((op: { id: string }) => op.id),
+        cursor: 0, head: 0, operations: [] });
+    });
+    vi.stubGlobal('fetch', fetcher);
+    expect(await dispatch({ type: 'sync.connect', code: `sw1.${'a'.repeat(64)}.${'b'.repeat(64)}`, seed: false }))
+      .toMatchObject({ enabled: true, error: false });
+    await dispatch({ type: 'tasks.update', itemId: tasks.entries[0]!.id, status: 'done' });
+    await dispatch({ type: 'sync.run' });
+    const uploaded = fetcher.mock.calls.map(([, options]) => JSON.parse(options.body as string))
+      .find((body) => body.operations.length > 0);
+    expect(uploaded.operations[0]).toMatchObject({ iv: expect.any(String), ciphertext: expect.any(String) });
+    expect(Object.keys(uploaded.operations[0]).sort()).toEqual(['ciphertext', 'id', 'iv']);
+  });
+  it('cannot finish setup without history and clears the completion decision with local data', async () => {
+    expect(await dispatch({ type: 'setup.complete' })).toMatchObject({ requestUrl: null });
+    expect(stored.schoolwareSetupComplete).toBeUndefined();
+    await dispatch({ type: 'agenda.check', requestUrl });
+    await dispatch({ type: 'setup.complete' });
+    expect(stored.schoolwareSetupComplete).toBe(true);
+    await dispatch({ type: 'connection.clear' });
+    expect(stored.schoolwareSetupComplete).toBeUndefined();
+  });
+  it('cannot finish setup while an enabled notification channel lacks permission', async () => {
+    await dispatch({ type: 'agenda.check', requestUrl });
+    notificationPermission = false;
+    await dispatch({ type: 'preferences.save', preferences: { ...DEFAULT_PREFERENCES, notificationsEnabled: true } });
+    expect(await dispatch({ type: 'setup.complete' })).toMatchObject({ requestUrl: null });
+    expect(stored.schoolwareSetupComplete).toBeUndefined();
+    notificationPermission = true;
+    await dispatch({ type: 'setup.complete' });
+    expect(stored.schoolwareSetupComplete).toBe(true);
+  });
   it('captures only in the chosen tab and creates a baseline only after explicit confirmation', async () => {
     vi.mocked(chrome.tabs.create).mockImplementation(async () => ({ id: 9 }) as chrome.tabs.Tab);
     const initial = await dispatch({ type: 'connection.discovery.start' }) as { id: string; status: string };

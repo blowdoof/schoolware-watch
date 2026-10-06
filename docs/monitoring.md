@@ -65,7 +65,7 @@ settings and remain off by default for new installations. No extra permission,
 server change, remote storage or database migration is required.
 
 After a successful agenda check at or after 16:00 Europe/Brussels, the worker
-selects unfinished marked points from today through the next known future
+selects unfinished marked points on the next known future
 weekday in that profile's latest agenda. Selected notification categories are
 respected; the source-change `notificationDays` horizon does not truncate this
 agenda-based horizon. Unknown future days, stale planning from a previous local

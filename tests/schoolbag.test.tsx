@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { agendaText, materialsFor, schoolbagOverview, type BagPoint } from '../src/domain/schoolbag';
+import { agendaText, materialsFor, packingChoiceId, schoolbagOverview, type BagPoint } from '../src/domain/schoolbag';
 import { createSchoolbagView, validateSchoolbagView } from '../src/shared/schoolbag';
 import { SchoolbagOverview } from '../src/ui/SchoolbagPanel';
 import { compareObservations } from '../src/domain/observations';
 import { validateConnectionMessage } from '../src/shared/connection';
 import { check, point } from './fixtures/observations';
+import { DEFAULT_PREFERENCES, validatePreferences, validateStoredPreferences } from '../src/shared/preferences';
 
 function bagPoint(overrides: Partial<BagPoint> = {}): BagPoint {
   return { id: crypto.randomUUID(), day: '2026-10-05', subject: 'Aardrijkskunde', title: 'Huiswerk',
@@ -14,6 +15,46 @@ function bagPoint(overrides: Partial<BagPoint> = {}): BagPoint {
 const now = new Date('2026-10-04T12:00:00Z');
 
 describe('local schoolbag suggestions', () => {
+  it('invalidates packing choices when evidence changes and isolates days and directions', async () => {
+    const point = bagPoint();
+    const material = materialsFor([point])[0]!;
+    const id = await packingChoiceId(point.day, 'school', material);
+    expect(await packingChoiceId(point.day, 'school', materialsFor([point])[0]!)).toBe(id);
+    expect(await packingChoiceId('2026-10-06', 'school', material)).not.toBe(id);
+    expect(await packingChoiceId(point.day, 'home', material)).not.toBe(id);
+    expect(await packingChoiceId(point.day, 'school', materialsFor([{ ...point, instructions: 'Boek pagina 35-40' }])[0]!)).not.toBe(id);
+    expect(await packingChoiceId(point.day, 'school', { ...material, sources: material.sources.map((source) => ({ ...source, day: '2026-10-06' })) })).not.toBe(id);
+    const combined = materialsFor([point, bagPoint({ instructions: 'Boek pagina 40-45' })])[0]!;
+    expect(await packingChoiceId(point.day, 'school', combined)).toBe(await packingChoiceId(point.day, 'school', { ...combined, sources: [...combined.sources].reverse() }));
+    expect(validateConnectionMessage({ type: 'schoolbag.update', choiceId: id, state: 'hidden' })).toEqual({ type: 'schoolbag.update', choiceId: id, state: 'hidden' });
+    expect(validateConnectionMessage({ type: 'schoolbag.update', choiceId: id, state: 'done' })).toBeNull();
+    expect(validateConnectionMessage({ type: 'schoolbag.update', choiceId: id, state: 'packed', scopeId: 'other' })).toBeNull();
+    expect(validateSchoolbagView({ ok: true, points: [], lastSuccessAt: null, choices: [{ id, day: point.day, state: 'hidden' }, { id, day: point.day, state: 'packed' }] })).toBeNull();
+  });
+  it('enables schoolbag by default and preserves explicit choices when upgrading preferences', () => {
+    expect(DEFAULT_PREFERENCES.schoolbagEnabled).toBe(true);
+    const legacy = { ...DEFAULT_PREFERENCES, intervalMinutes: 30, notificationsEnabled: true };
+    Reflect.deleteProperty(legacy, 'schoolbagEnabled');
+    expect(validateStoredPreferences(legacy)).toEqual({ ...legacy, schoolbagEnabled: true });
+    expect(validateStoredPreferences({ ...DEFAULT_PREFERENCES, schoolbagEnabled: false })?.schoolbagEnabled).toBe(false);
+    expect(validatePreferences({ ...DEFAULT_PREFERENCES, schoolbagEnabled: true })?.schoolbagEnabled).toBe(true);
+    expect(validatePreferences({ ...DEFAULT_PREFERENCES, schoolbagEnabled: 'yes' })).toBeNull();
+  });
+  it('recognizes folder diminutives in titles without separate instructions', () => {
+    for (const name of ['map', 'mappen', 'mapje', 'mapjes', 'ringmap', 'ringmappen', 'ringmapje', 'ringmapjes']) {
+      const materials = materialsFor([bagPoint({ title: `Neem je ${name} mee voor de oefening`, instructions: '' })]);
+      expect(materials.map((item) => item.label)).toEqual(['Map']);
+    }
+    expect(materialsFor([bagPoint({ title: 'Geen mapje nodig', instructions: '' })])).toEqual([]);
+    expect(materialsFor([bagPoint({ title: 'Bekijk de roadmap', instructions: '' })])).toEqual([]);
+  });
+  it('shows unresolved agenda points immediately without suggesting no material is needed', () => {
+    const html = renderToStaticMarkup(<SchoolbagOverview now={now} view={{ ok: true,
+      lastSuccessAt: now.toISOString(), points: [bagPoint({ title: 'Herhaal de oefeningen', instructions: '' })] }} />);
+    expect(html).toContain('het benodigde materiaal kon nog niet automatisch worden bepaald');
+    expect(html).toMatch(/<details open=""/);
+    expect(html).not.toContain('Geen materiaalverwijzingen herkend');
+  });
   it('extracts Dutch material and page references and keeps subjects separate', () => {
     const materials = materialsFor([bagPoint(), bagPoint({ subject: 'Frans', instructions: 'Werkboek pagina 50–65; schrift meebrengen.' })]);
     expect(materials.map((item) => [item.subject, item.label, item.pages])).toEqual([
@@ -105,7 +146,7 @@ describe('schoolbag projection and message validation', () => {
     const view = createSchoolbagView(scope);
     expect(view.points).toHaveLength(2);
     expect(validateSchoolbagView(view)).toEqual(view);
-    expect(JSON.stringify(view)).not.toContain('synthetic-profile-and-window');
+    expect(JSON.stringify(view)).not.toContain(check().scopeId);
     expect(JSON.stringify(view)).not.toContain('synthetic-source');
     expect(createSchoolbagView(null)).toEqual({ ok: true, lastSuccessAt: null, points: [] });
   });
@@ -130,7 +171,7 @@ describe('schoolbag projection and message validation', () => {
   it('does not describe missing material or a missing day as a complete packing list', () => {
     const markup = renderToStaticMarkup(<SchoolbagOverview view={{ ok: true, lastSuccessAt: null, points: [] }} now={now} />);
     expect(markup).toContain('Geen volgende lesdag bekend');
-    expect(markup).toContain('Dat betekent niet dat je verder niets nodig hebt');
+    expect(markup).toContain('de opgehaalde agenda geeft hierover geen uitsluitsel');
     const unspecified = renderToStaticMarkup(<SchoolbagOverview view={{ ok: true, lastSuccessAt: now.toISOString(), points: [bagPoint({ instructions: 'Leren hoofdstuk 3' })] }} now={now} />);
     expect(unspecified).toContain('Materiaal zelf controleren');
   });

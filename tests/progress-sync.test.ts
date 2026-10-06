@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-import { progressItemKey, progressVersion, encryptProgress, decryptProgress } from '../src/domain/progress-sync';
+import { progressItemKey, progressVersion, encryptProgress, decryptProgress, hex, unhex } from '../src/domain/progress-sync';
 import { parsePairingCode, validateSyncMessage, validateSyncView, normalizeSyncLabel, isSyncMember, isRemoteProgress, SYNC_STATE_KEY } from '../src/shared/progress-sync';
 import { HistoryRepository, openHistoryDatabase } from '../src/storage/history';
 import { ProgressSyncRepository } from '../src/storage/progress-sync';
@@ -16,6 +16,41 @@ beforeEach(() => { vi.stubGlobal('indexedDB', new IDBFactory()); vi.useFakeTimer
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe('private shared progress', () => {
+  it('keeps the latest manual outbox operation when a successful reopening check is retried', async () => {
+    const initial = await history.record(check());
+    await sync.connect(initial.scopeId, code, false);
+    await history.setTaskStatus(initial.scopeId, initial.items[0]!.localId!, 'done', audit());
+    const input = check({ checkId: 'synthetic-reopen', observedAt: '2026-10-03T08:00:00Z',
+      points: [{ ...point, snapshot: { ...point.snapshot, instructions: 'Synthetic revised instructions' } }] });
+    const reopened = await history.record(input);
+    await history.setTaskStatus(initial.scopeId, initial.items[0]!.localId!, 'done', audit());
+    const before = await sync.read();
+    const logs = await new ActivityRepository(name).read();
+    const latest = await history.record(input);
+    expect(latest.events).toEqual(reopened.events);
+    expect(latest.items[0]!.taskStatus).toBe('done');
+    expect(await sync.read()).toEqual(before);
+    expect(await new ActivityRepository(name).read()).toEqual(logs);
+  });
+  it('pads all new statuses and labels to the same length while remaining readable by legacy clients', async () => {
+    const id = crypto.randomUUID();
+    const values: unknown[] = ['open', 'in-progress', 'done'].map((status) => ({ item: 'a'.repeat(64), version: 'b'.repeat(64), status, kind: 'manual' }));
+    values.push({ label: 'Synthetic parent' });
+    const encrypted = await Promise.all(values.map((value) => encryptProgress(key, id, value)));
+    expect(new Set(encrypted.map((value) => value.ciphertext.length)).size).toBe(1);
+    expect(encrypted[0]!.ciphertext).toHaveLength(1056);
+    for (let index = 0; index < values.length; index++) {
+      expect(await decryptProgress(key, id, encrypted[index]!.iv, encrypted[index]!.ciphertext)).toEqual(values[index]);
+    }
+    const legacyKey = await crypto.subtle.importKey('raw', unhex(key), 'AES-GCM', false, ['encrypt', 'decrypt']);
+    const aad = new TextEncoder().encode(`sw1:${id}`);
+    const bytes = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unhex(encrypted[0]!.iv), additionalData: aad }, legacyKey, unhex(encrypted[0]!.ciphertext));
+    expect(JSON.parse(new TextDecoder().decode(bytes))).toEqual(values[0]);
+    const oldIv = crypto.getRandomValues(new Uint8Array(12));
+    const oldCiphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: oldIv, additionalData: aad }, legacyKey, new TextEncoder().encode(JSON.stringify(values[0])));
+    expect(await decryptProgress(key, id, hex(oldIv), hex(oldCiphertext))).toEqual(values[0]);
+    expect(await progressVersion(point.snapshot)).toBe(await progressVersion({ ...point.snapshot, instructions: `${point.snapshot.instructions}\r\n  ` }));
+  });
   it('removes credentials, queued progress and participants atomically when retention expires their profile', async () => {
     const first = await history.record(check());
     await sync.connect(first.scopeId, code, false, false, 'Synthetic parent');

@@ -10,7 +10,7 @@ async function send(message: ConnectionMessage): Promise<ActivityView> {
 }
 const phases = { started: 'Gestart', succeeded: 'Geslaagd', failed: 'Mislukt', skipped: 'Overgeslagen', info: 'Info' };
 
-export function ActivityPanel() {
+export function ActivityPanel({ refreshToken = 0 }: { refreshToken?: number }) {
   const [view, setView] = useState<ActivityView | null>(null);
   const [correlation, setCorrelation] = useState('');
   const [itemId, setItemId] = useState('');
@@ -18,12 +18,12 @@ export function ActivityPanel() {
   const [working, setWorking] = useState(false);
   const available = typeof chrome !== 'undefined' && Boolean(chrome.runtime?.id);
   useEffect(() => {
-    if (!available) return;
+    if (!available || (correlation && !isAlertId(correlation)) || (itemId && !isAlertId(itemId))) return;
     let mounted = true;
-    void send({ type: 'activity.read' }).then((next) => { if (mounted) setView(next); })
+    void send({ type: 'activity.read', ...(correlation ? { correlationId: correlation } : {}), ...(itemId ? { itemId } : {}) }).then((next) => { if (mounted) setView(next); })
       .catch(() => { if (mounted) setError('Het activiteitenlog kon niet worden geladen.'); });
     return () => { mounted = false; };
-  }, [available]);
+  }, [available, refreshToken, correlation, itemId]);
   async function act(operation: 'read' | 'export' | 'clear') {
     if (operation !== 'clear' && ((correlation && !isAlertId(correlation)) || (itemId && !isAlertId(itemId)))) {
       setError('Gebruik een volledig correlation-ID of lokaal item-ID uit het log.'); return;

@@ -60,13 +60,35 @@ try {
   };
   const { id } = await command('Extensions.loadUnpacked', { path: resolve('dist') });
   const optionsUrl = `chrome-extension://${id}/options.html`;
-  async function openSettings() {
+  async function openSettings(checkGuide = false) {
     const { targetId } = await command('Target.createTarget', { url: optionsUrl });
     const { sessionId } = await command('Target.attachToTarget', { targetId, flatten: true });
-    await poll(() => evaluate(sessionId, 'Boolean([...document.querySelectorAll("select")].find(select => select.options[0]?.text === "5 minuten"))'));
+    if (checkGuide) {
+      await poll(() => evaluate(sessionId, `document.querySelector('[aria-label="Installatiehulp"]')?.textContent.includes('Stap 1 van 3')`));
+      await poll(() => evaluate(sessionId, `Boolean([...document.querySelectorAll('button')].find(button => button.textContent === 'Schoolware verbinden'))`));
+      for (const label of ['Lokale geschiedenis', 'Voortgang synchroniseren', 'Activiteitenlog']) {
+        assert.equal(await evaluate(sessionId, `Boolean(document.querySelector('[aria-label="${label}"]'))`), true);
+      }
+      // Simulate a denied prompt without granting hosts or contacting Schoolware.
+      await evaluate(sessionId, `(() => {
+        chrome.permissions.request = async () => false;
+        [...document.querySelectorAll('button')].find(button => button.textContent === 'Schoolware verbinden').click();
+        return true;
+      })()`);
+      await poll(() => evaluate(sessionId, `document.body.textContent.includes('Geef toestemming om je agenda in Schoolware te herkennen.')`));
+      const local = await evaluate(sessionId, "chrome.storage.local.get(['schoolwareConnection', 'schoolwareSetupComplete'])");
+      assert.equal(local.schoolwareConnection, undefined);
+      assert.equal(local.schoolwareSetupComplete, undefined);
+      console.log('Chrome setup smoke passed: first-opening guide and denied access leave the agenda unconnected.');
+    }
+    await poll(() => evaluate(sessionId, `(() => {
+      const later = [...document.querySelectorAll('button')].find(button => button.textContent === 'Later instellen');
+      if (later) later.click();
+      return Boolean([...document.querySelectorAll('select')].find(select => select.options[0]?.text === '5 minuten'));
+    })()`));
     return { targetId, sessionId };
   }
-  const page = await openSettings();
+  const page = await openSettings(true);
   const worker = await poll(async () => {
     const { targetInfos } = await command('Target.getTargets');
     return targetInfos.find((target) => target.type === 'service_worker' && target.url.startsWith(`chrome-extension://${id}/`));
@@ -114,13 +136,22 @@ try {
     const day = date.toISOString().slice(0, 10);
     const scopeId = 'https://schoolware_siw.ksgwl.be/webouders/bin/server.fcgi/REST/AgendaPunt?AgendaID=10&MapAgendasOp=20&MinTot=2026-01-01&MaxVan=2026-12-31&CompletedTaskForLL=30';
     const prefs = (await chrome.storage.local.get('schoolwarePreferences')).schoolwarePreferences;
-    await chrome.storage.local.set({ schoolwarePreferences: { ...prefs, monitoringEnabled: false },
+    await chrome.storage.local.set({ schoolwarePreferences: { ...prefs, monitoringEnabled: false, schoolbagEnabled: true },
       schoolwareConnection: { requestUrl: scopeId, lastCheck: null } });
     const db = await new Promise((resolve, reject) => {
       const request = indexedDB.open('schoolware-watch-history', 3);
       request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
     });
     const tx = db.transaction('scopes', 'readwrite');
+    const laterItems = Array.from({ length: 6 }, (_, index) => {
+      do { date.setUTCDate(date.getUTCDate() + 1); } while ([0, 6].includes(date.getUTCDay()));
+      const laterDay = date.toISOString().slice(0, 10);
+      return { sourceKey: 'synthetic-planning-' + index, localId: crypto.randomUUID(), category: 'assignments', present: true,
+        taskStatus: 'open', firstSeenAt: now.toISOString(), lastSeenAt: now.toISOString(),
+        snapshot: { title: 'Synthetic later planning ' + (index + 1), instructions: '', typePunt: 1001,
+          startsAt: laterDay + ' 09:00:00', endsAt: laterDay + ' 09:50:00', validFrom: laterDay + ' 00:00:00',
+          hidden: false, cancelled: false, recurrence: '' } };
+    });
     tx.objectStore('scopes').put({ scopeId, localId: crypto.randomUUID(), baselineAt: now.toISOString(),
       lastSuccessAt: now.toISOString(), events: [], checks: [], items: [{ sourceKey: 'synthetic-bag-point',
         localId: crypto.randomUUID(), category: 'assignments', present: true, taskStatus: 'open',
@@ -128,13 +159,15 @@ try {
         lesson: { key: 'synthetic-lesson', subject: 'Aardrijkskunde', room: '' },
         snapshot: { title: 'Synthetic workbook task', instructions: 'Werkboek pagina 24-34', typePunt: 1001,
           startsAt: day + ' 09:00:00', endsAt: day + ' 09:50:00', validFrom: day + ' 00:00:00',
-          hidden: false, cancelled: false, recurrence: '' } }] });
+          hidden: false, cancelled: false, recurrence: '' } }, ...laterItems] });
     await new Promise((resolve, reject) => { tx.oncomplete = resolve; tx.onabort = () => reject(tx.error); });
     db.close(); return true;
   })()`);
   const { targetId: bagTarget } = await command('Target.createTarget', { url: `chrome-extension://${id}/dashboard.html` });
   const { sessionId: bagSession } = await command('Target.attachToTarget', { targetId: bagTarget, flatten: true });
-  await poll(() => evaluate(bagSession, `document.querySelector('[aria-label="Boekentas"]')?.textContent.includes('pagina 24-34')`));
+  await poll(() => evaluate(bagSession, `(() => {
+    return document.querySelector('[aria-label="Boekentas"]')?.textContent.includes('pagina 24-34');
+  })()`));
   const bag = await evaluate(bagSession, `(() => {
     const section = document.querySelector('[aria-label="Boekentas"]');
     return { text: section.textContent, homeText: [...section.querySelectorAll('h3')].find(heading => heading.textContent === 'Mee naar huis').parentElement.textContent, laptops: [...section.querySelectorAll('li')].filter(li => li.textContent.includes('Altijd meenemen')).length };
@@ -144,6 +177,170 @@ try {
   assert.ok(bag.text.includes('Aardrijkskunde') && bag.text.includes('Werkboek'));
   assert.ok(!bag.homeText.includes('Werkboek'), 'Same-day workbook must not appear in next-day home packing');
   console.log('Chrome schoolbag smoke passed: worker projection, both packing lists, laptop defaults and synthetic workbook page range.');
+  const { targetId: livePopupTarget } = await command('Target.createTarget', { url: `chrome-extension://${id}/popup.html` });
+  const { sessionId: livePopupSession } = await command('Target.attachToTarget', { targetId: livePopupTarget, flatten: true });
+  await poll(() => evaluate(livePopupSession, `document.body.textContent.includes('Synthetic workbook task')`));
+  await evaluate(restarted.sessionId, `(async () => {
+    const view = await chrome.runtime.sendMessage({ type: 'tasks.read' });
+    const item = view.entries.find(item => item.snapshot.title === 'Synthetic workbook task');
+    await chrome.runtime.sendMessage({ type: 'tasks.update', itemId: item.id, status: 'in-progress' });
+    return true;
+  })()`);
+  const busyTaskVisible = `(() => {
+    const item = [...document.querySelectorAll('li')].find(li => li.textContent.includes('Synthetic workbook task') && li.querySelector('input[type="checkbox"]'));
+    return Boolean(item && [...item.querySelectorAll('label')].find(label => label.textContent.includes('Bezig'))?.querySelector('input')?.checked);
+  })()`;
+  await poll(() => evaluate(bagSession, busyTaskVisible));
+  await poll(() => evaluate(livePopupSession, busyTaskVisible));
+  await poll(() => evaluate(restarted.sessionId, `document.querySelector('[aria-label="Activiteitenlog"]')?.textContent.includes('task.status')`));
+  await evaluate(restarted.sessionId, `(async () => {
+    const view = await chrome.runtime.sendMessage({ type: 'tasks.read' });
+    await chrome.runtime.sendMessage({ type: 'tasks.update', itemId: view.entries.find(item => item.snapshot.title === 'Synthetic workbook task').id, status: 'open' });
+    return true;
+  })()`);
+  await command('Target.closeTarget', { targetId: livePopupTarget });
+  console.log('Chrome live progress smoke passed: existing popup, dashboard and settings log update without reload.');
+  assert.equal(await evaluate(bagSession, `Boolean(document.querySelector('[aria-label="To-do voor de volgende schooldag"]').compareDocumentPosition(document.querySelector('[aria-label="Boekentas"]')) & Node.DOCUMENT_POSITION_FOLLOWING)`), true);
+  assert.equal(await evaluate(bagSession, `Boolean(document.querySelector('[aria-label="Boekentas"]').compareDocumentPosition(document.querySelector('[aria-label="Taken, toetsen en voortgang"]')) & Node.DOCUMENT_POSITION_FOLLOWING)`), true);
+  assert.equal(await evaluate(bagSession, `document.querySelectorAll('[aria-label="To-do voor de volgende schooldag"]').length`), 1);
+  assert.equal(await evaluate(bagSession, `document.querySelector('[aria-label="Taken, toetsen en voortgang"]').textContent.includes('Synthetic later planning 6')`), false);
+  await evaluate(bagSession, `([...document.querySelectorAll('button')].find(button => button.textContent.includes('Verder vooruit kijken'))).click()`);
+  await poll(() => evaluate(bagSession, `document.querySelector('[aria-label="Taken, toetsen en voortgang"]').textContent.includes('Synthetic later planning 6')`));
+  const packedSelector = '[aria-label="Aardrijkskunde Werkboek ingepakt"]';
+  await poll(() => evaluate(bagSession, `document.querySelector('${packedSelector}') && !document.querySelector('${packedSelector}').disabled`));
+  await evaluate(bagSession, `document.querySelector('${packedSelector}').click()`);
+  await poll(() => evaluate(bagSession, `document.querySelector('${packedSelector}')?.checked && !document.querySelector('${packedSelector}').disabled`));
+  await command('Page.reload', {}, bagSession);
+  await poll(() => evaluate(bagSession, `document.querySelector('${packedSelector}')?.checked && !document.querySelector('${packedSelector}').disabled`));
+  await evaluate(bagSession, `document.querySelector('${packedSelector}').closest('li').querySelector('button').click()`);
+  await poll(() => evaluate(bagSession, `!document.querySelector('${packedSelector}') && document.querySelector('[aria-label="Boekentas"]').textContent.includes('Verborgen suggesties tonen (1)')`));
+  await evaluate(bagSession, `[...document.querySelectorAll('button')].find(button => button.textContent.includes('Verborgen suggesties tonen')).click()`);
+  await poll(() => evaluate(bagSession, `document.querySelector('${packedSelector}') && !document.querySelector('${packedSelector}').disabled`));
+  await evaluate(bagSession, `document.querySelector('${packedSelector}').closest('li').querySelector('button').click()`);
+  await poll(() => evaluate(bagSession, `!document.querySelector('[aria-label="Boekentas"]').textContent.includes('Terugzetten')`));
+  await evaluate(bagSession, `(async () => {
+    const { schoolwareConnection: connection } = await chrome.storage.local.get('schoolwareConnection');
+    await chrome.storage.local.set({ schoolwareConnection: { ...connection, lastCheck: { status: 'session-required', count: null, checkedAt: new Date().toISOString() } } });
+    return true;
+  })()`);
+  await poll(() => evaluate(bagSession, `document.querySelector('[aria-label="Koppelingsstatus"]')?.textContent.includes('Opnieuw aanmelden')`));
+  assert.equal(await evaluate(bagSession, `document.querySelector('[aria-label="Koppelingsstatus"]').textContent.includes('Laatste geslaagde controle: nog geen')`), false);
+  console.log('Chrome overview smoke passed: one to-do, compact planning with expansion, durable packing choices, hide/restore and expired-session status.');
+  await poll(() => evaluate(restarted.sessionId, `(() => {
+    const panel = document.querySelector('[aria-label="Voortgang synchroniseren"]');
+    const name = [...panel.querySelectorAll('label')].find(label => label.textContent.includes('op deze computer (optioneel)'))?.querySelector('input');
+    const create = [...panel.querySelectorAll('button')].find(button => button.textContent === 'Nieuwe leerlinggroep aanmaken');
+    return name?.value === '' && create && !create.disabled;
+  })()`));
+  console.log('Chrome privacy smoke passed: group setup allows an empty optional participant label without sending a network request.');
+  assert.equal(await evaluate(restarted.sessionId, `Boolean([...document.querySelectorAll('button')].find(button => button.textContent === 'Leerlingvoortgang delen')?.disabled)`), true);
+  await evaluate(restarted.sessionId, `(() => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => { throw new Error('Synthetic denied clipboard'); } } });
+    [...document.querySelectorAll('button')].find(button => button.textContent === 'Extensie delen').click(); return true;
+  })()`);
+  await poll(() => evaluate(restarted.sessionId, `document.body.textContent.includes('openbare installatiebericht')`));
+  assert.equal(await evaluate(restarted.sessionId, `(() => {
+    const text = document.querySelector('[aria-label="Voortgang synchroniseren"] textarea')?.value ?? '';
+    return text.includes('chromewebstore.google.com/detail/phngkgibiapcabhnfjafkfibjobgkkaf') && !text.includes('sw1.') &&
+      !text.includes('Koppelen aan een bestaande computer');
+  })()`), true);
+  await evaluate(restarted.sessionId, `(async () => {
+    const { schoolwareConnection: connection } = await chrome.storage.local.get('schoolwareConnection');
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('schoolware-watch-history', 3);
+      request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+    });
+    const tx = db.transaction('sync', 'readwrite');
+    tx.objectStore('sync').put({ connectionId: crypto.randomUUID(), scopeId: connection.requestUrl,
+      token: 'a'.repeat(64), key: 'b'.repeat(64), cursor: 0, head: 0, outbox: [], remote: {},
+      lastSuccessAt: null, error: false }, 'progressSync');
+    await new Promise((resolve, reject) => { tx.oncomplete = resolve; tx.onerror = reject; });
+    db.close(); return true;
+  })()`);
+  await command('Page.reload', {}, restarted.sessionId);
+  await poll(() => evaluate(restarted.sessionId, `Boolean([...document.querySelectorAll('button')].find(button => button.textContent === 'Leerlingvoortgang delen' && !button.disabled))`));
+  await evaluate(restarted.sessionId, `(() => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => { throw new Error('Synthetic denied clipboard'); } } });
+    [...document.querySelectorAll('button')].find(button => button.textContent === 'Leerlingvoortgang delen').click(); return true;
+  })()`);
+  await poll(() => evaluate(restarted.sessionId, `document.body.textContent.includes('Automatisch kopiëren is niet gelukt')`));
+  assert.equal(await evaluate(restarted.sessionId, `(() => {
+    const text = document.querySelector('[aria-label="Voortgang synchroniseren"] textarea')?.value ?? '';
+    return text.includes('chromewebstore.google.com/detail/phngkgibiapcabhnfjafkfibjobgkkaf') &&
+      text.includes('sw1.' + 'a'.repeat(64) + '.' + 'b'.repeat(64)) && text.includes('Koppelen aan een bestaande computer');
+  })()`), true);
+  await evaluate(restarted.sessionId, `(async () => {
+    [...document.querySelectorAll('button')].find(button => button.textContent === 'Uitnodiging verbergen').click();
+    const db = await new Promise(resolve => { const request = indexedDB.open('schoolware-watch-history', 3); request.onsuccess = () => resolve(request.result); });
+    const tx = db.transaction('sync', 'readwrite'); tx.objectStore('sync').delete('progressSync');
+    await new Promise(resolve => { tx.oncomplete = resolve; }); db.close(); return true;
+  })()`);
+  await command('Page.reload', {}, restarted.sessionId);
+  await poll(() => evaluate(restarted.sessionId, `Boolean([...document.querySelectorAll('button')].find(button => button.textContent === 'Nieuwe leerlinggroep aanmaken'))`));
+  console.log('Chrome sharing smoke passed: separate public installation and private progress actions, pairing requirement and copy fallback.');
+  const toggleSchoolbag = () => evaluate(restarted.sessionId, `(() => {
+    [...document.querySelectorAll('label')].find(label => label.textContent.includes('Boekentas tonen onder de to-do')).querySelector('input').click();
+    return true;
+  })()`);
+  await poll(() => evaluate(restarted.sessionId, `Boolean([...document.querySelectorAll('label')].find(label => label.textContent.includes('Boekentas tonen onder de to-do'))?.querySelector('input').checked)`));
+  await toggleSchoolbag();
+  await poll(() => evaluate(bagSession, `!document.querySelector('[aria-label="Boekentas"]')`));
+  assert.equal(await evaluate(bagSession, `(async () => (await chrome.runtime.sendMessage({ type: 'preferences.read' })).preferences.schoolbagEnabled)()`), false);
+  await toggleSchoolbag();
+  await poll(() => evaluate(bagSession, `document.querySelector('[aria-label="Boekentas"]')?.textContent.includes('pagina 24-34')`));
+  console.log('Chrome schoolbag preference smoke passed: below to-do and above planning, immediate hide/show and durable visibility preference.');
+  // The dashboard must retain its own content while setup/repair is pending.
+  assert.equal(await evaluate(bagSession, `Boolean(document.querySelector('[aria-label="Taken, toetsen en voortgang"]'))`), true);
+  assert.equal(await evaluate(restarted.sessionId, `Boolean(document.querySelector('[aria-label="Voortgang synchroniseren"]'))`), true);
+  console.log('Chrome navigation smoke passed: dashboard tasks and full settings remain available during setup.');
+  const { targetId: upgradeTarget } = await command('Target.createTarget', { url: optionsUrl });
+  const { sessionId: upgradeSession } = await command('Target.attachToTarget', { targetId: upgradeTarget, flatten: true });
+  await poll(() => evaluate(upgradeSession, `Boolean(document.querySelector('[aria-label="Automatische controle en meldingen"]'))`));
+  // Simulate the UI host-permission result; no actual permission or session is granted.
+  await evaluate(upgradeSession, `(async () => {
+    chrome.permissions.contains = async () => true;
+    const data = await chrome.storage.local.get('schoolwareConnection');
+    await chrome.storage.local.set({ schoolwareConnection: { ...data.schoolwareConnection,
+      lastCheck: { status: 'success', count: 1, checkedAt: '2026-10-05T08:00:00Z' } } });
+    return true;
+  })()`);
+  await poll(() => evaluate(upgradeSession, `!document.querySelector('[aria-label="Installatiehulp"]')`));
+  assert.equal(await evaluate(upgradeSession, `Boolean(document.querySelector('[aria-label="Lokale geschiedenis"]'))`), true);
+  console.log('Chrome upgrade smoke passed: existing connection/preferences need no new setup marker.');
+
+  // Test the bundled content script on a synthetic page with a simulated runtime.
+  // No real Schoolware tab, payload or browser session is inspected.
+  const { targetId: bannerTarget } = await command('Target.createTarget', { url: 'about:blank' });
+  const { sessionId: bannerSession } = await command('Target.attachToTarget', { targetId: bannerTarget, flatten: true });
+  await evaluate(bannerSession, `(() => {
+    globalThis.syntheticListeners = [];
+    globalThis.syntheticReports = 0;
+    globalThis.syntheticAlert = { id: '11111111-1111-4111-8111-111111111111', createdAt: '2026-10-05T08:00:00Z', added: 0, changed: 0, days: 3, test: true };
+    globalThis.syntheticView = { ok: true, enabled: true, entries: [globalThis.syntheticAlert] };
+    globalThis.schoolwareAlertAttached = true;
+    globalThis.chrome = { runtime: { id: 'synthetic-extension',
+      sendMessage: async (message) => { if (message.type === 'browser.alerts.rendered') globalThis.syntheticReports++; return globalThis.syntheticView; },
+      onMessage: { addListener: (listener) => globalThis.syntheticListeners.push(listener),
+        removeListener: (listener) => { globalThis.syntheticListeners = globalThis.syntheticListeners.filter(value => value !== listener); } } } };
+    return true;
+  })()`);
+  const bannerScript = await readFile(resolve('dist/website-alert.js'), 'utf8');
+  await evaluate(bannerSession, bannerScript);
+  await poll(() => evaluate(bannerSession, `document.querySelector('schoolware-watch-alert')?.getBoundingClientRect().height > 0`));
+  await evaluate(bannerSession, bannerScript);
+  await poll(() => evaluate(bannerSession, `globalThis.syntheticReports === 2`));
+  assert.deepEqual(await evaluate(bannerSession, `({ hosts: document.querySelectorAll('schoolware-watch-alert').length, listeners: globalThis.syntheticListeners.length })`), { hosts: 1, listeners: 1 });
+  await evaluate(bannerSession, `(() => {
+    globalThis.syntheticView = { ok: true, enabled: true, entries: [] };
+    globalThis.syntheticListeners.forEach(listener => listener({ type: 'browser.alerts.updated' }, { id: 'synthetic-extension' })); return true;
+  })()`);
+  await poll(() => evaluate(bannerSession, `!document.querySelector('schoolware-watch-alert')`));
+  await evaluate(bannerSession, `(() => {
+    globalThis.syntheticView = { ok: true, enabled: true, entries: [globalThis.syntheticAlert] };
+    globalThis.syntheticListeners.forEach(listener => listener({ type: 'browser.alerts.updated' }, { id: 'synthetic-extension' })); return true;
+  })()`);
+  await poll(() => evaluate(bannerSession, `Boolean(document.querySelector('schoolware-watch-alert'))`));
+  console.log('Chrome banner smoke passed: stale attachment recovery, single listener/host after reinjection, dismissal and redisplay.');
   if (process.argv.includes('--store-assets')) {
     const assets = resolve('artifacts/chrome-web-store');
     await mkdir(assets, { recursive: true });
@@ -174,7 +371,10 @@ try {
     await command('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false }, bagSession);
     await command('Page.enable', {}, bagSession);
     await command('Page.navigate', { url: `chrome-extension://${id}/dashboard.html` }, bagSession);
-    await poll(() => evaluate(bagSession, `document.querySelector('[aria-label="Boekentas"]')?.textContent.includes('pagina 50-65')`));
+    await poll(() => evaluate(bagSession, `(() => {
+      [...document.querySelectorAll('button')].find(button => button.textContent === 'Later instellen')?.click();
+      return document.querySelector('[aria-label="Boekentas"]')?.textContent.includes('pagina 50-65');
+    })()`));
     const capture = async (fileName, selector) => {
       await evaluate(bagSession, `(() => {
         document.querySelector(${JSON.stringify(selector)}).scrollIntoView({ block: 'start' });

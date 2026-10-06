@@ -23,6 +23,7 @@ def main():
     parser.add_argument('--php', required=True)
     parser.add_argument('--mysql', required=True)
     parser.add_argument('--mysql-port', type=int, default=33307)
+    parser.add_argument('--legacy-compatibility', action='store_true')
     args = parser.parse_args()
     if args.mysql_port != 33307:
         raise ValueError('Use the dedicated isolated test port 33307')
@@ -38,10 +39,13 @@ def main():
             folder = Path(folder)
             public = folder / 'public'
             public.mkdir()
+            (folder / 'maintenance.php').write_text((root / 'maintenance.php').read_text(), encoding='utf-8')
             # Rewrite only the fixed production path in the disposable test copies.
             for source, destination in [(root / 'public/sync.php', public / 'sync.php'),
                                         (root / 'manage-groups.php', folder / 'manage-groups.php')]:
                 destination.write_text(source.read_text().replace(
+                    "'/home/example-account/maintenance.php'",
+                    "'" + (folder / 'maintenance.php').as_posix() + "'").replace(
                     "'/home/example-account/schoolware-sync-config.php'",
                     "'" + (folder / 'schoolware-sync-config.php').as_posix() + "'"), encoding='utf-8')
             def configure(extra=''):
@@ -54,6 +58,13 @@ def main():
             def sql(statement):
                 return subprocess.run(mysql, input=f'USE {database};\n' + statement, text=True,
                     check=True, capture_output=True).stdout
+
+            # Verify additive maintenance upgrade on a populated older schema.
+            migrated_id = uuid.uuid4().hex
+            sql("ALTER TABLE sw_sync_groups DROP COLUMN last_active_at; INSERT INTO sw_sync_groups (id, token_hash, revision) VALUES ('" + migrated_id + "', '" + '1' * 64 + "', 42);")
+            sql((root / 'migrations/20261005-maintenance.sql').read_text())
+            assert sql("SELECT revision FROM sw_sync_groups WHERE id = '" + migrated_id + "';").splitlines()[-1] == '42'
+            sql("DELETE FROM sw_sync_groups WHERE id = '" + migrated_id + "';")
 
             # Synthetic legacy installation; preserve revision/cursor even without records.
             sql('CREATE TABLE sw_sync_meta (singleton INT PRIMARY KEY, revision BIGINT NOT NULL) ENGINE=InnoDB; '
@@ -104,6 +115,9 @@ def main():
             assert result['head'] == 9 and result['operations'][0]['id'] == legacy['id']
             assert call({'action': 'delete'})[0] == 200
             assert call({**empty, 'cursor': 9})[1]['head'] == 9
+            if args.legacy_compatibility:
+                subprocess.run(['node', str(root / 'tests/legacy-compatibility.mjs'),
+                                f'http://127.0.0.1:{ports[0]}/sync.php', token], check=True)
             # Reset only this synthetic fixture for the existing pagination assertions.
             sql('UPDATE sw_sync_groups SET revision = 0;')
             assert call(empty, 'b' * 64)[0] == 401
@@ -264,14 +278,38 @@ def main():
             configure(", 'requests_per_token_minute'=>100, 'requests_per_minute'=>2")
             assert call(empty, 'b' * 64)[0] == 401
             assert call(empty, new_token)[0] == 200
-            assert call(empty, token)[0] == 429
-            # Unknown credentials allocate only the single global bucket.
-            assert sql('SELECT COUNT(*) FROM sw_sync_request_limits;').splitlines()[-1] == '2'
+            assert call(empty, token)[0] == 200
+            assert call(empty, new_token)[0] == 429
+            # Invalid tokens use one peer bucket and cannot exhaust the valid global bucket.
+            assert sql('SELECT COUNT(*) FROM sw_sync_request_limits;').splitlines()[-1] == '4'
             sql("UPDATE sw_sync_request_limits SET window_start = '2000-01-01';")
             assert call(empty, token)[0] == 200
             assert sql("SELECT COUNT(*) FROM sw_sync_request_limits WHERE window_start = '2000-01-01';").splitlines()[-1] == '0'
             configure(", 'requests_per_minute'=>0")
             assert call(empty)[0] == 503  # Invalid host configuration fails closed.
+            configure(", 'requests_per_unknown_peer_minute'=>2")
+            sql('DELETE FROM sw_sync_request_limits;')
+            assert call(empty, 'b' * 64)[0] == 401
+            assert call(empty, 'e' * 64)[0] == 401
+            assert call(empty, 'f' * 64)[0] == 429
+            assert call(empty, token)[0] == 200
+            assert sql('SELECT COUNT(*) FROM sw_sync_request_limits;').splitlines()[-1] == '3'
+            # Maintenance purges idle ciphertext and participants without deleting active group metadata.
+            sql("UPDATE sw_sync_group_operations SET received_at = '2000-01-01'; UPDATE sw_sync_members SET updated_at = '2000-01-01';")
+            subprocess.run(manager + ['purge'], check=True, capture_output=True)
+            assert sql('SELECT COUNT(*) FROM sw_sync_group_operations;').splitlines()[-1] == '0'
+            assert sql('SELECT COUNT(*) FROM sw_sync_members;').splitlines()[-1] == '0'
+            assert call(empty, token)[0] == 200
+            assert sql("SELECT revision FROM sw_sync_groups WHERE token_hash = '" + hashlib.sha256(token.encode()).hexdigest() + "';").splitlines()[-1] == '252'
+            sql("UPDATE sw_sync_groups SET last_active_at = '2000-01-01' WHERE id = '" + other_id + "';")
+            subprocess.run(manager + ['purge'], check=True, capture_output=True)
+            assert sql("SELECT COUNT(*) FROM sw_sync_groups WHERE id = '" + other_id + "';").splitlines()[-1] == '0'
+            subprocess.run(manager + ['enable-registration'], check=True, capture_output=True)
+            sql('DELETE FROM sw_sync_request_limits;')
+            assert call(registration, other_token)[0] == 401  # Cleanup must not undo revocation.
+            # IPv6 rotation inside a /64 has the same private rate identity.
+            peer_script = "require '" + (folder / 'maintenance.php').as_posix() + "'; echo (ratePeer('2001:db8:1234:5678::1') === ratePeer('2001:db8:1234:5678::abcd') && ratePeer('2001:db8:1234:5678::1') !== ratePeer('2001:db8:1234:5679::1')) ? 'ok' : 'fail';"
+            assert subprocess.run(php + ['-r', peer_script], check=True, capture_output=True, text=True).stdout == 'ok'
             print('PHP 8.2 / MySQL API integration passed: migration, isolation, revocation, authentication, validation, retry, pagination, scoped deletion, registration, quotas and encrypted participant isolation/deletion.')
     finally:
         for process in processes:

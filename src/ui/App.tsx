@@ -1,3 +1,4 @@
+import { SetupWizard } from './SetupWizard';
 import { ConnectionPanel } from './ConnectionPanel';
 import { ConnectionNotice } from './ConnectionNotice';
 import { HistoryPanel } from './HistoryPanel';
@@ -99,14 +100,14 @@ export function App({ page: initialPage }: { page: Page }) {
       <p className="text-xs font-bold uppercase tracking-widest text-teal-700">Schoolware Watch</p>
       <h1 className="mt-3 text-2xl font-semibold tracking-tight">{target ? 'Details bij je melding' : titles[page]}</h1>
       {helpOpen && <HelpPanel />}
+      {!target && page !== 'info' && <SetupWizard inlineConnection={page === 'popup'} onSettings={() => navigate('options')} refreshToken={historyRevision} onChanged={() => setHistoryRevision((revision) => revision + 1)} />}
       {target ? <NotificationDetailsPanel target={target} refreshToken={historyRevision} /> : page === 'info' ?
         <InfoPanel section={infoSection} onSectionChange={setInfoSection} onSettings={() => navigate('options')} /> : <>
-      {page === 'options' ?
-        <ConnectionPanel showSetup refreshToken={historyRevision} onHistoryChanged={() => setHistoryRevision((revision) => revision + 1)} /> :
-        <ConnectionNotice refreshToken={historyRevision} onSettings={() => navigate('options')} navigationPending={navigationPending} />}
-      {page === 'popup' && <TodoPanel refreshToken={historyRevision} />}
-      {(page === 'popup' || page === 'dashboard') && <SchoolbagPanel refreshToken={historyRevision} />}
+      <ConnectionNotice refreshToken={historyRevision} onSettings={() => navigate('options')} navigationPending={navigationPending} />
+      {page === 'options' && <ConnectionPanel showSetup refreshToken={historyRevision} onHistoryChanged={() => setHistoryRevision((revision) => revision + 1)} />}
       <PreferencesPanel settings={page === 'options'} refreshToken={historyRevision} onSaved={() => setHistoryRevision((revision) => revision + 1)} />
+      {(page === 'popup' || page === 'dashboard') && <TodoPanel refreshToken={historyRevision} />}
+      {(page === 'popup' || page === 'dashboard') && <SchoolbagPanel refreshToken={historyRevision} />}
       {page === 'dashboard' && <TasksPanel refreshToken={historyRevision} />}
       {page !== 'popup' && <HistoryPanel settings={page === 'options'} refreshToken={historyRevision} />}
       {page === 'options' && (
@@ -117,7 +118,7 @@ export function App({ page: initialPage }: { page: Page }) {
       )}
       </>}
       {page === 'options' && <ProgressSyncPanel refreshToken={historyRevision} />}
-      {page === 'options' && <ActivityPanel />}
+      {page === 'options' && <ActivityPanel refreshToken={historyRevision} />}
       <footer className="mt-8 border-t border-slate-200 pt-4 text-xs text-slate-500">
         <p>Een onafhankelijk project van Bumper.be</p>
         <nav aria-label="Projectinformatie" className="mt-2 flex flex-wrap gap-x-4 gap-y-2">

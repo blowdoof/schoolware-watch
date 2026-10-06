@@ -7,6 +7,25 @@ import fixture from './fixtures/synthetic-agenda.json';
 import { point, check } from './fixtures/observations';
 
 describe('observation comparison', () => {
+  it('ignores GeldigVan and formatting-only changes without reopening completed tasks or notifying', () => {
+    const initial = compareObservations(null, check({ points: [{ ...point, snapshot: { ...point.snapshot, instructions: 'Line one\nLine two' } }] }));
+    initial.items[0]!.taskStatus = 'done';
+    const next = compareObservations(initial, check({ checkId: 'synthetic-formatting', notificationSelection: { days: 3, categories: ['assignments'] },
+      points: [{ ...point, snapshot: { ...point.snapshot, validFrom: '2026-10-01 00:00:00', instructions: 'Line\u00a0one  \r\nLine two  \r\n' } }] }));
+    expect(next.events).toEqual(initial.events);
+    expect(next.items[0]!.taskStatus).toBe('done');
+    expect(next.items[0]!.snapshot.validFrom).toBe('2026-10-01 00:00:00');
+    expect(next.checks.at(-1)!.counts.changed).toBe(0);
+  });
+  it('accepts truthful rollback timestamps only for an explicitly serialized fresh check', () => {
+    const initial = compareObservations(null, check());
+    const input = check({ checkId: 'fresh-after-clock-change', observedAt: '2026-10-01T08:00:00.000Z', allowClockRollback: true,
+      points: [{ ...point, snapshot: { ...point.snapshot, title: 'Synthetic new instruction' } }] });
+    const next = compareObservations(initial, input);
+    expect(next.lastSuccessAt).toBe(input.observedAt);
+    expect(next.events.at(-1)!.kind).toBe('changed');
+    expect(compareObservations(next, input)).toEqual(next);
+  });
   it('reopens only completed active tasks on meaningful changes, retaining timestamps and status on metadata-only updates', () => {
     for (const status of ['open', 'in-progress', 'done'] as const) {
       const first = compareObservations(null, check());

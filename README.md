@@ -79,12 +79,12 @@ Click **Schoolware verbinden** in the extension and grant optional access.
 Sign in in the newly opened Schoolware tab and open the desired pupil's agenda.
 Return to the extension, verify the selection, check the confirmation box and
 click **Deze agenda koppelen**. Developer tools and copied URLs are unnecessary.
-Recognition remains active for five minutes in that dedicated tab. The
+Recognition remains active for five minutes in the selected or newly opened tab. The
 extension validates the observed request and fetches the agenda through the
 existing browser session before creating the local baseline. Existing
 connections do not change until explicitly confirmed.
 
-The current integration supports only `schoolware_siw.ksgwl.be`. Every computer
+The verified integration is `schoolware_siw.ksgwl.be`. Other user-selected public HTTPS installations can be connected experimentally when they expose the same validated agenda contract. Their TypePunt semantics are unverified: all points remain Other, with no inferred tasks, to-do reminders or shared task progress. Every computer
 still connects to its own Schoolware session; the progress pairing code does
 not grant Schoolware access. The manual URL field remains under **Geavanceerd**
 for troubleshooting. See [automatic connection](docs/agenda-discovery.md).
@@ -109,8 +109,10 @@ Unchanged checks update last-seen times without duplicating content versions.
 
 Only identical source-ID tuples are compared; identity stability across checks
 is not yet proven. Changed IDs are separate observations, not automatically
-merged entities. Editing the configured URL's date window or selection starts a
-separate scope; automatically rolling request dates keep the configured scope.
+merged entities. Reconnecting the same installation, pupil and agenda selection
+from another calendar window reuses an existing retained profile, preserving
+history and progress. A different selection or installation remains isolated.
+Legacy scope keys are retained; previously duplicated window scopes are not merged.
 Newly covered days receive baseline events, rather than new-item alerts. Only
 new source tuples strictly inside previously checked coverage are classified as
 first observations. This is conservative because API boundary inclusion and
@@ -270,3 +272,54 @@ come from locally stored agenda text, including ordinary lessons for the school
 list and unfinished marked work for the home list. Unknown material remains
 explicitly marked for review. No new API, server update or permission is needed.
 See [schoolbag behavior and verification](docs/schoolbag.md).
+
+## Guided setup and installation selection
+
+On opening the popup, dashboard or settings, setup checks the existing connection
+and permissions. A missing connection starts a three-step guide: connect the school
+and pupil agenda, choose monitoring/notifications, then optionally join an existing
+progress group using its private pairing code (or create one). Sharing can be skipped.
+There is no new account system. Completion is stored locally by the worker and
+removed with local data. Later instellen postpones the guide for the current view.
+Lost host permission or an expired session returns to connection repair; a missing
+permission for an enabled notification channel returns to preferences.
+
+Click the extension icon while the Schoolware site is open to read its address
+using activeTab. Only the origin of a likely Schoolware page is used; page content
+and unrelated tab URLs are not stored. Settings also allow a school address to be
+entered explicitly. Optional HTTPS host access is declared broadly because schools
+use custom domains, but requested only for the exact selected origin. The agenda
+path and five parameters stay constrained. Discovery binds origin, tab, top frame,
+initiator and a five-minute deadline, with no headers or bodies collected.
+Banner scripts and periodic checks use the connected origin; switching origins
+revokes the previous host grant. Encrypted progress item keys include the installation
+origin, preserving existing Wetteren-Lede keys. No backend change is required.
+
+See [multi-installation acceptance](docs/multi-installation-setup.md) for assumptions
+and remaining real-browser acceptance checks.
+
+Schoolbag suggestions are optional and enabled by default, including when older
+preferences are upgraded. Explicitly saved visibility choices are preserved.
+Use **Boekentas tonen onder de to-do** in settings to change visibility.
+The panel appears below the to-do overview and above dashboard planning; changing
+the setting immediately updates open extension views without deleting history.
+
+Connection status in the popup, dashboard and settings shows the latest check
+outcome and the last successful observation independently. Session expiry prompts
+the parent to sign in again without erasing history; network errors do not imply
+expired credentials. A saved connection alone does not prove a working session.
+
+Packing suggestions can be marked as packed or hidden, with a restore control.
+These choices are stored only in the existing local IndexedDB profile, separately
+for each selected day and packing direction. SHA-256 fingerprints of the suggestion
+and its source evidence invalidate choices when instructions change, without
+duplicating agenda text in packing metadata. Choices are not progress updates and
+are never synchronized. Past choices are pruned during successful observations;
+profile deletion and history retention remove their enclosing profile. No schema
+upgrade or additional permission is needed.
+
+Upcoming planning initially shows five positively known agenda days and at most
+20 tasks. Parents can expand by five days or show more tasks. Ongoing tasks and
+observed weekend deadlines remain eligible; unknown dates are not assumed to be
+school holidays. Earlier/all-task selections remain available. The dashboard has
+one to-do overview, followed by the optional schoolbag and planning.

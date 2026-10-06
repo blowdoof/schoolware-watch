@@ -9,7 +9,8 @@ export function createObservationInput(requestUrl: string, points: AgendaPoint[]
   return { scopeId, checkId, observedAt, complete: false, identityVerified: false,
     points: points.map((point) => ({
       // Exact observed source tuples only. No claim of a stable entity key or
-      // merging across recurrences, changed IDs, profiles, filters, or date windows.
+      // merging across recurrences, changed IDs, profiles or agenda selections.
+      // The worker resolves calendar-window changes to an existing profile first.
       sourceKey: JSON.stringify([point.ID, point.AgendaID, point.UniekAgendaPuntID,
         point.OrigineelPuntID ?? null, point.HerhaaldAgendaPuntID ?? null]),
       category: classifyAgendaType(new URL(scopeId).origin, point.TypePunt),

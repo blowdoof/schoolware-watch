@@ -13,21 +13,24 @@ import { ActivityRepository, activityInput, type AuditContext } from '../storage
 import { type ActivityAction, type ActivityData, type ActivityPhase, type ActivityView, type ActivityReporter, type ActivityTrigger } from '../shared/activity';
 import { createTasksView, type TasksView } from '../shared/tasks';
 import { createSchoolbagView, type SchoolbagView } from '../shared/schoolbag';
+import { availablePackingChoices } from '../domain/schoolbag';
 import { isAlertId } from '../shared/browser-alerts';
 import type { Category, HistoryScope } from '../domain/observations';
 import { notificationEventSelection } from '../domain/notification-window';
 import { todoReminderSelection } from '../domain/todo';
 import type { NotificationTestResult } from '../shared/notifications';
-import { BROWSER_ALERTS_KEY, BROWSER_PERMISSIONS, browserAlertsText, isWebsiteSender, type BrowserAlert, type BrowserAlertsView } from '../shared/browser-alerts';
+import { BROWSER_ALERTS_KEY, browserPermissions, browserAlertsText, isWebsiteSender, type BrowserAlert, type BrowserAlertsView } from '../shared/browser-alerts';
 import { BrowserAlertInbox, UNCONNECTED_TEST_SCOPE } from './browser-alert-inbox';
 import { configureWebsiteAlerts, broadcastWebsiteAlerts } from './website-alerts';
 import { notificationPage, isNotificationTarget, testNotificationDetails, validateNotificationDetails,
   type NotificationDetailsView } from '../shared/notification-details';
 import { createHistoryView, type HistoryView } from '../shared/history';
 import { DEFAULT_PREFERENCES, PREFERENCES_KEY, validateStoredPreferences, type PreferencesView } from '../shared/preferences';
-import { SCHOOLWARE_PERMISSION } from '../schoolware/agenda-request';
+import { SCHOOLWARE_ORIGIN, schoolwarePermission, schoolwareOrigin } from '../schoolware/agenda-request';
 import { CONNECTION_KEY, EMPTY_CONNECTION, isExtensionPage, validateConnectionMessage,
   validateConnectionState, type ConnectionMessage, type ConnectionState } from '../shared/connection';
+
+import { SETUP_KEY } from '../shared/setup';
 
 export const MONITOR_ALARM = 'schoolware-monitor';
 export const MONITOR_STATE_KEY = 'schoolwareMonitoringState';
@@ -106,7 +109,7 @@ async function ensureAlarm(current?: Trace): Promise<void> {
   const connection = await readConnection();
   const prefs = await readPreferences();
   if (!connection.requestUrl || !prefs.monitoringEnabled ||
-      !await chrome.permissions.contains({ origins: [SCHOOLWARE_PERMISSION] })) {
+      !await chrome.permissions.contains({ origins: [schoolwarePermission(connection.requestUrl)] })) {
     const removed = await chrome.alarms.clear(MONITOR_ALARM);
     if (current) await log(current, 'alarm.configured', removed ? 'succeeded' : 'skipped', { alarm: 'agenda', reason: 'disabled' });
     return;
@@ -126,14 +129,14 @@ async function preferencesView(): Promise<PreferencesView> {
   const alarm = await chrome.alarms.get(MONITOR_ALARM);
   const retry = await readRetryState();
   return { ok: true, preferences, notificationPermission: await chrome.permissions.contains({ permissions: ['notifications'] }),
-    browserPermission: await chrome.permissions.contains(BROWSER_PERMISSIONS),
+    browserPermission: await chrome.permissions.contains(browserPermissions((await readConnection()).requestUrl ?? SCHOOLWARE_ORIGIN)),
     monitoringScheduled: Boolean(alarm), nextCheckAt: alarm ? new Date(alarm.scheduledTime).toISOString() : null, retryAt: retry.retryAt };
 }
 
 async function browserAlertsView(): Promise<BrowserAlertsView> {
   const connection = await readConnection();
   const prefs = await readPreferences();
-  const enabled = prefs.browserNotificationsEnabled && await chrome.permissions.contains(BROWSER_PERMISSIONS);
+  const enabled = prefs.browserNotificationsEnabled && await chrome.permissions.contains(browserPermissions(connection.requestUrl ?? SCHOOLWARE_ORIGIN));
   const stored = await history.read(connection.requestUrl);
   const entries = await browserInbox.read(connection.requestUrl ?? UNCONNECTED_TEST_SCOPE, stored.retentionDays);
   const todo = prefs.todoRemindersEnabled && stored.scope ?
@@ -247,7 +250,7 @@ async function notify(scope: HistoryScope, checkId: string, now: Date, currentGe
   const added = events.filter((event) => event.kind === 'observed' || event.kind === 'reappeared').length;
   const changed = events.length - added;
   await log(current, 'notification.selection', 'succeeded', { ...selectionData, added, changed });
-  if (prefs.browserNotificationsEnabled && await chrome.permissions.contains(BROWSER_PERMISSIONS) && generation === currentGeneration) {
+  if (prefs.browserNotificationsEnabled && await chrome.permissions.contains(browserPermissions((await readConnection()).requestUrl ?? SCHOOLWARE_ORIGIN)) && generation === currentGeneration) {
     const stored = await history.read(scope.scopeId);
     try {
       await browserInbox.publish(scope.scopeId, { id: checkId, createdAt: now.toISOString(), added, changed,
@@ -263,7 +266,7 @@ async function notify(scope: HistoryScope, checkId: string, now: Date, currentGe
     await log(current, 'notification.system', 'skipped', { reason: 'already-claimed' }); return;
   }
   const reopened = events.filter((event) => event.taskReopened).length;
-  await createNotification(checkId, `${added} nieuwe of opnieuw zichtbare en ${changed} gewijzigde of niet meer zichtbare agendapunten binnen ${prefs.notificationDays} dagen.${reopened ? ` ${reopened} voltooide taken weer op Bezig gezet.` : ''} Klik voor de lesdetails.`, false, current);
+  await createNotification(checkId, `${added} nieuwe of opnieuw zichtbare en ${changed} gewijzigde agendapunten binnen ${prefs.notificationDays} dagen.${reopened ? ` ${reopened} voltooide taken weer op Bezig gezet.` : ''} Klik voor de lesdetails.`, false, current);
 }
 
 async function notifyTodo(scopeId: string, now: Date, currentGeneration: number, current: Trace): Promise<void> {
@@ -271,7 +274,7 @@ async function notifyTodo(scopeId: string, now: Date, currentGeneration: number,
   if (generation !== currentGeneration || !prefs.todoRemindersEnabled) {
     await log(current, 'notification.todo', 'skipped', { reason: generation !== currentGeneration ? 'cancelled' : 'disabled' }); return;
   }
-  const browser = prefs.browserNotificationsEnabled && await chrome.permissions.contains(BROWSER_PERMISSIONS);
+  const browser = prefs.browserNotificationsEnabled && await chrome.permissions.contains(browserPermissions((await readConnection()).requestUrl ?? SCHOOLWARE_ORIGIN));
   const system = prefs.notificationsEnabled && Boolean(chrome.notifications) && await chrome.permissions.contains({ permissions: ['notifications'] });
   if ((!browser && !system) || generation !== currentGeneration) {
     await log(current, 'notification.todo', 'skipped', { reason: generation !== currentGeneration ? 'cancelled' :
@@ -307,7 +310,8 @@ async function notifyTodo(scopeId: string, now: Date, currentGeneration: number,
 async function runCheck(requestUrl: string, controller: AbortController, currentGeneration: number, current: Trace): Promise<ConnectionState> {
   await log(current, 'check', 'started');
   try {
-    if (!await chrome.permissions.contains({ origins: [SCHOOLWARE_PERMISSION] })) {
+    requestUrl = await history.resolveProfileLink(requestUrl);
+    if (!await chrome.permissions.contains({ origins: [schoolwarePermission(requestUrl)] })) {
       const state = { ...summary('permission-required'), requestUrl };
       if (generation === currentGeneration) {
         await chrome.storage.local.set({ [CONNECTION_KEY]: state });
@@ -317,6 +321,7 @@ async function runCheck(requestUrl: string, controller: AbortController, current
       return state;
     }
     if (generation !== currentGeneration) return EMPTY_CONNECTION;
+    const previousConnection = await readConnection();
     const prefs = await readPreferences();
     const fetchUrl = monitoringRequest(requestUrl, new Date(), prefs.notificationDays);
     await chrome.storage.local.set({ [CONNECTION_KEY]: { requestUrl, lastCheck: null } });
@@ -332,6 +337,7 @@ async function runCheck(requestUrl: string, controller: AbortController, current
     const checkId = current.correlationId;
     if (result.status === 'success') {
       const input = createObservationInput(requestUrl, result.points, checkId, checkedAt);
+      input.allowClockRollback = true;
       input.coverage = requestCoverage(fetchUrl);
       input.legacyCoverage = requestCoverage(requestUrl);
       if (prefs.notificationsEnabled || prefs.browserNotificationsEnabled) {
@@ -352,6 +358,12 @@ async function runCheck(requestUrl: string, controller: AbortController, current
     if (retryAt) await log(current, 'retry.scheduled', 'info', { retryAt });
     if (result.status !== 'success') await log(current, 'check', 'failed', { reason: result.status });
     await ensureAlarm(current);
+    // Refresh existing pages as well as persistent registration after reloads.
+    await configureWebsite(prefs.browserNotificationsEnabled, current).catch(() => {});
+    if (previousConnection.requestUrl && schoolwareOrigin(previousConnection.requestUrl) !== schoolwareOrigin(requestUrl)) {
+      await broadcastWebsiteAlerts(schoolwareOrigin(previousConnection.requestUrl)!).catch(() => {});
+      await chrome.permissions.remove({ origins: [schoolwarePermission(previousConnection.requestUrl)] }).catch(() => false);
+    }
     await refreshBrowserBadge(prefs.browserNotificationsEnabled, current).catch(() => {});
     if (committed) {
       if (await synchronizeProgress(requestUrl, progressReporter(current, 'agenda-check'), current)) await invalidateTaskViews();
@@ -393,9 +405,19 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
   // operational messages still require successful storage access isolation.
   if (message.type === 'activity.read') return readActivity(message);
   await initialization;
+  if (message.type === 'setup.complete') return serializeMutation(async () => {
+    const connection = await readConnection();
+    if (!connection.requestUrl || !(await history.read(connection.requestUrl)).scope ||
+        !await chrome.permissions.contains({ origins: [schoolwarePermission(connection.requestUrl)] })) throw new Error('Setup incomplete');
+    const prefs = await preferencesView();
+    if ((prefs.preferences.notificationsEnabled && !prefs.notificationPermission) ||
+        (prefs.preferences.browserNotificationsEnabled && !prefs.browserPermission)) throw new Error('Permission missing');
+    await chrome.storage.local.set({ [SETUP_KEY]: true, [PREFERENCES_KEY]: prefs.preferences });
+    return connection;
+  });
   if (message.type === 'connection.discovery.start') return serializeMutation(async () => {
     registerAgendaDiscovery(observeDiscovery);
-    return beginAgendaDiscovery();
+    return beginAgendaDiscovery(message.origin, message.tabId);
   });
   if (message.type === 'connection.discovery.read') return serializeMutation(readAgendaDiscovery);
   if (message.type === 'connection.discovery.cancel') return serializeMutation(async () => {
@@ -456,19 +478,29 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
         await log(current, 'progress.connection', 'succeeded', { trigger: 'disconnect', reason: 'disabled' });
       }
       if (message.type === 'sync.delete') await deleteRemoteProgress(progressReporter(current, 'manual'));
+      if (message.type === 'sync.run') await progressSync.resume();
       if (message.type === 'sync.disconnect' || message.type === 'sync.delete') await chrome.permissions.remove({ origins: [SYNC_PERMISSION] });
       await configureProgressSyncAlarm(progressReporter(current, 'manual'));
       if (message.type === 'sync.create' || message.type === 'sync.connect' || message.type === 'sync.run') {
         await synchronizeProgress(connection.requestUrl, progressReporter(current, 'manual'), current);
+        await configureProgressSyncAlarm(progressReporter(current, 'manual'));
       }
       await invalidateTaskViews();
       await refreshBrowserBadge(true, current).catch(() => {});
       return progressSync.view();
     });
   }
-  if (message.type === 'schoolbag.read') {
+  if (message.type === 'schoolbag.read' || message.type === 'schoolbag.update') {
     return serializeMutation(async () => {
       const connection = await readConnection();
+      if (message.type === 'schoolbag.update') {
+        if (!connection.requestUrl) throw new Error('Profile unavailable');
+        const agenda = createSchoolbagView((await history.read(connection.requestUrl)).scope);
+        const day = (await availablePackingChoices(agenda, new Date())).get(message.choiceId);
+        if (!day) throw new Error('Packing suggestion unavailable');
+        await history.setPackingChoice(connection.requestUrl, message.choiceId, day, message.state);
+        await invalidateTaskViews();
+      }
       return createSchoolbagView((await history.read(connection.requestUrl)).scope);
     });
   }
@@ -505,7 +537,10 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
     await log(current, 'permission.requested', 'info', { permission: message.permission, reason: message.granted ? 'granted' : 'denied' });
     return preferencesView();
   }
-  if (message.type === 'connection.read') return readConnection();
+  if (message.type === 'connection.read') {
+    const connection = await readConnection();
+    return { ...connection, lastSuccessAt: (await history.read(connection.requestUrl)).scope?.lastSuccessAt ?? null };
+  }
   if (message.type === 'history.read') return readHistory(message.category);
   if (message.type === 'preferences.read') return preferencesView();
   if (message.type === 'notifications.details') {
@@ -547,7 +582,7 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
       const scopeId = connection.requestUrl ?? UNCONNECTED_TEST_SCOPE;
       const stored = await history.read(connection.requestUrl);
       if (message.type === 'browser.alerts.test') {
-        if (!await chrome.permissions.contains(BROWSER_PERMISSIONS)) {
+        if (!await chrome.permissions.contains(browserPermissions((await readConnection()).requestUrl ?? SCHOOLWARE_ORIGIN))) {
           await log(current, 'banner.published', 'skipped', { reason: 'permission-required', test: true });
           throw new Error('Website permission required');
         }
@@ -581,7 +616,7 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
         await log(current, 'preferences.saved', 'succeeded', { intervalMinutes: message.preferences.intervalMinutes, days: message.preferences.notificationDays,
           monitoringEnabled: message.preferences.monitoringEnabled, notificationsEnabled: message.preferences.notificationsEnabled,
           browserNotificationsEnabled: message.preferences.browserNotificationsEnabled, categories: message.preferences.notificationCategories,
-          todoRemindersEnabled: message.preferences.todoRemindersEnabled,
+          todoRemindersEnabled: message.preferences.todoRemindersEnabled, schoolbagEnabled: message.preferences.schoolbagEnabled,
           newColor: message.preferences.newColor, changedColor: message.preferences.changedColor });
         await ensureAlarm(current);
         await configureWebsite(message.preferences.browserNotificationsEnabled, current);
@@ -591,6 +626,7 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
       if (message.type === 'connection.clear') {
         erasingData = true;
         try {
+        const oldConnection = await readConnection();
         await cancelAgendaDiscovery(false, false);
         await chrome.alarms.clear(MONITOR_ALARM);
         await configureWebsiteAlerts(false);
@@ -601,12 +637,12 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
         await configureProgressSyncAlarm(progressReporter(current, 'disconnect'));
         await history.clearAll();
         await browserInbox.clear(DEFAULT_RETENTION);
-        await chrome.storage.local.remove([CONNECTION_KEY, PREFERENCES_KEY, MONITOR_STATE_KEY, BROWSER_ALERTS_KEY, LOG_HEALTH_KEY]);
+        await chrome.storage.local.remove([CONNECTION_KEY, PREFERENCES_KEY, MONITOR_STATE_KEY, BROWSER_ALERTS_KEY, LOG_HEALTH_KEY, SETUP_KEY]);
         logGeneration++;
         logWriteFailed = false;
         await chrome.action.setBadgeText({ text: '' });
-        await broadcastWebsiteAlerts();
-        await chrome.permissions.remove({ origins: [SCHOOLWARE_PERMISSION, SYNC_PERMISSION], permissions: ['scripting', 'webRequest'] });
+        await broadcastWebsiteAlerts(schoolwareOrigin(oldConnection.requestUrl) ?? SCHOOLWARE_ORIGIN);
+        await chrome.permissions.remove({ origins: [schoolwarePermission(oldConnection.requestUrl ?? SCHOOLWARE_ORIGIN), SYNC_PERMISSION], permissions: ['scripting', 'webRequest'] });
         await invalidateTaskViews();
         return EMPTY_CONNECTION;
         } finally { erasingData = false; }
@@ -674,11 +710,13 @@ chrome.runtime.onMessage.addListener((raw: unknown, sender, sendResponse) => {
   const message = validateConnectionMessage(raw);
   if (!message) { void initialization.then(() => log(trace('worker'), 'message.rejected', 'info', { reason: 'invalid-message' })).catch(() => {}); return false; }
   if (!isExtensionPage(sender, chrome.runtime.id)) {
-    if (!isWebsiteSender(sender, chrome.runtime.id) || !['browser.alerts.read', 'browser.alerts.dismiss', 'browser.alerts.open', 'browser.alerts.rendered'].includes(message.type)) {
+    if (!isWebsiteSender(sender, chrome.runtime.id, schoolwareOrigin(sender.url) ?? '') || !['browser.alerts.read', 'browser.alerts.dismiss', 'browser.alerts.open', 'browser.alerts.rendered'].includes(message.type)) {
       void initialization.then(() => log(trace('worker'), 'message.rejected', 'info', { reason: 'untrusted-sender' })).catch(() => {}); return false;
     }
     void (async () => {
-      if (!await chrome.permissions.contains(BROWSER_PERMISSIONS) || !(await readPreferences()).browserNotificationsEnabled) {
+      const origin = schoolwareOrigin((await readConnection()).requestUrl) ?? SCHOOLWARE_ORIGIN;
+      if (!isWebsiteSender(sender, chrome.runtime.id, origin)) return { ok: true, enabled: false, entries: [] } satisfies BrowserAlertsView;
+      if (!await chrome.permissions.contains(browserPermissions((await readConnection()).requestUrl ?? SCHOOLWARE_ORIGIN)) || !(await readPreferences()).browserNotificationsEnabled) {
         return { ok: true, enabled: false, entries: [] } satisfies BrowserAlertsView;
       }
       return loggedHandle(message, trace('schoolware'));
@@ -693,7 +731,7 @@ chrome.runtime.onMessage.addListener((raw: unknown, sender, sendResponse) => {
     else if (message.type.startsWith('browser.alerts.')) sendResponse({ ok: false, enabled: false, entries: [] });
     else if (message.type === 'notifications.test') sendResponse({ status: 'api-error', permissionLevel: 'unknown', registered: null });
     else if (message.type === 'notifications.details') sendResponse({ ok: false, status: 'missing', details: null });
-    else if (message.type === 'schoolbag.read') sendResponse({ ok: false, lastSuccessAt: null, points: [] });
+    else if (message.type === 'schoolbag.read' || message.type === 'schoolbag.update') sendResponse({ ok: false, lastSuccessAt: null, points: [] });
     else if (message.type.startsWith('tasks.')) sendResponse({ ok: false, entries: [] });
     else if (message.type.startsWith('activity.')) sendResponse({ ok: false, healthy: false, entries: [], total: 0, retentionDays: DEFAULT_RETENTION });
     else if (message.type.startsWith('history.')) sendResponse({ ...createHistoryView(null, DEFAULT_RETENTION), ok: false });
@@ -758,7 +796,7 @@ chrome.permissions.onAdded.addListener((permissions) => {
 function notificationCorrelation(id: string): string | null {
   if (!id.startsWith(NOTIFICATION_PREFIX)) return null;
   const suffix = id.slice(NOTIFICATION_PREFIX.length);
-  const correlation = suffix.startsWith('test-') ? suffix.slice(5) : suffix;
+  const correlation = suffix.startsWith('test-') ? suffix.slice(5) : suffix.startsWith('progress-') ? suffix.slice(9) : suffix;
   return isAlertId(correlation) ? correlation : null;
 }
 
@@ -767,8 +805,9 @@ function registerNotificationListener(): void {
   chrome.notifications.onClicked.addListener((id) => {
     if (!id.startsWith(NOTIFICATION_PREFIX)) return;
     const suffix = id.slice(NOTIFICATION_PREFIX.length);
+    const progress = suffix.startsWith('progress-') && isAlertId(suffix.slice(9));
     const target = suffix === 'test' || (suffix.startsWith('test-') && isNotificationTarget(suffix.slice(5))) ? 'test' : suffix;
-    if (!isNotificationTarget(target)) return;
+    if (!progress && !isNotificationTarget(target)) return;
     const current = trace('system', notificationCorrelation(id) ?? crypto.randomUUID());
     void (async () => {
       await initialization;
@@ -776,7 +815,7 @@ function registerNotificationListener(): void {
       if (existing.entries[0]?.profileId) current.profileId = existing.entries[0].profileId;
       if (existing.total) await log(current, 'notification.clicked', 'info', { test: target === 'test' });
       try {
-        await chrome.tabs.create({ url: chrome.runtime.getURL(notificationPage(target)) });
+        await chrome.tabs.create({ url: chrome.runtime.getURL(progress ? 'dashboard.html' : notificationPage(target)) });
         await chrome.notifications.clear(id);
         if (existing.total) await log(current, 'notification.cleared', 'succeeded', { test: target === 'test' });
       } catch { await log(current, 'notification.clicked', 'failed', { reason: 'api-error' }); }

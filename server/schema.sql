@@ -3,7 +3,13 @@ CREATE TABLE IF NOT EXISTS sw_sync_groups (
     id CHAR(32) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
     token_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL UNIQUE,
     revision BIGINT UNSIGNED NOT NULL DEFAULT 0,
-    enabled TINYINT UNSIGNED NOT NULL DEFAULT 1
+    enabled TINYINT UNSIGNED NOT NULL DEFAULT 1,
+    last_active_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- Small revocation tombstones prevent expired disabled groups from re-registering.
+CREATE TABLE IF NOT EXISTS sw_sync_revoked_tokens (
+    token_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY
 ) ENGINE=InnoDB;
 
 -- Participant labels remain encrypted and are scoped to the authenticated group.

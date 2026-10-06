@@ -17,4 +17,5 @@ return [
     // All valid API actions, including retries and failed operations.
     'requests_per_minute' => 6000,
     'requests_per_token_minute' => 120,
+    'requests_per_unknown_peer_minute' => 120,
 ];

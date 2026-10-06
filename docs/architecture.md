@@ -105,9 +105,11 @@ creation. A detected change usually occurred between comparable successful
 checks; do not present its observation time as the exact source change time.
 Items outside a moving window are outside coverage, not disappeared.
 
-Identity is scoped by the canonical request URL, including installation, pupil,
-agenda selection, mapping and configured date window. Requests use rolling dates
-without changing this configured scope key. New source tuples outside previous
+Profile matching uses the canonical request's installation, pupil, agenda selection
+and mapping, excluding MinTot/MaxVan. The worker reuses a retained legacy scope key
+before checking, preferring its existing sharing connection then original baseline.
+Existing duplicate window scopes are retained rather than destructively merged.
+Requests use rolling dates without changing the selected legacy scope key. New source tuples outside previous
 successful coverage receive baseline events. Legacy checks without coverage use
 the original configured dates as their conservative coverage. Boundary days are
 excluded from new-item classification until boundary semantics are verified.
@@ -117,10 +119,11 @@ This compares only identical observed tuples and does not assert a stable entity
 identity. Changed tuples are first observations; no recurrence or rescheduling
 merge is attempted. Duplicate tuples abort the write. Broader identity matching
 requires verification of ID stability and relationships first.
-For the tested installation, TypePunt 101 is classified as a test and 1001 as an
-assignment based on owner-confirmed examples. TypePunt 2 remains a review
-category because it also appears on ordinary lesson content. Other values
-remain unclassified until their meanings are established.
+Public Schoolware frontends from KOHa and Scholen Molenland confirm fixed
+TypePunt ranges: 100–999 tests, 1000–1999 assignments, and 9 attention points
+(the review category). Types 1 and 2 are unmarked lesson information; activities
+2000–2999 and unknown values remain Other. Classification and task eligibility
+share one pure domain classifier, including integer validation and range bounds.
 Normalize meaningful fields deterministically, preserving source date semantics
 until timezone and serialization behavior are verified.
 
@@ -130,9 +133,11 @@ Chrome test, including with the Schoolware tab closed. An open Schoolware tab
 is not required for the tested session. Logging out correctly results in a
 session-unavailable status. No tab bridge is needed for this integration.
 Do not extract or persist cookies or tokens. Permissions are added only as the integration
-requires them. The manifest requests storage and alarms, and declares optional
-notifications, scripting and host access only for the observed Schoolware installation. Only trusted bundled
-extension pages can invoke the manual-check message; arbitrary URLs, extra query
+requires them. The manifest requests storage, alarms and activeTab, and declares optional
+notifications, scripting, webRequest and HTTPS host access. Each host request
+names the exact user-selected installation; the broad optional declaration allows
+custom school domains without granting all-sites access. Only trusted bundled
+extension pages can invoke the manual-check message; URLs outside the constrained agenda contract, extra query
 parameters, credentials in URLs, and unknown message fields are rejected.
 No full agenda payload is persisted or sent to the UI. History messages expose
 display snapshots and counts, not source keys or profile IDs. Structured comments

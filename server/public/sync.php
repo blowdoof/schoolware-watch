@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 // PHP 8.2 / PDO MySQL. No Schoolware transport or plaintext agenda data.
 ini_set('display_errors', '0');
+require '/home/example-account/maintenance.php';
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
@@ -30,17 +31,26 @@ function validOperation(mixed $value): bool {
 function enforceRequestLimits(PDO $pdo, array $config, string $tokenHash): void {
     $globalLimit = $config['requests_per_minute'] ?? 6000;
     $tokenLimit = $config['requests_per_token_minute'] ?? 120;
-    foreach ([$globalLimit, $tokenLimit] as $limit) {
+    $unknownLimit = $config['requests_per_unknown_peer_minute'] ?? 120;
+    foreach ([$globalLimit, $tokenLimit, $unknownLimit] as $limit) {
         if (!is_int($limit) || $limit < 1 || $limit > 100000) throw new RuntimeException('Invalid request limit');
     }
     $window = gmdate('Y-m-d H:i:00');
     $pdo->beginTransaction();
-    // Lock global first, including unknown tokens. Unknown tokens never create
-    // per-token rows, keeping storage bounded without storing IPs or secrets.
-    $buckets = [hash('sha256', 'requests:global') => $globalLimit];
+    $buckets = [];
     $known = $pdo->prepare('SELECT id FROM sw_sync_groups WHERE token_hash = ? AND enabled = 1');
     $known->execute([$tokenHash]);
-    if ($known->fetchColumn() !== false) $buckets[hash('sha256', 'requests:' . $tokenHash)] = $tokenLimit;
+    if ($known->fetchColumn() !== false) {
+        $buckets[hash('sha256', 'requests:global')] = $globalLimit;
+        $buckets[hash('sha256', 'requests:' . $tokenHash)] = $tokenLimit;
+    } else {
+        $seed = $pdo->prepare('INSERT IGNORE INTO sw_sync_registration_settings (singleton, enabled, rate_secret) VALUES (1, 0, ?)');
+        $seed->execute([bin2hex(random_bytes(32))]);
+        $secret = $pdo->query('SELECT rate_secret FROM sw_sync_registration_settings WHERE singleton = 1')->fetchColumn();
+        if (!is_string($secret)) throw new RuntimeException('Missing rate secret');
+        $peer = ratePeer($_SERVER['REMOTE_ADDR'] ?? '');
+        $buckets[hash_hmac('sha256', 'unknown:' . $window . ':' . $peer, $secret)] = $unknownLimit;
+    }
     $create = $pdo->prepare('INSERT INTO sw_sync_request_limits (bucket_key, window_start, requests) VALUES (?, ?, 0) ON DUPLICATE KEY UPDATE requests = requests');
     $read = $pdo->prepare('SELECT requests FROM sw_sync_request_limits WHERE bucket_key = ? AND window_start = ? FOR UPDATE');
     $increment = $pdo->prepare('UPDATE sw_sync_request_limits SET requests = requests + 1 WHERE bucket_key = ? AND window_start = ?');
@@ -61,6 +71,9 @@ function enforceRequestLimits(PDO $pdo, array $config, string $tokenHash): void 
 function registerGroup(PDO $pdo, array $config, string $tokenHash): never {
     // Serialize registration quotas and inserts; the caller owns the transaction.
     $settings = $pdo->query('SELECT enabled, rate_secret FROM sw_sync_registration_settings WHERE singleton = 1 FOR UPDATE')->fetch(PDO::FETCH_ASSOC);
+    $revoked = $pdo->prepare('SELECT token_hash FROM sw_sync_revoked_tokens WHERE token_hash = ?');
+    $revoked->execute([$tokenHash]);
+    if ($revoked->fetchColumn() !== false) { $pdo->rollBack(); reply(401, ['ok' => false]); }
     $existing = $pdo->prepare('SELECT enabled FROM sw_sync_groups WHERE token_hash = ? FOR UPDATE');
     $existing->execute([$tokenHash]);
     $enabled = $existing->fetchColumn();
@@ -81,8 +94,7 @@ function registerGroup(PDO $pdo, array $config, string $tokenHash): never {
     if ((int)$pdo->query('SELECT COUNT(*) FROM sw_sync_groups')->fetchColumn() >= $maxGroups) {
         $pdo->rollBack(); reply(429, ['ok' => false]);
     }
-    $peer = $_SERVER['REMOTE_ADDR'] ?? '';
-    if (filter_var($peer, FILTER_VALIDATE_IP) === false) throw new RuntimeException('Missing peer');
+    $peer = ratePeer($_SERVER['REMOTE_ADDR'] ?? '');
     $window = gmdate('Y-m-d H:00:00');
     // Do not trust proxy headers or store raw IPs; rotate the keyed digest hourly.
     $buckets = [hash('sha256', 'global') => $globalLimit,
@@ -154,6 +166,8 @@ try {
     if ($group === false) { $pdo->rollBack(); reply(401, ['ok' => false]); }
     $groupId = $group['id'];
     $revision = (int)$group['revision'];
+    $touch = $pdo->prepare('UPDATE sw_sync_groups SET last_active_at = UTC_TIMESTAMP() WHERE id = ?');
+    $touch->execute([$groupId]);
     if ($body['action'] === 'members') {
         $days = $config['retention_days'] ?? 90;
         if (!in_array($days, [30, 90, 180, 365], true)) throw new RuntimeException('Invalid retention');
