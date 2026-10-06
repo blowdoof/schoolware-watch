@@ -1,20 +1,12 @@
-import { SCHOOLWARE_ORIGIN } from './agenda-request';
+import { schoolwareOrigin } from './agenda-request';
+import { agendaCategory } from '../domain/agenda-types';
 
 export type AgendaCategory = 'tests' | 'assignments' | 'review' | 'other';
 export type AgendaTypeCounts = Record<AgendaCategory, number>;
 
-/** Evidence applies to the inspected installation, not every WISA deployment. */
+/** Classify validated installations using the publicly verified Schoolware ranges. */
 export function classifyAgendaType(origin: string, typePunt: number): AgendaCategory {
-  if (origin !== SCHOOLWARE_ORIGIN) return 'other';
-  switch (typePunt) {
-    case 100:
-    case 101: return 'tests';
-    case 1002:
-    case 1001: return 'assignments';
-    // Starred points are relevant, without asserting assignment/test semantics.
-    case 9: return 'review';
-    default: return 'other';
-  }
+  return schoolwareOrigin(origin) ? agendaCategory(typePunt) : 'other';
 }
 
 export function summarizeAgendaTypes(

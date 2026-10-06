@@ -1,4 +1,4 @@
-/** Minimal source fields; identity and TypePunt semantics are not yet verified. */
+/** Minimal source fields; identity relationships and response completeness remain unverified. */
 export interface AgendaPoint {
   ID: number;
   AgendaID: number;

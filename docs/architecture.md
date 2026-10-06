@@ -119,10 +119,11 @@ This compares only identical observed tuples and does not assert a stable entity
 identity. Changed tuples are first observations; no recurrence or rescheduling
 merge is attempted. Duplicate tuples abort the write. Broader identity matching
 requires verification of ID stability and relationships first.
-For the tested installation, TypePunt 101 is classified as a test and 1001 as an
-assignment based on owner-confirmed examples. TypePunt 2 remains a review
-category because it also appears on ordinary lesson content. Other values
-remain unclassified until their meanings are established.
+Public Schoolware frontends from KOHa and Scholen Molenland confirm fixed
+TypePunt ranges: 100–999 tests, 1000–1999 assignments, and 9 attention points
+(the review category). Types 1 and 2 are unmarked lesson information; activities
+2000–2999 and unknown values remain Other. Classification and task eligibility
+share one pure domain classifier, including integer validation and range bounds.
 Normalize meaningful fields deterministically, preserving source date semantics
 until timezone and serialization behavior are verified.
 

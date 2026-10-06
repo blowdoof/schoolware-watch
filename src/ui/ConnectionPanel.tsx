@@ -166,7 +166,7 @@ export function ConnectionPanel({ showSetup, refreshToken, onHistoryChanged }: {
             <p className="font-semibold">Je agenda is al gekoppeld aan Schoolware Watch.</p>
             <p>Gebruik Nu controleren om de gekoppelde agenda opnieuw op te halen.</p>
           </div> : <p className="mt-2 text-sm leading-6 text-slate-600">Schoolware is nog niet verbonden. Log in bij Schoolware in deze browser om je agenda te koppelen.</p>}
-          {connection.requestUrl && schoolwareOrigin(connection.requestUrl) !== SCHOOLWARE_ORIGIN && <p role="status" className="mt-3 text-sm text-amber-800">Experimentele installatie: ophalen en geschiedenis worden gecontroleerd op het verwachte formaat. Taak- en toetssoorten zijn hier nog niet bevestigd; punten staan bij Overige. To-do en gedeelde taakvoortgang zijn daardoor nog niet beschikbaar.</p>}
+          {connection.requestUrl && schoolwareOrigin(connection.requestUrl) !== SCHOOLWARE_ORIGIN && <p role="status" className="mt-3 text-sm text-amber-800">Nieuwe schoolinstallatie: ophalen en geschiedenis worden gecontroleerd op het ondersteunde agendaformaat. Taken en toetsen volgen de standaard Schoolware-typecodes. Controleer bij het eerste gebruik of de agenda en leerling overeenkomen met Schoolware.</p>}
           {(showSetup || !connection.requestUrl) && <div className="mt-4 space-y-3 text-sm">
             <p>{connection.requestUrl ? 'Wil je een andere agenda of leerling volgen? Klik op Andere agenda koppelen.' : 'Verbind met Schoolware, meld je aan en open de agenda van de gewenste leerling. Keer daarna terug naar dit scherm om de koppeling te bevestigen.'}</p>
             {candidate ? <p className="rounded-lg bg-teal-50 p-3">Schoolware-adres uit je geopende tabblad: <strong>{candidate.origin}</strong>.

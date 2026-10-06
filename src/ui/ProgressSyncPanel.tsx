@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { SCHOOLWARE_ORIGIN, schoolwareOrigin } from '../schoolware/agenda-request';
+import { validateAgendaRequest } from '../schoolware/agenda-request';
 import { validateConnectionState } from '../shared/connection';
 import { hex } from '../domain/progress-sync';
 import { SYNC_PERMISSION, parsePairingCode, normalizeSyncLabel, validateSyncView, type SyncMessage, type SyncView } from '../shared/progress-sync';
@@ -21,7 +21,7 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
     if (!available) return;
     let mounted = true;
     void chrome.runtime.sendMessage({ type: 'connection.read' }).then((raw: unknown) => {
-      if (mounted) setCompatible(schoolwareOrigin(validateConnectionState(raw)?.requestUrl) === SCHOOLWARE_ORIGIN);
+      if (mounted) setCompatible(Boolean(validateAgendaRequest(validateConnectionState(raw)?.requestUrl)));
     }).catch(() => {});
     void chrome.runtime.sendMessage({ type: 'sync.read' } satisfies SyncMessage).then((raw: unknown) => {
       const next = validateSyncView(raw);
@@ -39,7 +39,7 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
     setView(next); return next;
   }
   async function connect() {
-    if (!compatible) { setMessage('Taaksoorten zijn op deze installatie nog niet bevestigd. Gedeelde taakvoortgang is nog niet beschikbaar.'); return; }
+    if (!compatible) { setMessage('Koppel eerst een ondersteunde Schoolware-agenda en voer een geslaagde controle uit.'); return; }
     setWorking(true); setMessage('');
     try {
       // Request optional host access directly from the user's click.
@@ -92,7 +92,7 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
     <h2 className="font-semibold">Voortgang delen tussen computers</h2>
     <p className="mt-2 text-sm leading-6 text-slate-600">Deel Open, Bezig en Klaar via schoolware.bumper.be. Titels, instructies en Schoolware-inloggegevens blijven lokaal.
       Koppel alleen computers die de agenda van dezelfde leerling bekijken. Elke leerling heeft een eigen deelgroep en koppelcode; verschillende gezinnen blijven gescheiden.</p>
-    {!compatible && <p role="status" className="mt-3 text-sm text-amber-800">Koppel eerst een ondersteunde agenda. Voor experimentele installaties zijn taaksoorten en gedeelde taakvoortgang nog niet bevestigd.</p>}
+    {!compatible && <p role="status" className="mt-3 text-sm text-amber-800">Koppel eerst een ondersteunde Schoolware-agenda en voer een geslaagde controle uit om voortgang te delen.</p>}
     {view?.enabled ? <>
       {view.blocked && <p role="status" className="mt-3 text-sm text-amber-800">Automatische synchronisatie is gestopt: de server weigert deze koppeling. Controleer de koppelcode of vraag de beheerder om hulp. Nu synchroniseren probeert opnieuw; lokale voortgang blijft bewaard.</p>}
       <p className="mt-3 text-sm">{view.registrationPending ? view.blocked ? 'Je nieuwe leerlinggroep is nog niet geregistreerd; automatische pogingen zijn gestopt.' : 'Je nieuwe leerlinggroep wacht nog op registratie; Chrome probeert het automatisch opnieuw.' : 'Ingeschakeld voor de agendaselectie waarmee je hebt gekoppeld.'} {view.pending} wijzigingen wachten op verzending.</p>

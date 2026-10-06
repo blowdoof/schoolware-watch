@@ -14,9 +14,12 @@ compatibility is experimental, not a claim that every Schoolware school works.
   Public DNS names are not proof of Schoolware ownership. Users confirm their school.
 - The parent AgendaPunt path, GET method and five query parameters remain allowlisted.
   Discovery checks its persisted tab/origin/deadline and the top-frame initiator.
-- Runtime response validation remains unchanged. Completeness, ID relationships,
-  timezone and TypePunt values are not established for other installations.
-  Disappearance stays disabled. Other-installation categories stay Other.
+- Runtime response validation remains unchanged. Completeness, ID relationships
+  and timezone still require live checks on other installations. Public frontends
+  from KOHa and Scholen Molenland confirm standard TypePunt category ranges:
+  100–999 tests, 1000–1999 assignments and 9 marked attention points. These ranges
+  are now used across validated HTTPS installations; unknown types stay Other.
+  Disappearance stays disabled. See the public-code investigation below.
 - All history remains local and scoped by installation plus selection. Progress
   pseudonyms include the origin without changing old Wetteren-Lede keys. The fixed
   encrypted progress-only service, retention, deletion and shared-secret limits remain
@@ -39,8 +42,9 @@ Owner browser acceptance must still verify the native activeTab flow on the real
 Schoolware login page, exact-host permission prompt (grant/deny), tab navigation,
 agenda confirmation, session recovery and restart. A volunteer at another school
 can verify the expected parent endpoint and local history without supplying
-credentials or agenda captures. Confirm TypePunt semantics separately before
-enabling tasks or progress sharing for that installation. Update the store package
+credentials or agenda captures. Tasks and optional progress sharing use the
+verified standard ranges after a successful supported agenda check. Confirm the
+real task presentation and pupil selection during live acceptance. Update the store package
 and hosted privacy policy together when publication is separately authorized.
 
 Chrome's permission model follows [activeTab](https://developer.chrome.com/docs/extensions/develop/concepts/activeTab)
@@ -71,3 +75,10 @@ single-host/listener behavior and dismissal/redisplay. Banner visibility still
 requires enabled host/scripting access and an actual pending notification; the
 UI's test-banner action creates a generic synthetic example. No real Schoolware
 session or native permission approval is used by these automated checks.
+
+## Public type-code comparison (2026-10-06)
+
+See [source evidence and limits](reviews/2026-10-06-public-schoolware-type-codes.md).
+The independent Molenland portal serves the same bundle as KOHa. Public code
+establishes category ranges and parameter names, not authenticated transport or
+response completeness. The exact observed parent API path remains allowlisted.

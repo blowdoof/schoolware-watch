@@ -49,7 +49,7 @@ describe('user-selected installation boundaries', () => {
     expect(isSchoolwarePage('https://synthetic.schoolware.be/')).toBe(true);
     expect(isSchoolwarePage('https://synthetic-school.example/webouders/start.html')).toBe(true);
     expect(isSchoolwarePage('https://unrelated.example/news')).toBe(false);
-    expect(classifyAgendaType('https://synthetic.schoolware.be', 1001)).toBe('other');
+    expect(classifyAgendaType('https://synthetic.schoolware.be', 1001)).toBe('assignments');
   });
   it.each(['http://school.example', 'https://user:secret@school.example', 'https://localhost',
     'https://127.0.0.1', 'https://[::1]', 'https://school.local', 'https://school.example:8443'])('rejects unsafe installation addresses: %s', (value) => {

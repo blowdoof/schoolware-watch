@@ -988,6 +988,32 @@ describe('agenda discovery worker integration', () => {
     expect(reply).toMatchObject({ enabled: false, entries: [] });
     expect(await dispatch({ type: 'history.read' })).toMatchObject({ itemCount: 2, entries: [{ kind: 'baseline' }, { kind: 'baseline' }] });
   });
+  it('projects standard subtype ranges and pairs progress on another installation without sharing agenda content', async () => {
+    const selectedUrl = requestUrl.replace('https://schoolware_siw.ksgwl.be', 'https://synthetic.schoolware.be');
+    const types = [999, 1000, 1999, 2000, 2];
+    vi.mocked(fetchAgenda).mockResolvedValue({ ...success, count: types.length,
+      typeCounts: { tests: 1, assignments: 2, review: 0, other: 2 },
+      points: types.map((TypePunt, index) => ({ ...parsed.points[0]!, ID: 42000000000 + index, TypePunt })) });
+    await dispatch({ type: 'agenda.check', requestUrl: selectedUrl });
+    const tasks = validateTasksView(await dispatch({ type: 'tasks.read' }))!;
+    expect(tasks.entries.map((entry) => entry.snapshot.typePunt).sort((a, b) => a - b)).toEqual([999, 1000, 1999]);
+    const fetcher = vi.fn(async (_url: string, options: RequestInit) => {
+      const body = JSON.parse(options.body as string);
+      expect(body.action).toBe('exchange');
+      expect(options.body).not.toContain('synthetic.schoolware.be');
+      return Response.json({ ok: true, acknowledged: body.operations.map((op: { id: string }) => op.id),
+        cursor: 0, head: 0, operations: [] });
+    });
+    vi.stubGlobal('fetch', fetcher);
+    expect(await dispatch({ type: 'sync.connect', code: `sw1.${'a'.repeat(64)}.${'b'.repeat(64)}`, seed: false }))
+      .toMatchObject({ enabled: true, error: false });
+    await dispatch({ type: 'tasks.update', itemId: tasks.entries[0]!.id, status: 'done' });
+    await dispatch({ type: 'sync.run' });
+    const uploaded = fetcher.mock.calls.map(([, options]) => JSON.parse(options.body as string))
+      .find((body) => body.operations.length > 0);
+    expect(uploaded.operations[0]).toMatchObject({ iv: expect.any(String), ciphertext: expect.any(String) });
+    expect(Object.keys(uploaded.operations[0]).sort()).toEqual(['ciphertext', 'id', 'iv']);
+  });
   it('cannot finish setup without history and clears the completion decision with local data', async () => {
     expect(await dispatch({ type: 'setup.complete' })).toMatchObject({ requestUrl: null });
     expect(stored.schoolwareSetupComplete).toBeUndefined();

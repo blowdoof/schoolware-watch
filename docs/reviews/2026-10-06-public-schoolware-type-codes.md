@@ -60,5 +60,36 @@ No live cross-school extension integration or synchronization was tested.
 Future implementation can use the verified category ranges with explicit
 integer-boundary tests. Wider feature enablement should distinguish verified
 frontend type semantics from successful transport/response validation. Unknown
-types must remain Other. This investigation does not itself change feature gates,
-request permissions, classification or the released package.
+types must remain Other. The initial investigation did not change feature gates
+or the released package.
+
+## Second independent domain and implementation
+
+The official Molenland school group confirms its Schoolware use:
+<https://molenland.be/schoolware.html>. Its published parent guide links
+<https://webksotr.schoolware.be/webouders/start.html>.
+On the same date that portal referenced
+<https://webksotr.schoolware.be/webouders/assets/index-BihnKBT6.js>.
+Its SHA-256 is identical to the KOHa bundle recorded above. Definitions, range
+inclusivity and parent agenda parameter names therefore match exactly. This is
+evidence of shared frontend code across different school groups, not two
+independent implementations or an authenticated transport test.
+
+Following owner authorization, the extension now classifies the full test/task
+ranges across validated installation origins. Task eligibility uses the same
+pure classifier. The UI enables existing opt-in progress sharing for supported
+agenda URLs, with successful local history still required by the repository.
+Unknown/ordinary lesson types and activity types remain Other. Host-specific
+permissions, exact request paths, response validation, installation-scoped
+identities and progress pseudonyms remain in place. Existing retained points
+are reclassified on the next successful check, not by a destructive migration.
+Live cross-school session, identity and response compatibility still require
+acceptance; the extension does not claim universal Schoolware compatibility.
+
+Validation: 319 tests across 26 files, strict TypeScript, ESLint, production build
+and the isolated Chrome 154 smoke suite passed. Synthetic boundary cases cover
+99/100/999/1000/1999/2000, invalid numeric types and rejected installation URLs.
+Worker integration verifies subtype projection, opt-in pairing and encrypted-only
+uploads on a different synthetic installation. Existing installation-isolation
+and old progress-key compatibility tests remain passing. No server change or
+database migration is needed for this frontend/domain update.
