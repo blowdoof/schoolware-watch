@@ -11,12 +11,12 @@ export const ACTIVITY_ACTIONS = ['worker.started', 'worker.installed', 'browser.
   'banner.published', 'banner.rendered', 'banner.opened', 'banner.dismissed', 'banner.broadcast', 'website.script',
   'preferences.saved', 'permission.changed', 'permission.requested', 'task.status', 'log.exported',
   'progress.sync', 'progress.registration', 'progress.exchange', 'progress.apply', 'progress.members',
-  'progress.leave', 'progress.delete', 'progress.connection', 'progress.name', 'notification.todo', 'notification.progress', 'connection.discovery'] as const;
+  'progress.leave', 'progress.delete', 'progress.connection', 'progress.name', 'notification.todo', 'notification.progress', 'notification.specialDays', 'connection.discovery'] as const;
 export type ActivityAction = typeof ACTIVITY_ACTIONS[number];
 export type ActivityPhase = 'started' | 'succeeded' | 'failed' | 'skipped' | 'info';
 export type ActivityContext = 'worker' | 'popup' | 'options' | 'dashboard' | 'schoolware' | 'alarm' | 'system';
 export const ACTIVITY_REQUESTS = ['setup.complete', 'ui.open', 'sync.read', 'sync.run', 'sync.create', 'sync.connect', 'sync.disconnect', 'sync.delete', 'sync.pairing', 'connection.read', 'connection.clear', 'history.read', 'history.clear', 'history.retention',
-  'sync.name',
+  'sync.name', 'specialDays.read', 'specialDays.save', 'specialDays.delete',
   'connection.discovery.start', 'connection.discovery.read', 'connection.discovery.cancel', 'connection.discovery.confirm',
   'preferences.read', 'preferences.save', 'notifications.test', 'notifications.details', 'browser.alerts.read',
   'browser.alerts.dismiss', 'browser.alerts.test', 'browser.alerts.open', 'browser.alerts.rendered', 'agenda.check',
@@ -37,7 +37,7 @@ export interface ActivityData {
   monitoringEnabled?: boolean; notificationsEnabled?: boolean; browserNotificationsEnabled?: boolean; todoRemindersEnabled?: boolean; schoolbagEnabled?: boolean;
   newColor?: string; changedColor?: string; categories?: Category[]; failedCount?: number;
   from?: TaskStatus; to?: TaskStatus; fields?: (keyof Snapshot)[];
-  trigger?: ActivityTrigger; alarm?: 'agenda' | 'progress-sync' | 'agenda-discovery';
+  trigger?: ActivityTrigger; alarm?: 'agenda' | 'progress-sync' | 'agenda-discovery' | 'special-days';
   uploadedCount?: number; downloadedCount?: number; pendingCount?: number; httpStatus?: number;
   applied?: boolean; membersUpdated?: boolean; hasMore?: boolean;
 }
@@ -91,7 +91,7 @@ export function validateActivityInput(value: unknown): ActivityInput | null {
     data.trigger = value.data.trigger as ActivityTrigger;
   }
   if (Object.hasOwn(value.data, 'alarm')) {
-    if (!['agenda', 'progress-sync', 'agenda-discovery'].includes(value.data.alarm as string)) return null;
+    if (!['agenda', 'progress-sync', 'agenda-discovery', 'special-days'].includes(value.data.alarm as string)) return null;
     data.alarm = value.data.alarm as NonNullable<ActivityData['alarm']>;
   }
   for (const key of ['registered', 'test', 'byUser', 'monitoringEnabled', 'notificationsEnabled', 'browserNotificationsEnabled', 'todoRemindersEnabled', 'schoolbagEnabled', 'applied', 'membersUpdated', 'hasMore'] as const) {

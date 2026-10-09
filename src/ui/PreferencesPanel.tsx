@@ -197,6 +197,7 @@ export function PreferencesPanel({ settings, refreshToken, onSaved }: {
             <p className="text-xs leading-5 text-slate-500">Systeemmeldingen melden ook ontvangen wijzigingen in gedeelde taakstatussen. Deze meldingen bevatten geen namen of taaktitels. De eerste synchronisatie geeft geen melding over bestaande voortgang.</p>
             <p className="text-xs leading-5 text-slate-500">Na een geslaagde agendacontrole krijg je maximaal één to-do herinnering per dag via elk ingeschakeld meldingskanaal.
               Ze volgt de geselecteerde categorieën en kijkt naar de volgende bekende schooldag in je agenda. Chrome moet draaien; zonder open taken of bekende volgende schooldag komt er geen herinnering.</p>
+            <p className="text-xs leading-5 text-slate-500">Speciale dagen gebruiken dezelfde systeemmeldings- en to-do instellingen voor een aparte voorbereidingsherinnering vanaf 16 uur. Die vraagt geen Schoolware-controle en verschijnt niet als webbanner.</p>
             <p className="text-xs leading-5 text-slate-500">De banner verschijnt alleen op je gekoppelde Schoolware-website en toont algemene aantallen.
               De extensie leest of bewaart geen pagina-inhoud. Chrome vraagt toestemming om de banner op Schoolware te plaatsen.
               Het extensie-icoon toont een teller totdat je de meldingen op Schoolware sluit.</p>

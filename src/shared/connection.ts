@@ -11,6 +11,7 @@ import { MAX_ACTIVITY_ENTRIES } from './activity';
 import { isTaskStatus, type TaskStatus } from '../domain/tasks';
 import { MAX_TASK_UPDATES } from './tasks';
 import { validateOpenPageMessage, type OpenPageMessage } from './navigation';
+import { validateSpecialDaysMessage, type SpecialDaysMessage } from './special-days';
 
 export type CheckStatus = FetchStatus | 'permission-required' | 'busy' | 'storage-error';
 export interface CheckSummary { status: CheckStatus; checkedAt: string; count: number | null; typeCounts?: AgendaTypeCounts }
@@ -22,7 +23,7 @@ const statuses: CheckStatus[] = ['success', 'session-required', 'redirected', 'a
   'invalid-response', 'network-error', 'timeout', 'http-error', 'rate-limited',
   'invalid-request', 'permission-required', 'busy', 'storage-error'];
 
-export type ConnectionMessage = SyncMessage | DiscoveryMessage | OpenPageMessage
+export type ConnectionMessage = SyncMessage | DiscoveryMessage | OpenPageMessage | SpecialDaysMessage
   | { type: 'setup.complete' }
   | { type: 'connection.read' }
   | { type: 'connection.clear' }
@@ -50,6 +51,8 @@ export type ConnectionMessage = SyncMessage | DiscoveryMessage | OpenPageMessage
   | { type: 'agenda.check'; requestUrl: string };
 
 export function validateConnectionMessage(value: unknown): ConnectionMessage | null {
+  const special = validateSpecialDaysMessage(value);
+  if (special) return special;
   const navigation = validateOpenPageMessage(value);
   if (navigation) return navigation;
   const sync = validateSyncMessage(value);

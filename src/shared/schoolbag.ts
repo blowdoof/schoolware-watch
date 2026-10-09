@@ -2,6 +2,7 @@ import type { HistoryScope, Category } from '../domain/observations';
 import type { BagAgenda, BagPoint } from '../domain/schoolbag';
 import { isTaskStatus } from '../domain/tasks';
 import { isAlertId } from './browser-alerts';
+import { validateSpecialDays } from '../domain/special-days';
 
 export interface SchoolbagView extends BagAgenda { ok: boolean; choices?: { id: string; day: string; state: 'packed' | 'hidden' }[] }
 
@@ -9,6 +10,7 @@ export interface SchoolbagView extends BagAgenda { ok: boolean; choices?: { id: 
 export function createSchoolbagView(scope: HistoryScope | null): SchoolbagView {
   return { ok: true, lastSuccessAt: scope?.lastSuccessAt ?? null,
     ...(scope?.schoolbagChoices ? { choices: scope.schoolbagChoices } : {}),
+    ...(scope?.specialDays ? { specialDays: scope.specialDays } : {}),
     points: (scope?.items ?? []).filter((item) => item.localId && item.present && !item.snapshot.hidden &&
       !item.snapshot.cancelled && item.lastSeenAt === scope?.lastSuccessAt).map((item) => ({
       id: item.localId!, day: item.snapshot.startsAt.slice(0, 10), subject: item.lesson?.subject ?? '',
@@ -20,7 +22,7 @@ export function createSchoolbagView(scope: HistoryScope | null): SchoolbagView {
 export function validateSchoolbagView(raw: unknown): SchoolbagView | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const view = raw as Record<string, unknown>;
-  if (!Object.keys(view).every((key) => ['ok', 'points', 'lastSuccessAt', 'choices'].includes(key)) || typeof view.ok !== 'boolean' || !Array.isArray(view.points) ||
+  if (!Object.keys(view).every((key) => ['ok', 'points', 'lastSuccessAt', 'choices', 'specialDays'].includes(key)) || typeof view.ok !== 'boolean' || !Array.isArray(view.points) ||
       !(view.lastSuccessAt === null || (typeof view.lastSuccessAt === 'string' &&
         /^\d{4}-\d{2}-\d{2}T/.test(view.lastSuccessAt) && Number.isFinite(Date.parse(view.lastSuccessAt))))) return null;
   const points: BagPoint[] = [];
@@ -53,5 +55,7 @@ export function validateSchoolbagView(raw: unknown): SchoolbagView | null {
       choices.push({ id: entry.id, day: entry.day, state: entry.state });
     }
   }
-  return { ok: view.ok, points, lastSuccessAt: view.lastSuccessAt as string | null, ...(choices ? { choices } : {}) };
+  const specialDays = Object.hasOwn(view, 'specialDays') ? validateSpecialDays(view.specialDays) : undefined;
+  if (specialDays === null) return null;
+  return { ok: view.ok, points, lastSuccessAt: view.lastSuccessAt as string | null, ...(choices ? { choices } : {}), ...(specialDays ? { specialDays } : {}) };
 }

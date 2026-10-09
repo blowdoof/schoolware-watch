@@ -3,6 +3,7 @@ import { isTaskCategory, type TaskStatus } from './tasks';
 import type { TodoReminderState } from './todo';
 import { brusselsWallTime } from './notification-window';
 import { normalizeAgendaText } from './agenda-normalization';
+import type { SpecialDay } from './special-days';
 
 export type Category = 'tests' | 'assignments' | 'review' | 'other';
 export interface Snapshot {
@@ -36,6 +37,8 @@ export interface HistoryScope {
   localId?: string;
   todoReminder?: TodoReminderState;
   schoolbagChoices?: { id: string; day: string; state: 'packed' | 'hidden' }[];
+  specialDays?: SpecialDay[];
+  specialDayReminders?: { key: string; claimedAt: string }[];
   items: ObservedItem[]; events: ObservationEvent[]; checks: RecordedCheck[];
 }
 export interface CheckInput {
@@ -120,6 +123,8 @@ export function compareObservations(previous: HistoryScope | null, input: CheckI
   return { scopeId: input.scopeId,
     ...(previous?.localId ? { localId: previous.localId } : {}),
     ...(previous?.todoReminder ? { todoReminder: previous.todoReminder } : {}),
+    ...(previous?.specialDays ? { specialDays: previous.specialDays } : {}),
+    ...(previous?.specialDayReminders ? { specialDayReminders: previous.specialDayReminders } : {}),
     ...(previous?.schoolbagChoices ? { schoolbagChoices: previous.schoolbagChoices.filter((choice) => choice.day >= brusselsWallTime(new Date(input.observedAt)).slice(0, 10)) } : {}),
     baselineAt: previous?.baselineAt ?? (input.points.length ? input.observedAt : null),
     lastSuccessAt: input.observedAt, items: [...items.values()],
@@ -132,7 +137,10 @@ export function compareObservations(previous: HistoryScope | null, input: CheckI
 
 export function pruneHistory(scope: HistoryScope, cutoff: string): HistoryScope | null {
   if (scope.lastSuccessAt < cutoff) return null;
-  return { ...scope, items: scope.items.filter((item) => item.lastSeenAt >= cutoff),
+  return { ...scope,
+    ...(scope.specialDays ? { specialDays: scope.specialDays.filter((entry) => entry.day >= cutoff.slice(0, 10)) } : {}),
+    ...(scope.specialDayReminders ? { specialDayReminders: scope.specialDayReminders.filter((entry) => entry.claimedAt >= cutoff) } : {}),
+    items: scope.items.filter((item) => item.lastSeenAt >= cutoff),
     events: scope.events.filter((event) => event.observedAt >= cutoff),
     checks: scope.checks.filter((check) => check.observedAt >= cutoff) };
 }

@@ -11,6 +11,7 @@ import { ActivityPanel } from './ActivityPanel';
 import { HelpPanel } from './HelpPanel';
 import { ProgressSyncPanel } from './ProgressSyncPanel';
 import { TodoPanel } from './TodoPanel';
+import { SpecialDaysPanel } from './SpecialDaysPanel';
 import { SchoolbagPanel } from './SchoolbagPanel';
 import { InfoPanel, infoSections, type InfoSection } from './InfoPanel';
 import type { OpenPageMessage } from '../shared/navigation';
@@ -107,6 +108,7 @@ export function App({ page: initialPage }: { page: Page }) {
       {page === 'options' && <ConnectionPanel showSetup refreshToken={historyRevision} onHistoryChanged={() => setHistoryRevision((revision) => revision + 1)} />}
       <PreferencesPanel settings={page === 'options'} refreshToken={historyRevision} onSaved={() => setHistoryRevision((revision) => revision + 1)} />
       {(page === 'popup' || page === 'dashboard') && <TodoPanel refreshToken={historyRevision} />}
+      {(page === 'popup' || page === 'dashboard') && <SpecialDaysPanel refreshToken={historyRevision} />}
       {(page === 'popup' || page === 'dashboard') && <SchoolbagPanel refreshToken={historyRevision} />}
       {page === 'dashboard' && <TasksPanel refreshToken={historyRevision} />}
       {page !== 'popup' && <HistoryPanel settings={page === 'options'} refreshToken={historyRevision} />}

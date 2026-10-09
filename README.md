@@ -322,4 +322,12 @@ Upcoming planning initially shows five positively known agenda days and at most
 20 tasks. Parents can expand by five days or show more tasks. Ongoing tasks and
 observed weekend deadlines remain eligible; unknown dates are not assumed to be
 school holidays. Earlier/all-task selections remain available. The dashboard has
-one to-do overview, followed by the optional schoolbag and planning.
+one to-do overview, followed by local special days, the optional schoolbag and planning.
+
+The dashboard supports filtered local CSV export of all retained tasks,
+independent of the visible planning window. Popup and dashboard support local
+special days with preparation dates, checklists and schoolbag additions. Home
+study preparation includes ordinary lesson material and completed tasks.
+Generic local preparation reminders use the existing system/to-do preferences.
+No PHP/SQL update, cloud sharing or new permission is required. See
+[CSV and special days](docs/csv-and-special-days.md) for behavior and validation.

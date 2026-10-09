@@ -165,6 +165,13 @@ hides it, while Chrome keeps optional permissions until revoked/disconnected.
 CSV export is an explicit local user action. Warn within that action that the
 file contains personal information and escape formula-like cell values.
 
+Local special-day titles, notes, dates and checklists are stored inside the
+selected IndexedDB profile. They are never sent to the encrypted progress
+service or written into activity logs. Existing history retention, profile
+clearing and disconnect remove them. Generic preparation notifications expose
+no event titles or checklist text. User-downloaded CSV files remain outside
+extension retention/deletion controls. See [feature details](csv-and-special-days.md).
+
 Only synthetic fixtures belong in Git. The private data directories and HAR
 files are ignored, but ignore patterns do not replace review of staged changes.
 

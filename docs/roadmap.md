@@ -2,6 +2,12 @@
 
 ## Owner-requested backlog
 
+2026-10-09: filtered local task CSV export and local special days (notes,
+checklist, preparation date, timetable-aware schoolbag and generic reminders)
+are implemented on the feature branch. See [feature details](csv-and-special-days.md).
+Help-needed status and external calendar integration remain unimplemented.
+Historical phase descriptions below predate several subsequent features.
+
 Recorded on 2026-10-04. These extensions are planned, not implemented; they do
 not change the current Chrome Web Store submission.
 

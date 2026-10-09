@@ -22,6 +22,13 @@ Een lokale activiteitenlog bevat tijden, aantallen, technische resultaten en
 willekeurige lokale verwijzingen, geen agendatekst of Schoolware-inloggegevens.
 Logexport is een expliciete actie naar een bestand op je eigen computer.
 
+Zelf ingevoerde speciale dagen, opmerkingen, checklistpunten en voorbereidingsdatums
+blijven lokaal bij het gekozen leerlingprofiel. Ze worden niet gesynchroniseerd
+of in het activiteitenlog opgenomen en volgen de lokale bewaartermijn en
+verwijderfuncties. Voorbereidingsmeldingen bevatten alleen algemene tekst.
+Je kunt taken en voortgang lokaal als CSV downloaden. Dat bestand kan
+persoonlijke agendatekst bevatten; bewaar en verwijder geëxporteerde bestanden zelf.
+
 De extensie gebruikt je bestaande Schoolware-browsersessie. Ze vraagt of bewaart
 geen Schoolware-wachtwoorden, sessiecookies, authenticatietokens of
 autorisatieheaders. De browser beheert de sessie tijdens de toegestane aanvraag.

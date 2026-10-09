@@ -10,6 +10,7 @@ import { todoReminderSelection } from '../domain/todo';
 import type { Category } from '../domain/observations';
 import { brusselsWallTime } from '../domain/notification-window';
 import { agendaProfileKey, validateAgendaRequest } from '../schoolware/agenda-request';
+import { validateSpecialDay, MAX_SPECIAL_DAYS, type SpecialDay } from '../domain/special-days';
 
 export { HISTORY_DB, HISTORY_VERSION, openHistoryDatabase } from './database';
 
@@ -176,6 +177,57 @@ export class HistoryRepository {
 
   async setTaskStatus(scopeId: string, itemId: string, status: TaskStatus, trace: AuditContext): Promise<void> {
     await this.setTaskStatuses(scopeId, [itemId], status, trace);
+  }
+
+  /** Optimistic revisions prevent stale popup/dashboard writes from losing checklist edits. */
+  async saveSpecialDay(scopeId: string, entry: SpecialDay): Promise<void> {
+    const validated = validateSpecialDay(entry);
+    if (!validated) throw new Error('Invalid special day');
+    await this.editSpecialDays(scopeId, (entries) => {
+      const previous = entries.find((item) => item.id === validated.id);
+      if ((previous?.revision ?? 0) !== validated.revision || (!previous && validated.revision !== 0) ||
+          entries.some((item) => item.day === validated.day && item.id !== validated.id)) throw new Error('Special day changed');
+      const next = entries.filter((item) => item.id !== validated.id);
+      next.push({ ...validated, revision: validated.revision + 1 });
+      if (next.length > MAX_SPECIAL_DAYS) throw new Error('Special day limit');
+      return next.sort((a, b) => a.day.localeCompare(b.day));
+    });
+  }
+
+  async deleteSpecialDay(scopeId: string, id: string, revision: number): Promise<void> {
+    if (!isAlertId(id) || !Number.isSafeInteger(revision) || revision < 1) throw new Error('Invalid special day deletion');
+    await this.editSpecialDays(scopeId, (entries) => {
+      if (!entries.some((item) => item.id === id && item.revision === revision)) throw new Error('Special day changed');
+      return entries.filter((item) => item.id !== id);
+    });
+  }
+
+  private async editSpecialDays(scopeId: string, edit: (entries: SpecialDay[]) => SpecialDay[]): Promise<void> {
+    const db = await openHistoryDatabase(this.name);
+    try {
+      const tx = db.transaction('scopes', 'readwrite');
+      const done = tx.done; void done.catch(() => {});
+      try {
+        const scope = await tx.store.get(scopeId);
+        if (!scope) throw new Error('Profile unavailable');
+        scope.specialDays = edit(scope.specialDays ?? []);
+        await tx.store.put(scope); await done;
+      } catch (error) { try { tx.abort(); } catch { /* Already completed. */ } await done.catch(() => {}); throw error; }
+    } finally { db.close(); }
+  }
+
+  async claimSpecialDayReminder(scopeId: string, key: string, now: string): Promise<boolean> {
+    const db = await openHistoryDatabase(this.name);
+    try {
+      const tx = db.transaction('scopes', 'readwrite');
+      const done = tx.done; void done.catch(() => {});
+      try {
+        const scope = await tx.store.get(scopeId);
+        if (!scope || scope.specialDayReminders?.some((entry) => entry.key === key)) { await done; return false; }
+        scope.specialDayReminders = [...(scope.specialDayReminders ?? []).filter((entry) => entry.claimedAt >= retentionCutoff(now, DEFAULT_RETENTION)), { key, claimedAt: now }];
+        await tx.store.put(scope); await done; return true;
+      } catch (error) { try { tx.abort(); } catch { /* Already completed. */ } await done.catch(() => {}); throw error; }
+    } finally { db.close(); }
   }
 
   async setPackingChoice(scopeId: string, id: string, day: string, state: 'packed' | 'hidden' | 'open'): Promise<void> {

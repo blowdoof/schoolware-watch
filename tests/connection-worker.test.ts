@@ -16,6 +16,8 @@ import { validateActivityView } from '../src/shared/activity';
 import { validateTasksView } from '../src/shared/tasks';
 import { availablePackingChoices, packingChoiceId, materialsFor } from '../src/domain/schoolbag';
 import { validateSchoolbagView } from '../src/shared/schoolbag';
+import { validateSpecialDaysView } from '../src/shared/special-days';
+import { specialDay } from './fixtures/special-days';
 
 const scopeId = validateAgendaRequest(requestUrl)!;
 
@@ -116,6 +118,66 @@ beforeEach(async () => {
     action: { setBadgeText: vi.fn().mockResolvedValue(undefined), setBadgeBackgroundColor: vi.fn().mockResolvedValue(undefined) },
   });
   await import('../src/background/service-worker');
+});
+
+describe('special day worker boundaries and reminders', () => {
+  it('requires a successful profile, rejects website access and stale profile/revision edits without logging text', async () => {
+    const entry = specialDay();
+    const profileId = crypto.randomUUID();
+    expect(await dispatch({ type: 'specialDays.save', profileId, entry })).toMatchObject({ ok: false });
+    await dispatch({ type: 'agenda.check', requestUrl });
+    const view = validateSpecialDaysView(await dispatch({ type: 'specialDays.read' }))!;
+    expect(view.connected).toBe(true);
+    const website = { ...sender, url: 'https://schoolware_siw.ksgwl.be/webouders/start.html', tab: { id: 1 }, frameId: 0 };
+    expect(listener({ type: 'specialDays.read' }, website, vi.fn())).toBe(false);
+    expect(await dispatch({ type: 'specialDays.save', profileId, entry })).toMatchObject({ ok: false });
+    const saved = validateSpecialDaysView(await dispatch({ type: 'specialDays.save', profileId: view.profileId, entry }))!;
+    expect(saved.entries[0]?.revision).toBe(1);
+    expect(await dispatch({ type: 'specialDays.save', profileId: view.profileId, entry })).toMatchObject({ ok: false });
+    expect(validateSchoolbagView(await dispatch({ type: 'schoolbag.read' }))?.specialDays).toEqual(saved.entries);
+    expect(JSON.stringify(await dispatch({ type: 'activity.read' }))).not.toContain(entry.title);
+    expect(JSON.stringify(await dispatch({ type: 'activity.read' }))).not.toContain(entry.checklist[0]!.text);
+    await dispatch({ type: 'history.clear' });
+    expect(await dispatch({ type: 'specialDays.read' })).toMatchObject({ connected: false, entries: [] });
+  });
+  it('schedules independently of monitoring, survives worker restart and claims generic reminders once', async () => {
+    await dispatch({ type: 'agenda.check', requestUrl });
+    const view = validateSpecialDaysView(await dispatch({ type: 'specialDays.read' }))!;
+    const entry = specialDay({ day: '2026-10-05', preparationDay: '2026-10-02' });
+    await dispatch({ type: 'preferences.save', preferences: { ...DEFAULT_PREFERENCES, monitoringEnabled: false, notificationsEnabled: true } });
+    await dispatch({ type: 'specialDays.save', profileId: view.profileId, entry });
+    expect(chrome.alarms.create).toHaveBeenCalledWith('schoolware-special-days', { when: Date.parse('2026-10-02T14:00:00Z') });
+    expect(await chrome.alarms.get('schoolware-monitor')).toBeUndefined();
+    vi.resetModules(); await import('../src/background/service-worker');
+    expect(await dispatch({ type: 'specialDays.read' })).toMatchObject({ entries: [{ ...entry, revision: 1 }] });
+    createNotification.mockClear();
+    vi.setSystemTime(new Date('2026-10-02T14:00:00Z'));
+    const alarm = { name: 'schoolware-special-days', scheduledTime: Date.now(), persistAcrossSessions: true };
+    alarmListener(alarm);
+    await vi.waitFor(() => expect(createNotification).toHaveBeenCalledTimes(1));
+    expect(JSON.stringify(createNotification.mock.calls)).not.toContain(entry.title);
+    expect(JSON.stringify(createNotification.mock.calls)).not.toContain(entry.checklist[0]!.text);
+    alarmListener(alarm);
+    await dispatch({ type: 'specialDays.read' });
+    expect(createNotification).toHaveBeenCalledTimes(1);
+    expect(await chrome.alarms.get('schoolware-special-days')).toBeUndefined();
+    await dispatch({ type: 'connection.clear' });
+    expect(await dispatch({ type: 'specialDays.read' })).toMatchObject({ connected: false, profileId: null, entries: [] });
+  });
+  it('does not schedule without notification permission and clears the alarm when reminders are disabled', async () => {
+    await dispatch({ type: 'agenda.check', requestUrl });
+    const view = validateSpecialDaysView(await dispatch({ type: 'specialDays.read' }))!;
+    const entry = specialDay();
+    notificationPermission = false;
+    await dispatch({ type: 'preferences.save', preferences: { ...DEFAULT_PREFERENCES, notificationsEnabled: true } });
+    await dispatch({ type: 'specialDays.save', profileId: view.profileId, entry });
+    expect(await chrome.alarms.get('schoolware-special-days')).toBeUndefined();
+    notificationPermission = true;
+    await dispatch({ type: 'preferences.save', preferences: { ...DEFAULT_PREFERENCES, notificationsEnabled: true } });
+    expect(await chrome.alarms.get('schoolware-special-days')).toBeDefined();
+    await dispatch({ type: 'preferences.save', preferences: { ...DEFAULT_PREFERENCES, notificationsEnabled: true, todoRemindersEnabled: false } });
+    expect(await chrome.alarms.get('schoolware-special-days')).toBeUndefined();
+  });
 });
 
 describe('schoolbag worker access', () => {

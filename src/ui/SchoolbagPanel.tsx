@@ -77,21 +77,23 @@ export function SchoolbagOverview({ view, now, working = false, onChange }: { vi
     <p className="mt-2 text-xs leading-5 text-slate-600">Laptop is een vaste suggestie. Ander materiaal wordt herkend in titels en instructies; bekijk de agendatekst voor de reden. Ingepakt en verborgen blijven lokaal, per lesdag en leerling. Gewijzigde materiaalinstructies vragen een nieuwe controle.</p>
     {!overview ? <p className="mt-3 text-sm">Boekentas laden…</p> : <>
       <div className="mt-4">
-        <h3 className="font-semibold">Mee naar school</h3>
+        <h3 className="font-semibold">{overview.special?.kind === 'home-study' ? 'Nodig voor thuisstudie' : 'Mee naar school'}</h3>
+        {overview.special && <p className="mt-2 whitespace-pre-wrap text-sm text-teal-800">{overview.special.title}{overview.special.useTimetable ? ' — gewoon lesrooster' : ' — afwijkend programma'}{overview.special.notes ? `\n${overview.special.notes}` : ''}</p>}
         {overview.days.length > 0 && <label className="mt-2 block text-sm">Lesdag
           <select value={overview.targetDay ?? ''} onChange={(event) => setSelectedDay(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-300 bg-white p-2">
             {overview.targetDay === null && <option value="">Kies een bekende lesdag</option>}
             {overview.days.map((day) => <option key={day} value={day}>{dateLabel(day)}</option>)}
           </select>
         </label>}
-        <p className="mt-2 text-xs text-slate-600">{overview.targetDay ? `Voor ${dateLabel(overview.targetDay)} — ook materiaal uit gewone lessen.` : 'Geen volgende lesdag bekend in de ingelezen agenda. Controleer je agenda opnieuw.'}</p>
+        <p className="mt-2 text-xs text-slate-600">{overview.targetDay ? `Voor ${dateLabel(overview.targetDay)}${overview.special?.useTimetable === false ? ' — materiaal uit je speciale checklist.' : ' — ook materiaal uit gewone lessen.'}` : 'Geen volgende lesdag bekend in de ingelezen agenda. Controleer je agenda opnieuw.'}</p>
         <PackingList materials={overview.school} points={overview.schoolPoints} day={overview.targetDay} direction="school" choices={view?.choices} working={working} onChange={onChange} />
       </div>
       <div className="mt-5 border-t border-teal-200 pt-4">
         <h3 className="font-semibold">Mee naar huis</h3>
+        {overview.preparations.map((entry) => <p key={entry.id} className="mt-2 text-sm font-medium text-amber-800">Voorbereiden voor {entry.title} op {dateLabel(entry.day)}.{entry.kind === 'home-study' && entry.useTimetable ? ' Ook materiaal uit gewone lessen en afgeronde taken meenemen.' : ''}</p>)}
         <p className="mt-2 text-xs text-slate-600">{overview.homeDay ? `Voor nog openstaande taken en toetsen tegen ${dateLabel(overview.homeDay)}. Neem het benodigde materiaal mee naar huis.` : 'Geen latere lesdag bekend na de gekozen lesdag. Controleer je agenda opnieuw.'}</p>
         <PackingList materials={overview.homework} points={overview.homeworkPoints} day={overview.targetDay} direction="home" choices={view?.choices} working={working} onChange={onChange} />
-        <p className="mt-2 text-xs text-slate-500">Klaar gemarkeerde taken tellen hier niet mee. Controleer ook werk voor latere dagen.</p>
+        <p className="mt-2 text-xs text-slate-500">Voor gewone huiswerktaken telt Klaar niet mee. Voor thuisstudie telt het hele bekende lesrooster mee. Controleer ook materiaal dat niet in de agenda staat.</p>
       </div>
       {view?.lastSuccessAt && <p className="mt-4 text-xs text-slate-500">Gebaseerd op je agenda van {new Date(view.lastSuccessAt).toLocaleString('nl-BE', { timeZone: 'Europe/Brussels' })}. Alleen laatst opgehaalde punten; een lege dag bewijst niet dat er geen les is.</p>}
     </>}

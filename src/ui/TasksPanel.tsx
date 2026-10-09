@@ -5,6 +5,7 @@ import { displaySnapshotValue, snapshotLabels } from './agenda-presentation';
 import { hasAgendaMarker, isPastTask } from '../domain/tasks';
 import { useNow } from './useNow';
 import { planningWindow } from '../domain/planning';
+import { CsvExport } from './CsvExport';
 
 export function TasksPanel({ refreshToken }: { refreshToken: number }) {
   const { view, working, error, update, available } = useTasks(refreshToken);
@@ -21,6 +22,7 @@ export function TasksPanel({ refreshToken }: { refreshToken: number }) {
   return <>
     <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" aria-label="Taken, toetsen en voortgang">
     <h2 className="text-lg font-semibold">Taken, toetsen en voortgang</h2>
+    <CsvExport view={view} />
     <p className="mt-2 text-sm text-slate-600">Vink Bezig of Klaar aan. Uitvinken zet de taak weer open. Een gewijzigde of opnieuw verschenen voltooide taak gaat automatisch terug naar Bezig. Deze status blijft lokaal en wijzigt niets in Schoolware.</p>
     <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
       <label>Planning <select value={planning} onChange={(event) => { setPlanning(event.target.value); setLimit(20); setDayLimit(5); }} className="ml-2 rounded-lg border border-slate-300 p-2">

@@ -177,6 +177,61 @@ try {
   assert.ok(bag.text.includes('Aardrijkskunde') && bag.text.includes('Werkboek'));
   assert.ok(!bag.homeText.includes('Werkboek'), 'Same-day workbook must not appear in next-day home packing');
   console.log('Chrome schoolbag smoke passed: worker projection, both packing lists, laptop defaults and synthetic workbook page range.');
+  // Create and check a local special day through the real React form, then
+  // restart the worker and verify the optional v3 profile fields remain durable.
+  await poll(() => evaluate(bagSession, `Boolean(document.querySelector('[aria-label="Speciale dagen"] button:not(:disabled)'))`));
+  await evaluate(bagSession, `(() => {
+    [...document.querySelector('[aria-label="Speciale dagen"]').querySelectorAll('button')].find(button => button.textContent === 'Speciale dag toevoegen').click();
+    return true;
+  })()`);
+  await poll(() => evaluate(bagSession, `Boolean(document.querySelector('[aria-label="Speciale dagen"] form'))`));
+  await evaluate(bagSession, `(() => {
+    [...document.querySelector('[aria-label="Speciale dagen"] form').querySelectorAll('button')].find(button => button.textContent === 'Checklistpunt toevoegen').click();
+    return true;
+  })()`);
+  await poll(() => evaluate(bagSession, `Boolean([...document.querySelector('[aria-label="Speciale dagen"] form').querySelectorAll('label')].find(label => label.textContent.startsWith('Checklistpunt 1'))?.querySelector('input'))`));
+  await evaluate(bagSession, `(() => {
+    [...document.querySelector('[aria-label="Speciale dagen"] form').querySelectorAll('label')].find(label => label.textContent.startsWith('Checklistpunt 1')).querySelector('input').focus();
+    return true;
+  })()`);
+  await command('Input.insertText', { text: 'Synthetic folders and charger' }, bagSession);
+  await evaluate(bagSession, `(() => {
+    [...document.querySelector('[aria-label="Speciale dagen"] form').querySelectorAll('label')].find(label => label.textContent.includes('Ook tonen in boekentas')).querySelector('input').click();
+    document.querySelector('[aria-label="Speciale dagen"] form button[type="submit"]').click(); return true;
+  })()`);
+  await poll(() => evaluate(bagSession, `!document.querySelector('[aria-label="Speciale dagen"] form') && document.querySelector('[aria-label="Speciale dagen"]').textContent.includes('Synthetic folders and charger')`));
+  await evaluate(bagSession, `(() => {
+    [...document.querySelector('[aria-label="Speciale dagen"]').querySelectorAll('label')].find(label => label.textContent.includes('Synthetic folders and charger')).querySelector('input').click(); return true;
+  })()`);
+  await poll(() => evaluate(bagSession, `(async () => (await chrome.runtime.sendMessage({ type: 'specialDays.read' })).entries[0]?.checklist[0]?.done)()`));
+  await command('ServiceWorker.stopAllWorkers', {}, restarted.sessionId);
+  const special = await evaluate(bagSession, `chrome.runtime.sendMessage({ type: 'specialDays.read' })`);
+  assert.equal(special.ok, true);
+  assert.equal(special.entries[0].checklist[0].text, 'Synthetic folders and charger');
+  assert.equal(special.entries[0].checklist[0].done, true);
+  assert.equal(special.entries[0].revision, 2);
+  const specialBag = await evaluate(bagSession, `chrome.runtime.sendMessage({ type: 'schoolbag.read' })`);
+  assert.equal(specialBag.specialDays[0].checklist[0].pack, true);
+  // Download the CSV to this disposable profile only and inspect the actual file.
+  const downloadPath = join(profile, 'downloads');
+  await mkdir(downloadPath);
+  await command('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath });
+  await evaluate(bagSession, `(() => {
+    [...document.querySelectorAll('summary')].find(summary => summary.textContent === 'Taken exporteren (CSV)').click();
+    [...document.querySelectorAll('button')].find(button => button.textContent.startsWith('CSV downloaden')).click(); return true;
+  })()`);
+  const csv = await poll(async () => readFile(join(downloadPath, 'schoolware-watch-taken.csv'), 'utf8'));
+  assert.ok(csv.startsWith('\uFEFF"Datum";'));
+  assert.ok(csv.includes('Synthetic workbook task'));
+  assert.ok(csv.includes('Synthetic later planning 6'), 'Export must include tasks beyond the initial five-day planning window');
+  assert.ok(!csv.includes(special.profileId));
+  assert.ok(!csv.includes('Synthetic folders and charger'), 'Task CSV must not silently include free-form special-day notes');
+  await evaluate(bagSession, `(async () => {
+    const view = await chrome.runtime.sendMessage({ type: 'specialDays.read' });
+    return chrome.runtime.sendMessage({ type: 'specialDays.delete', profileId: view.profileId, id: view.entries[0].id, revision: view.entries[0].revision });
+  })()`);
+  await poll(() => evaluate(bagSession, `!document.querySelector('[aria-label="Speciale dagen"]').textContent.includes('Synthetic folders and charger')`));
+  console.log('Chrome CSV/special-day smoke passed: real form, checklist, local book bag projection, worker restart, deletion and full-selection CSV file download.');
   const { targetId: livePopupTarget } = await command('Target.createTarget', { url: `chrome-extension://${id}/popup.html` });
   const { sessionId: livePopupSession } = await command('Target.attachToTarget', { targetId: livePopupTarget, flatten: true });
   await poll(() => evaluate(livePopupSession, `document.body.textContent.includes('Synthetic workbook task')`));
