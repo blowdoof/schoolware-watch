@@ -7,13 +7,14 @@ import { validateSpecialDay, validateSpecialDays } from '../src/domain/special-d
 import { validateSpecialDaysView } from '../src/shared/special-days';
 import { validateConnectionMessage } from '../src/shared/connection';
 import { compareObservations } from '../src/domain/observations';
-import { schoolbagOverview, type BagPoint } from '../src/domain/schoolbag';
+import { availablePackingChoices, packingChoiceId, schoolbagOverview, type BagPoint } from '../src/domain/schoolbag';
 import { createSchoolbagView, validateSchoolbagView } from '../src/shared/schoolbag';
 import { specialReminderPlan, specialReminderKey } from '../src/domain/special-day-reminders';
 import { HistoryRepository } from '../src/storage/history';
 import { SpecialDaysOverview } from '../src/ui/SpecialDaysPanel';
 import { check } from './fixtures/observations';
 import { specialDay } from './fixtures/special-days';
+import { SchoolbagOverview } from '../src/ui/SchoolbagPanel';
 
 beforeEach(() => { vi.stubGlobal('indexedDB', new IDBFactory()); });
 const friday = new Date('2026-10-09T10:00:00Z');
@@ -38,9 +39,52 @@ describe('special days validation and book bag', () => {
     expect(overview.homeworkPoints).toHaveLength(1);
     expect(overview.homework.map((item) => item.label)).toEqual(['Boek', 'All folders and charger']);
     expect(overview.preparations).toEqual([entry]);
-    expect(schoolbagOverview(agenda, new Date('2026-10-09T18:00:00Z')).targetDay).toBe('2026-10-09');
+    const evening = schoolbagOverview(agenda, new Date('2026-10-09T18:00:00Z'));
+    expect(evening.targetDay).toBe('2026-10-12');
+    expect(evening.homePackingDay).toBe('2026-10-09');
+    expect(evening.preparations).toEqual([entry]);
     expect(schoolbagOverview(agenda, friday, '2026-10-12').school.map((item) => item.label)).toEqual(['Boek', 'All folders and charger']);
     expect(schoolbagOverview({ ...agenda, specialDays: [] }, friday, '2026-10-09').homework).toHaveLength(0);
+  });
+  it('shows Monday home study at Friday 21:24 while preserving Friday bring-home choices and full Monday material', async () => {
+    const now = new Date('2026-10-09T19:24:00Z');
+    const entry = specialDay();
+    const fridayLesson = bagPoint('2026-10-09', { subject: 'Synthetic Friday', instructions: 'Atlas' });
+    const mondayLesson = bagPoint('2026-10-12', { subject: 'Synthetic Monday', instructions: 'Werkboek', status: 'done' });
+    const agenda = { lastSuccessAt: now.toISOString(), specialDays: [entry], points: [fridayLesson, mondayLesson] };
+    const evening = schoolbagOverview(agenda, now);
+    expect(evening.targetDay).toBe('2026-10-12');
+    expect(evening.special).toEqual(entry);
+    expect(evening.schoolPoints).toEqual([mondayLesson]);
+    expect(evening.homePackingDay).toBe('2026-10-09');
+    expect(evening.homeDay).toBe('2026-10-12');
+    expect(evening.homeworkPoints).toEqual([mondayLesson]);
+    expect(evening.school.map((material) => material.label)).toEqual(['Werkboek', 'All folders and charger']);
+    expect(evening.homework.map((material) => material.label)).toEqual(['Werkboek', 'All folders and charger']);
+    const fridayHome = schoolbagOverview(agenda, now, '2026-10-09');
+    const choices = await availablePackingChoices(agenda, now);
+    for (const material of [null, ...evening.homework]) {
+      const id = await packingChoiceId(evening.homePackingDay!, 'home', material);
+      expect(choices.get(id)).toBe('2026-10-09');
+      if (material) expect(id).toBe(await packingChoiceId('2026-10-09', 'home', fridayHome.homework.find((point) => point.key === material.key)!));
+    }
+    const html = renderToStaticMarkup(<SchoolbagOverview now={now} view={{ ok: true, ...agenda }} />);
+    expect(html).toContain('Nodig voor thuisstudie');
+    expect(html).toContain('Voor maandag 12 oktober');
+    expect(html).toContain('Meenemen naar huis op vrijdag 9 oktober');
+    expect(html).not.toContain('Voor vrijdag 9 oktober');
+  });
+  it('keeps the 16:00 transition and explicit selections separate from preparation-only dates', () => {
+    const entry = specialDay();
+    const agenda = { lastSuccessAt: friday.toISOString(), specialDays: [entry], points: [bagPoint('2026-10-09'), bagPoint('2026-10-12')] };
+    expect(schoolbagOverview(agenda, new Date('2026-10-09T13:59:00Z')).targetDay).toBe('2026-10-09');
+    expect(schoolbagOverview(agenda, new Date('2026-10-09T14:00:00Z')).targetDay).toBe('2026-10-12');
+    const explicit = schoolbagOverview(agenda, new Date('2026-10-09T19:24:00Z'), '2026-10-09');
+    expect(explicit.targetDay).toBe('2026-10-09'); expect(explicit.homePackingDay).toBe('2026-10-09');
+    const saturday = schoolbagOverview(agenda, new Date('2026-10-10T12:00:00Z'));
+    expect(saturday.targetDay).toBe('2026-10-12'); expect(saturday.preparations).toEqual([]);
+    const preparationOnly = schoolbagOverview({ ...agenda, points: [bagPoint('2026-10-12')] }, new Date('2026-10-09T19:24:00Z'));
+    expect(preparationOnly.targetDay).toBe('2026-10-12'); expect(preparationOnly.homePackingDay).toBe('2026-10-09');
   });
   it('supports a sports day without a known Schoolware day and suppresses timetable packing only on that date', () => {
     const entry = specialDay({ kind: 'sports', useTimetable: false });

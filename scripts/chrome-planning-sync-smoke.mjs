@@ -141,7 +141,7 @@ try {
   await evaluate(parent.sessionId, `(async () => {
     const view = await chrome.runtime.sendMessage({ type: 'specialDays.read' });
     const entry = { id: crypto.randomUUID(), revision: 0, day: ${JSON.stringify(parent.day)}, kind: 'home-study', title: 'Synthetic shared home study',
-      notes: 'Synthetic shared notes', useTimetable: true, preparationDay: null,
+      notes: 'Synthetic shared notes', useTimetable: true, preparationDay: new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Brussels' }),
       checklist: [{ id: crypto.randomUUID(), text: 'Synthetic shared folders', done: false, pack: true }] };
     const saved = await chrome.runtime.sendMessage({ type: 'specialDays.save', profileId: view.profileId, entry });
     if (!saved.ok) throw new Error('Synthetic event save failed');
@@ -149,6 +149,17 @@ try {
   })()`);
   await evaluate(pupil.sessionId, `chrome.runtime.sendMessage({ type: 'sync.run' })`);
   await poll(() => evaluate(pupil.sessionId, `document.querySelector('[aria-label="Speciale dagen"]').textContent.includes('Synthetic shared notes')`));
+  // After the evening cutoff, today's bring-home reminder must not select today
+  // for the school/study list. The separate home list retains today's choices.
+  await evaluate(pupil.sessionId, `(() => {
+    const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Brussels', hour: '2-digit', hourCycle: 'h23' }).format(new Date()));
+    if (hour >= 16) {
+      const panel = document.querySelector('[aria-label="Boekentas"]');
+      if (panel.querySelector('select')?.value !== ${JSON.stringify(pupil.day)} || !panel.textContent.includes('Nodig voor thuisstudie') || !panel.textContent.includes('Meenemen naar huis op'))
+        throw new Error('Synthetic evening preparation kept the study list on today');
+    }
+    return true;
+  })()`);
   assert.equal(await evaluate(pupil.sessionId, `(async () => (await chrome.runtime.sendMessage({ type: 'specialDays.read' })).sharing.enabled)()`), true);
   assert.equal(await evaluate(pupil.sessionId, `document.querySelector('[aria-label="Speciale dagen"]').textContent.includes('Laatst gesynchroniseerd:')`), true);
   await evaluate(pupil.sessionId, `(() => {

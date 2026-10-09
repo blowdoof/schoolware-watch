@@ -48,7 +48,12 @@ attendance are never inferred from agenda gaps.
 For home study with ordinary timetable enabled, the chosen preparation date's
 **Mee naar huis** suggestions include all latest-observed points on the home
 study date: ordinary lessons and completed tasks as well as unfinished work.
-Friday preparation remains the default schoolbag selection on Friday evening.
+After 16:00 Brussels, the school/study list defaults to the next known day,
+including a Monday home-study day. An explicit preparation date on today keeps
+only the bring-home list on today; it never holds the school/study selector on
+Friday. The bring-home heading shows its own packing date and preserves its
+existing date-scoped packing choices. Explicit lesson-day selection continues
+to select both directions for that day.
 On the home study date the heading becomes **Nodig voor thuisstudie**. For an
 event with the timetable disabled, ordinary agenda material is omitted only
 from that date's school list. Existing homework remains eligible for the home

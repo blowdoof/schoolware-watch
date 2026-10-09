@@ -10,6 +10,14 @@ The popup and dashboard include **Boekentas** with two separate lists:
   next known school day after the selected lesson day. Browsing the school list
   also advances the home-work horizon. It is not a complete list of all future homework.
 
+An explicit special-day preparation date on today retains that date only for
+the default **Mee naar huis** list, including complete home-study lesson
+material. After 16:00 the school/study list still advances to the next known
+day. The home list shows its own bring-home date and keeps the existing packing
+identities for that date. An explicit day selection applies to both directions.
+Regression tests reproduce Friday 2026-10-09 at 21:24 Brussels: Monday home
+study appears above while Friday's bring-home checklist remains below.
+
 Laptop is always displayed in both lists. Other entries are deterministic
 suggestions extracted from the already stored agenda title/instructions, grouped
 by subject and material. Page ranges and original text remain visible. Examples

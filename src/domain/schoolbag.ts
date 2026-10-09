@@ -100,21 +100,23 @@ export function schoolbagOverview(agenda: BagAgenda, now: Date, selectedDay: str
     return day >= today && ((weekday !== 0 && weekday !== 6) || specialDays.some((entry) => entry.day === day || entry.preparationDay === day));
   }).sort();
   const nextDay = days.find((day) => day > today) ?? null;
-  const defaultDay = (wall.slice(11, 16) < '16:00' || specialDays.some((entry) => entry.preparationDay === today)) && days.includes(today) ? today : nextDay;
+  const defaultDay = wall.slice(11, 16) < '16:00' && days.includes(today) ? today : nextDay;
   const targetDay = selectedDay && days.includes(selectedDay) ? selectedDay : defaultDay;
+  // A bring-home reminder must not hold the next lesson's school list on today.
+  const homePackingDay = !(selectedDay && days.includes(selectedDay)) && specialDays.some((entry) => entry.preparationDay === today) ? today : targetDay;
   const special = specialDays.find((entry) => entry.day === targetDay);
   const schoolPoints = agenda.points.filter((point) => point.day === targetDay && special?.useTimetable !== false);
   // A preparation-only date is a packing choice, not evidence of a lesson/deadline day.
-  const homeDay = targetDay ? days.find((day) => day > targetDay &&
+  const homeDay = homePackingDay ? days.find((day) => day > homePackingDay &&
     (agenda.points.some((point) => point.day === day) || specialDays.some((entry) => entry.day === day))) ?? null : null;
-  const preparations = specialDays.filter((entry) => entry.preparationDay === targetDay);
+  const preparations = specialDays.filter((entry) => entry.preparationDay === homePackingDay);
   const homework = agenda.points.filter((point) => (point.day === homeDay && point.status !== 'done' && point.category !== 'other' && hasAgendaMarker(point.typePunt)) ||
     preparations.some((entry) => entry.day === point.day && entry.kind === 'home-study' && entry.useTimetable));
   const manual = (entries: SpecialDay[]): BagMaterial[] => entries.flatMap((entry) => entry.checklist.filter((item) => item.pack).map((item) => ({
     key: `special:${entry.id}:${item.id}`, label: item.text, subject: entry.title, uncertain: false, pages: [],
     sources: [{ id: item.id, day: entry.day, title: entry.title, text: item.text }],
   })));
-  return { today, nextDay, days, targetDay, homeDay, special, preparations,
+  return { today, nextDay, days, targetDay, homePackingDay, homeDay, special, preparations,
     school: [...materialsFor(schoolPoints), ...manual(special ? [special] : [])], homework: [...materialsFor(homework), ...manual(preparations)],
     schoolPoints, homeworkPoints: homework };
 }

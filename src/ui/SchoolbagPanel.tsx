@@ -92,9 +92,10 @@ export function SchoolbagOverview({ view, now, working = false, onChange }: { vi
       </div>
       <div className="mt-5 border-t border-teal-200 pt-4">
         <h3 className="font-semibold">Mee naar huis</h3>
+        {overview.homePackingDay && <p className="mt-2 text-xs text-slate-600">Meenemen naar huis op {dateLabel(overview.homePackingDay)}.</p>}
         {overview.preparations.map((entry) => <p key={entry.id} className="mt-2 text-sm font-medium text-amber-800">Voorbereiden voor {entry.title} op {dateLabel(entry.day)}.{entry.kind === 'home-study' && entry.useTimetable ? ' Ook materiaal uit gewone lessen en afgeronde taken meenemen.' : ''}</p>)}
         <p className="mt-2 text-xs text-slate-600">{overview.homeDay ? `Voor nog openstaande taken en toetsen tegen ${dateLabel(overview.homeDay)}. Neem het benodigde materiaal mee naar huis.` : 'Geen latere lesdag bekend na de gekozen lesdag. Controleer je agenda opnieuw.'}</p>
-        <PackingList materials={overview.homework} points={overview.homeworkPoints} day={overview.targetDay} direction="home" choices={view?.choices} working={working} onChange={onChange} />
+        <PackingList materials={overview.homework} points={overview.homeworkPoints} day={overview.homePackingDay} direction="home" choices={view?.choices} working={working} onChange={onChange} />
         <p className="mt-2 text-xs text-slate-500">Voor gewone huiswerktaken telt Klaar niet mee. Voor thuisstudie telt het hele bekende lesrooster mee. Controleer ook materiaal dat niet in de agenda staat.</p>
       </div>
       {view?.lastSuccessAt && <p className="mt-4 text-xs text-slate-500">Gebaseerd op je agenda van {new Date(view.lastSuccessAt).toLocaleString('nl-BE', { timeZone: 'Europe/Brussels' })}. Alleen laatst opgehaalde punten; een lege dag bewijst niet dat er geen les is.</p>}
