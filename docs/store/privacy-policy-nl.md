@@ -1,6 +1,6 @@
 # Privacyverklaring Schoolware Watch
 
-Laatst bijgewerkt: 6 oktober 2026. Versie: 0.2.0 (bron voor de volgende update).
+Laatst bijgewerkt: 9 oktober 2026. Versie: 0.2.0 (bron voor de volgende update).
 
 Schoolware Watch is een onafhankelijk project van Bumper.be. Contact:
 [info@bumper.be](mailto:info@bumper.be). Het is geen officieel product van
@@ -16,16 +16,18 @@ Agenda-inhoud kan persoonlijke informatie bevatten.
 
 De extensie gebruikt deze gegevens voor lokale wijzigingsgeschiedenis,
 taakstatussen, meldingen, een to-do overzicht en boekentassuggesties. Ingepakt- en
-verbergkeuzes voor de boekentas blijven lokaal, per leerling en lesdag, en worden
-niet gedeeld via de voortgangsdienst.
+verbergkeuzes voor de boekentas worden per leerling en lesdag bewaard en met
+ingeschakelde voortgangsdeling versleuteld gedeeld.
 Een lokale activiteitenlog bevat tijden, aantallen, technische resultaten en
 willekeurige lokale verwijzingen, geen agendatekst of Schoolware-inloggegevens.
 Logexport is een expliciete actie naar een bestand op je eigen computer.
 
 Zelf ingevoerde speciale dagen, opmerkingen, checklistpunten en voorbereidingsdatums
-blijven lokaal bij het gekozen leerlingprofiel. Ze worden niet gesynchroniseerd
-of in het activiteitenlog opgenomen en volgen de lokale bewaartermijn en
-verwijderfuncties. Voorbereidingsmeldingen bevatten alleen algemene tekst.
+staan bij het gekozen leerlingprofiel. Met voortgangsdeling worden ze samen met
+checklistvinkjes en boekentaskeuzes versleuteld gesynchroniseerd. Deze tekst wordt
+niet in het activiteitenlog opgenomen. Lokale en gedeelde gegevens volgen hun
+afzonderlijke bewaartermijnen en verwijderfuncties. Voorbereidingsmeldingen bevatten
+alleen algemene tekst.
 Je kunt taken en voortgang lokaal als CSV downloaden. Dat bestand kan
 persoonlijke agendatekst bevatten; bewaar en verwijder geëxporteerde bestanden zelf.
 
@@ -40,8 +42,10 @@ worden niet gevolgd.
 
 Alleen wanneer je zelf een groep aanmaakt of koppelt, gebruikt de extensie
 `https://schoolware.bumper.be`. De deelnemende browsers delen versleutelde
-Open/Bezig/Klaar-statussen en optioneel versleutelde, zelfgekozen deelnemerlabels.
-Agendatitels, instructies, ruwe leerling-/bronidentificaties en Schoolware-sessies
+Open/Bezig/Klaar-statussen, zelf ingevoerde speciale dagen met opmerkingen en
+checklists, checklistvinkjes, boekentaskeuzes en optioneel deelnemerlabels.
+Neem in speciale-dagtekst alleen informatie op die je met de gekoppelde personen
+wilt delen. Schoolware-agendatitels, instructies, geschiedenis, ruwe leerling-/bronidentificaties en Schoolware-sessies
 worden niet naar deze dienst verstuurd. De browser maakt een aparte willekeurige
 groepscredential en encryptiesleutel; dit zijn geen Schoolware-inloggegevens.
 

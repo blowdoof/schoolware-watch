@@ -10,7 +10,16 @@ import { todoReminderSelection } from '../domain/todo';
 import type { Category } from '../domain/observations';
 import { brusselsWallTime } from '../domain/notification-window';
 import { agendaProfileKey, validateAgendaRequest } from '../schoolware/agenda-request';
-import { validateSpecialDay, MAX_SPECIAL_DAYS, type SpecialDay } from '../domain/special-days';
+import { validateSpecialDay, MAX_SPECIAL_DAYS, isDay, type SpecialDay } from '../domain/special-days';
+import { planningOperations, planningResource, sharedSpecialDay, type PlanningValue } from '../shared/planning-sync';
+import type { SyncState } from '../shared/progress-sync';
+import { packingIdentityMigration } from '../shared/schoolbag';
+
+function queuePlanning(state: SyncState | undefined, scopeId: string, value: PlanningValue): void {
+  if (state?.scopeId !== scopeId) return;
+  const resource = planningResource(value);
+  state.planningOutbox = [...(state.planningOutbox ?? []).filter((operation) => operation.resource !== resource), ...planningOperations(value)];
+}
 
 export { HISTORY_DB, HISTORY_VERSION, openHistoryDatabase } from './database';
 
@@ -183,11 +192,18 @@ export class HistoryRepository {
   async saveSpecialDay(scopeId: string, entry: SpecialDay): Promise<void> {
     const validated = validateSpecialDay(entry);
     if (!validated) throw new Error('Invalid special day');
-    await this.editSpecialDays(scopeId, (entries) => {
+    await this.editSpecialDays(scopeId, (entries, state) => {
       const previous = entries.find((item) => item.id === validated.id);
       if ((previous?.revision ?? 0) !== validated.revision || (!previous && validated.revision !== 0) ||
           entries.some((item) => item.day === validated.day && item.id !== validated.id)) throw new Error('Special day changed');
       const next = entries.filter((item) => item.id !== validated.id);
+      if (previous && previous.day !== validated.day) queuePlanning(state, scopeId, { type: 'special-day-move', previousDay: previous.day, entry: sharedSpecialDay(validated) });
+      else if (!previous || JSON.stringify(sharedSpecialDay(previous)) !== JSON.stringify(sharedSpecialDay(validated)))
+        queuePlanning(state, scopeId, { type: 'special-day', day: validated.day, entry: sharedSpecialDay(validated) });
+      for (const point of validated.checklist) {
+        if (previous?.checklist.find((item) => item.id === point.id)?.done !== point.done)
+          queuePlanning(state, scopeId, { type: 'checklist', eventId: validated.id, pointId: point.id, done: point.done });
+      }
       next.push({ ...validated, revision: validated.revision + 1 });
       if (next.length > MAX_SPECIAL_DAYS) throw new Error('Special day limit');
       return next.sort((a, b) => a.day.localeCompare(b.day));
@@ -196,23 +212,52 @@ export class HistoryRepository {
 
   async deleteSpecialDay(scopeId: string, id: string, revision: number): Promise<void> {
     if (!isAlertId(id) || !Number.isSafeInteger(revision) || revision < 1) throw new Error('Invalid special day deletion');
-    await this.editSpecialDays(scopeId, (entries) => {
+    await this.editSpecialDays(scopeId, (entries, state) => {
       if (!entries.some((item) => item.id === id && item.revision === revision)) throw new Error('Special day changed');
+      queuePlanning(state, scopeId, { type: 'special-day', day: entries.find((item) => item.id === id)!.day, entry: null });
       return entries.filter((item) => item.id !== id);
     });
   }
 
-  private async editSpecialDays(scopeId: string, edit: (entries: SpecialDay[]) => SpecialDay[]): Promise<void> {
+  private async editSpecialDays(scopeId: string, edit: (entries: SpecialDay[], state: SyncState | undefined) => SpecialDay[]): Promise<void> {
     const db = await openHistoryDatabase(this.name);
     try {
+      const tx = db.transaction(['scopes', 'sync'], 'readwrite');
+      const done = tx.done; void done.catch(() => {});
+      try {
+        const scope = await tx.objectStore('scopes').get(scopeId);
+        if (!scope) throw new Error('Profile unavailable');
+        const state = await tx.objectStore('sync').get(SYNC_STATE_KEY);
+        const previous = scope.specialDays ?? [];
+        scope.specialDays = edit(scope.specialDays ?? [], state);
+        const clock = Math.max(scope.specialDayRevision ?? 0, ...previous.map((entry) => entry.revision), 0) + 1;
+        if (!Number.isSafeInteger(clock)) throw new Error('Special day revision exhausted');
+        for (const entry of scope.specialDays) if (JSON.stringify(entry) !== JSON.stringify(previous.find((old) => old.id === entry.id))) entry.revision = clock;
+        scope.specialDayRevision = clock;
+        await tx.objectStore('scopes').put(scope);
+        if (state?.scopeId === scopeId) await tx.objectStore('sync').put(state, SYNC_STATE_KEY);
+        await done;
+      } catch (error) { try { tx.abort(); } catch { /* Already completed. */ } await done.catch(() => {}); throw error; }
+    } finally { db.close(); }
+  }
+
+  async migratePackingIdentity(scopeId: string): Promise<void> {
+    const db = await openHistoryDatabase(this.name);
+    try {
+      const before = await db.get('scopes', scopeId);
+      if (!before || before.packingIdentityVersion === 1) return;
+      const mapping = await packingIdentityMigration(before, new Date());
       const tx = db.transaction('scopes', 'readwrite');
       const done = tx.done; void done.catch(() => {});
       try {
-        const scope = await tx.store.get(scopeId);
-        if (!scope) throw new Error('Profile unavailable');
-        scope.specialDays = edit(scope.specialDays ?? []);
-        await tx.store.put(scope); await done;
-      } catch (error) { try { tx.abort(); } catch { /* Already completed. */ } await done.catch(() => {}); throw error; }
+        const current = await tx.store.get(scopeId);
+        if (!current || JSON.stringify(current) !== JSON.stringify(before)) throw new Error('Packing view changed');
+        current.schoolbagChoices = (current.schoolbagChoices ?? []).flatMap((choice) => {
+          const id = mapping.get(choice.id); return id ? [{ ...choice, id }] : [];
+        });
+        current.packingIdentityVersion = 1;
+        await tx.store.put(current); await done;
+      } catch (error) { try { tx.abort(); } catch { /* Completed. */ } await done.catch(() => {}); throw error; }
     } finally { db.close(); }
   }
 
@@ -231,20 +276,23 @@ export class HistoryRepository {
   }
 
   async setPackingChoice(scopeId: string, id: string, day: string, state: 'packed' | 'hidden' | 'open'): Promise<void> {
-    if (!/^[a-f0-9]{64}$/.test(id) || !/^\d{4}-\d{2}-\d{2}$/.test(day) || !['packed', 'hidden', 'open'].includes(state)) throw new Error('Invalid packing choice');
+    if (!/^[a-f0-9]{64}$/.test(id) || !isDay(day) || !['packed', 'hidden', 'open'].includes(state)) throw new Error('Invalid packing choice');
     const db = await openHistoryDatabase(this.name);
     try {
-      const tx = db.transaction('scopes', 'readwrite');
+      const tx = db.transaction(['scopes', 'sync'], 'readwrite');
       const done = tx.done;
       void done.catch(() => {});
       try {
-        const scope = await tx.store.get(scopeId);
+        const scope = await tx.objectStore('scopes').get(scopeId);
         if (!scope) throw new Error('Profile unavailable');
         const choices = (scope.schoolbagChoices ?? []).filter((choice) => choice.id !== id && choice.day >= brusselsWallTime(new Date()).slice(0, 10));
         if (state !== 'open') choices.push({ id, day, state });
         if (choices.length > 5000) throw new Error('Packing choice limit');
         scope.schoolbagChoices = choices;
-        await tx.store.put(scope);
+        const sync = await tx.objectStore('sync').get(SYNC_STATE_KEY);
+        queuePlanning(sync, scopeId, { type: 'packing', id, day, state });
+        await tx.objectStore('scopes').put(scope);
+        if (sync?.scopeId === scopeId) await tx.objectStore('sync').put(sync, SYNC_STATE_KEY);
         await done;
       } catch (error) { try { tx.abort(); } catch { /* Already completed. */ } await done.catch(() => {}); throw error; }
     } finally { db.close(); }

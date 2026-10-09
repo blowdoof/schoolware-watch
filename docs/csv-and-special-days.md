@@ -1,4 +1,9 @@
-# Local CSV export and special days
+# CSV export and special days
+
+Special days, checklist completion and schoolbag choices now synchronize through
+the existing optional encrypted group, following the owner's 2026-10-09 scope
+expansion. See [shared planning](shared-planning.md). All paired clients must
+update; PHP/SQL remain unchanged. CSV downloads and Schoolware content remain local.
 
 ## CSV export
 
@@ -24,7 +29,7 @@ file is saved; local profile deletion cannot erase previously downloaded files.
 
 ## Special days
 
-Popup and dashboard include a per-profile local **Speciale dagen** panel. After
+Popup and dashboard include a per-profile **Speciale dagen** panel. After
 a successful agenda check, a user can create one event per date, with:
 
 - Home study, sports day, trip or another event type.
@@ -80,11 +85,14 @@ no store/schema upgrade is required. Domain observations preserve those fields,
 and existing retention prunes past events. Expiring the entire enclosing
 profile removes its events, including future ones. History clearing and
 disconnect remove events and claims. Writes require the active random local
-profile ID and matching event revision to reject stale/cross-profile edits.
+profile ID and matching local event revision to reject stale/cross-profile edits.
+Remote changes increment that revision so open editors cannot silently overwrite
+received updates. Checklist completion updates travel independently.
 
-Nothing is added to the progress outbox or PHP service. Titles, notes,
-checklists and packing choices are never synchronized. Logs contain validated
-request/action names and delivery outcomes only, without free text. No new
+Special days, user-created titles/notes/checklists and packing choices join the
+encrypted outbox when sharing is enabled. Schoolware title/instruction content
+is never uploaded. Logs contain validated request/action names and delivery
+outcomes only, without free text. No new
 permission, transport destination, API assumption or PHP/SQL update is needed.
 
 ## Verification

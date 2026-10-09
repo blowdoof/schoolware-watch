@@ -4,6 +4,7 @@ import { validateSchoolbagView, type SchoolbagView } from '../shared/schoolbag';
 import type { ConnectionMessage } from '../shared/connection';
 import { validatePreferencesView } from '../shared/preferences';
 import { useNow } from './useNow';
+import { PlanningSharingStatus } from './PlanningSharingStatus';
 
 const dateLabel = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString('nl-BE', {
   timeZone: 'Europe/Brussels', weekday: 'long', day: 'numeric', month: 'long',
@@ -73,8 +74,9 @@ export function SchoolbagOverview({ view, now, working = false, onChange }: { vi
   const overview = view ? schoolbagOverview(view, now, selectedDay) : null;
   return <section aria-label="Boekentas" className="mt-6 rounded-2xl border border-teal-200 bg-teal-50 p-5 shadow-sm">
     <h2 className="text-lg font-semibold">Boekentas</h2>
+    <PlanningSharingStatus status={view?.sharing} />
     <p className="mt-2 text-xs leading-5 text-slate-600">Suggesties uit je agenda. Controleer welk boek bedoeld wordt en of de pagina’s op papier of digitaal nodig zijn.</p>
-    <p className="mt-2 text-xs leading-5 text-slate-600">Laptop is een vaste suggestie. Ander materiaal wordt herkend in titels en instructies; bekijk de agendatekst voor de reden. Ingepakt en verborgen blijven lokaal, per lesdag en leerling. Gewijzigde materiaalinstructies vragen een nieuwe controle.</p>
+    <p className="mt-2 text-xs leading-5 text-slate-600">Laptop is een vaste suggestie. Ander materiaal wordt herkend in titels en instructies; bekijk de agendatekst voor de reden. Met Voortgang delen worden Ingepakt en Verbergen gedeeld per lesdag en leerling. Gewijzigde materiaalinstructies vragen een nieuwe controle. Elke computer leest zelf Schoolware in: controleer de laatste ophaal- en synchronisatietijd als lijsten verschillen.</p>
     {!overview ? <p className="mt-3 text-sm">Boekentas laden…</p> : <>
       <div className="mt-4">
         <h3 className="font-semibold">{overview.special?.kind === 'home-study' ? 'Nodig voor thuisstudie' : 'Mee naar school'}</h3>

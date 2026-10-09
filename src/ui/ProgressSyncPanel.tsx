@@ -128,8 +128,9 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
         {!view?.enabled && <p className="mt-1 text-xs text-slate-600">Maak hieronder eerst een leerlinggroep aan of koppel een bestaande groep.</p>}
       </div>
     </div>
-    <p className="mt-2 text-sm leading-6 text-slate-600">Deel Open, Bezig en Klaar via schoolware.bumper.be. Titels, instructies en Schoolware-inloggegevens blijven lokaal.
+    <p className="mt-2 text-sm leading-6 text-slate-600">Deel Open, Bezig en Klaar, speciale dagen met opmerkingen en checklists, en boekentaskeuzes versleuteld via schoolware.bumper.be. Schoolware-titels, instructies en inloggegevens blijven lokaal.
       Koppel alleen computers die de agenda van dezelfde leerling bekijken. Elke leerling heeft een eigen deelgroep en koppelcode; verschillende gezinnen blijven gescheiden.</p>
+    <p className="mt-2 text-xs text-amber-800">Werk de extensie op alle gekoppelde computers bij voor speciale dagen en boekentaskeuzes. Oudere versies kunnen deze wijzigingen niet verwerken. De Schoolware-agenda wordt op elk toestel afzonderlijk ingelezen; een verlopen sessie of oudere controle kan tijdelijk verschillende lijsten geven.</p>
     {!compatible && <p role="status" className="mt-3 text-sm text-amber-800">Koppel eerst een ondersteunde Schoolware-agenda en voer een geslaagde controle uit om voortgang te delen.</p>}
     {view?.enabled ? <>
       {view.blocked && <p role="status" className="mt-3 text-sm text-amber-800">Automatische synchronisatie is gestopt: de server weigert deze koppeling. Controleer de koppelcode of vraag de beheerder om hulp. Nu synchroniseren probeert opnieuw; lokale voortgang blijft bewaard.</p>}

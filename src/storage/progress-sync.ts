@@ -4,6 +4,10 @@ import { progressItemKey, progressVersion, progressVersionText } from '../domain
 import { hasAgendaMarker, isTaskCategory } from '../domain/tasks';
 import type { TaskStatus } from '../domain/tasks';
 import { activityInput, appendActivity, type AuditContext } from './activity';
+import { HistoryRepository, DEFAULT_RETENTION, retentionCutoff } from './history';
+import { planningOperations, sharedSpecialDay, planningResource, assemblePlanning, type PlanningFragment, type PlanningValue } from '../shared/planning-sync';
+import { applySharedPlanning } from '../domain/shared-planning';
+import { brusselsWallTime } from '../domain/notification-window';
 
 export class ProgressSyncRepository {
   constructor(private readonly name = HISTORY_DB) {}
@@ -13,11 +17,38 @@ export class ProgressSyncRepository {
   }
   async view(): Promise<SyncView> {
     const state = await this.read();
-    return { ok: true, enabled: Boolean(state), pending: state?.outbox.length ?? 0,
+    return { ok: true, enabled: Boolean(state), pending: (state?.outbox.length ?? 0) + (state?.planningOutbox?.length ?? 0),
       lastSuccessAt: state?.lastSuccessAt ?? null, error: state?.error ?? false,
       ...(state?.displayName ? { displayName: state.displayName, membersError: state.membersError ?? false,
         members: (state.members ?? []).map((member) => ({ ...member, self: member.id === state.connectionId })) } : {}),
       ...(state?.registrationPending ? { registrationPending: true } : {}), ...(state?.blocked ? { blocked: true } : {}) };
+  }
+  async preparePlanning(scopeId: string): Promise<void> {
+    const history = new HistoryRepository(this.name);
+    await history.read(scopeId);
+    await history.migratePackingIdentity(scopeId);
+    const db = await openHistoryDatabase(this.name);
+    try {
+      const tx = db.transaction(['scopes', 'sync'], 'readwrite');
+      const done = tx.done; void done.catch(() => {});
+      try {
+        const state = await tx.objectStore('sync').get(SYNC_STATE_KEY);
+        const scope = await tx.objectStore('scopes').get(scopeId);
+        if (state?.scopeId === scopeId && scope && !state.planningInitialized) {
+          const values: PlanningValue[] = (scope.specialDays ?? []).flatMap((entry) => [
+            { type: 'special-day' as const, day: entry.day, entry: sharedSpecialDay(entry) },
+            ...entry.checklist.map((point) => ({ type: 'checklist' as const, eventId: entry.id, pointId: point.id, done: point.done })),
+          ]);
+          values.push(...(scope.schoolbagChoices ?? []).map((choice) => ({ type: 'packing' as const, ...choice })));
+          state.planningOutbox ??= [];
+          for (const value of values) if (!state.planningOutbox.some((operation) => operation.resource === planningResource(value)))
+            state.planningOutbox.push(...planningOperations(value, true));
+          state.planningInitialized = true;
+          await tx.objectStore('sync').put(state, SYNC_STATE_KEY);
+        }
+        await done;
+      } catch (error) { try { tx.abort(); } catch { /* Completed. */ } await done.catch(() => {}); throw error; }
+    } finally { db.close(); }
   }
   async connect(scopeId: string, code: string, seed: boolean, register = false, label?: string): Promise<void> {
     const pair = parsePairingCode(code);
@@ -85,28 +116,57 @@ export class ProgressSyncRepository {
     } finally { db.close(); }
   }
   async commit(expected: SyncState, acknowledged: string[], cursor: number,
-    remote: Record<string, { version: string; status: TaskStatus; revision: number; kind: 'manual' | 'reopen' }>, head = cursor): Promise<boolean> {
+    remote: Record<string, { version: string; status: TaskStatus; revision: number; kind: 'manual' | 'reopen' }>, head = cursor,
+    planning: { fragment: PlanningFragment; revision: number }[] = []): Promise<boolean> {
     const db = await openHistoryDatabase(this.name);
     try {
       const tx = db.transaction('sync', 'readwrite');
-      const current = await tx.store.get(SYNC_STATE_KEY);
-      let accepted = false;
-      if (current && current.connectionId === expected.connectionId && current.token === expected.token && current.key === expected.key && current.scopeId === expected.scopeId) {
-        current.outbox = current.outbox.filter((op) => !acknowledged.includes(op.id));
-        current.cursor = Math.max(current.cursor, cursor);
-        current.head = Math.max(current.head, head);
-        for (const [key, value] of Object.entries(remote)) {
-          const previous = current.remote[key];
-          if (!previous || (previous.kind !== 'manual' && value.kind === 'manual') ||
-              (previous.kind === value.kind && previous.revision < value.revision)) current.remote[key] = value;
+      const done = tx.done; void done.catch(() => {});
+      try {
+        const current = await tx.store.get(SYNC_STATE_KEY);
+        let accepted = false;
+        if (current && current.connectionId === expected.connectionId && current.token === expected.token && current.key === expected.key && current.scopeId === expected.scopeId) {
+          current.outbox = current.outbox.filter((op) => !acknowledged.includes(op.id));
+          if (current.planningOutbox) current.planningOutbox = current.planningOutbox.filter((op) => !acknowledged.includes(op.id));
+          for (const { fragment, revision } of planning) {
+            current.planningParts ??= {}; current.planningRemote ??= {};
+            const assembly = current.planningParts[fragment.batch] ?? { count: fragment.count, parts: {}, revision };
+            if (assembly.count !== fragment.count || (assembly.parts[fragment.index] !== undefined && assembly.parts[fragment.index] !== fragment.data)) throw new Error('Invalid planning fragments');
+            assembly.parts[fragment.index] = fragment.data;
+            assembly.revision = Math.max(assembly.revision, revision);
+            current.planningParts[fragment.batch] = assembly;
+            if (Object.keys(assembly.parts).length === assembly.count) {
+              const assembled = assemblePlanning(assembly);
+              const values: PlanningValue[] = assembled.value.type === 'special-day-move' ? [
+                { type: 'special-day', day: assembled.value.previousDay, entry: null },
+                { type: 'special-day', day: assembled.value.entry.day, entry: assembled.value.entry },
+              ] : [assembled.value];
+              for (const value of values) {
+                const key = planningResource(value);
+                const previous = current.planningRemote[key];
+                if (!previous || (previous.seed && !assembled.seed) || (previous.seed === assembled.seed && previous.revision < assembly.revision))
+                  current.planningRemote[key] = { value, seed: assembled.seed, revision: assembly.revision };
+              }
+              delete current.planningParts[fragment.batch];
+            }
+          }
+          if (current.planningParts) current.planningParts = Object.fromEntries(Object.entries(current.planningParts).sort((a, b) => b[1].revision - a[1].revision).slice(0, 128));
+          if (current.planningRemote && Object.keys(current.planningRemote).length > 20000) throw new Error('Planning cache limit');
+          current.cursor = Math.max(current.cursor, cursor);
+          current.head = Math.max(current.head, head);
+          for (const [key, value] of Object.entries(remote)) {
+            const previous = current.remote[key];
+            if (!previous || (previous.kind !== 'manual' && value.kind === 'manual') ||
+                (previous.kind === value.kind && previous.revision < value.revision)) current.remote[key] = value;
+          }
+          // Bound the cache, including operations for points not locally visible yet.
+          current.remote = Object.fromEntries(Object.entries(current.remote).sort((a, b) => b[1].revision - a[1].revision).slice(0, 20000));
+          current.lastSuccessAt = new Date().toISOString(); current.error = false;
+          await tx.store.put(current, SYNC_STATE_KEY);
+          accepted = true;
         }
-        // Bound the cache, including operations for points not locally visible yet.
-        current.remote = Object.fromEntries(Object.entries(current.remote).sort((a, b) => b[1].revision - a[1].revision).slice(0, 20000));
-        current.lastSuccessAt = new Date().toISOString(); current.error = false;
-        await tx.store.put(current, SYNC_STATE_KEY);
-        accepted = true;
-      }
-      await tx.done; return accepted;
+        await done; return accepted;
+      } catch (error) { try { tx.abort(); } catch { /* Completed. */ } await done.catch(() => {}); throw error; }
     } finally { db.close(); }
   }
   async resume(): Promise<void> {
@@ -141,13 +201,16 @@ export class ProgressSyncRepository {
         const version = await progressVersion(item.snapshot); const key = await progressItemKey(state.key, item.sourceKey, new URL(state.scopeId).origin);
         return { sourceKey: item.sourceKey, text: progressVersionText(item.snapshot), remoteKey: `${key}.${version}` };
       }));
-      const tx = db.transaction(['scopes', 'sync', 'activity'], 'readwrite');
+      const tx = db.transaction(['scopes', 'sync', 'activity', 'settings'], 'readwrite');
       const done = tx.done; void done.catch(() => {});
       try {
         const current = await tx.objectStore('sync').get(SYNC_STATE_KEY);
         const scope = await tx.objectStore('scopes').get(scopeId);
         let changed = false;
         if (current?.connectionId === state.connectionId && current.token === state.token && current.key === state.key && current.scopeId === scopeId && scope) {
+          const now = new Date();
+          const retention = await tx.objectStore('settings').get('retentionDays') ?? DEFAULT_RETENTION;
+          if (applySharedPlanning(scope, current, retentionCutoff(now.toISOString(), retention), brusselsWallTime(now).slice(0, 10))) changed = true;
           for (const match of matches) {
             const item = scope.items.find((item) => item.sourceKey === match.sourceKey);
             const remote = current.remote[match.remoteKey];

@@ -9,11 +9,12 @@ contacted only when the user opens that link and handles any subsequent payment
 under its own privacy policy. See [Project information](project-information.md).
 
 Schoolware Watch has no analytics or telemetry. Agenda history stays local.
-At the owner's explicit request, optional progress-only synchronization can use
+At the owner's explicit request, optional progress and planning synchronization can use
 the owner's PHP service at `https://schoolware.bumper.be`. It is disabled until
-devices are explicitly paired. Encrypted progress operations and optional
+devices are explicitly paired. Encrypted task progress, user-created special
+days/text/checklists, checklist completion, packing/hiding choices and optional
 encrypted participant announcements are uploaded;
-no titles, instructions, raw pupil/source IDs or Schoolware session material is
+no Schoolware source titles/instructions, raw pupil/source IDs or Schoolware session material is
 sent. The independent sync credential and encryption key are stored locally in
 IndexedDB, separately from Schoolware authentication. A device with access to
 that browser profile can read these keys. The server stores a token verifier per isolated group,
@@ -165,10 +166,13 @@ hides it, while Chrome keeps optional permissions until revoked/disconnected.
 CSV export is an explicit local user action. Warn within that action that the
 file contains personal information and escape formula-like cell values.
 
-Local special-day titles, notes, dates and checklists are stored inside the
-selected IndexedDB profile. They are never sent to the encrypted progress
-service or written into activity logs. Existing history retention, profile
-clearing and disconnect remove them. Generic preparation notifications expose
+Special-day titles, notes, dates and checklists are stored inside the
+selected IndexedDB profile. With optional sharing enabled, those user-created
+fields, checklist completion and packing/hiding choices are encrypted and sent
+to the existing service (owner-authorized scope expansion on 2026-10-09).
+They are never written into activity logs. Existing history retention, profile
+clearing and disconnect remove local copies; server deletion and retention are
+separate and cannot remove copies already received by other devices. Generic preparation notifications expose
 no event titles or checklist text. User-downloaded CSV files remain outside
 extension retention/deletion controls. See [feature details](csv-and-special-days.md).
 

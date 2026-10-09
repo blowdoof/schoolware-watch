@@ -34,8 +34,9 @@ never interpreted as holidays or assigned invented lessons.
 The service worker reads the existing repository and returns a runtime-validated
 `schoolbag.read` response only to trusted extension pages. Website scripts cannot
 read it. Source IDs and profile identifiers are excluded. HTML is converted to
-text and rendered through React escaping. No additional fields are persisted,
-no packing data is synchronized, and there are no new permissions or server
+text and rendered through React escaping. Packing/hiding choices and special
+days now synchronize in the existing optional encrypted group; automatic
+Schoolware material text remains local. There are no new permissions or server
 changes. Existing retention/profile deletion controls apply to the source data.
 
 An isolated headless Chrome smoke also verifies the actual worker response and

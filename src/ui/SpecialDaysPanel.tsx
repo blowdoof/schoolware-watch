@@ -3,6 +3,7 @@ import { brusselsWallTime } from '../domain/notification-window';
 import { validateSpecialDay, type SpecialDay } from '../domain/special-days';
 import { validateSpecialDaysView, type SpecialDaysView, type SpecialDaysMessage } from '../shared/special-days';
 import { useNow } from './useNow';
+import { PlanningSharingStatus } from './PlanningSharingStatus';
 
 const kinds: Record<SpecialDay['kind'], string> = { 'home-study': 'Thuisstudie', sports: 'Sportdag', trip: 'Uitstap', other: 'Andere speciale dag' };
 const dateLabel = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString('nl-BE', { timeZone: 'Europe/Brussels', weekday: 'long', day: 'numeric', month: 'long' });
@@ -85,7 +86,8 @@ export function SpecialDaysPanel({ refreshToken }: { refreshToken: number }) {
   const entry = draft?.entry;
   return <section aria-label="Speciale dagen" className="mt-6 rounded-2xl border border-amber-200 bg-white p-5 shadow-sm">
     <h2 className="text-lg font-semibold">Speciale dagen</h2>
-    <p className="mt-2 text-xs text-slate-600">Lokale aanvullingen voor deze leerling. Kies wanneer je voorbereidt en welke punten ook in de boekentas horen. Schoolware en gedeelde voortgang blijven ongewijzigd.</p>
+    <PlanningSharingStatus status={view?.sharing} />
+    <p className="mt-2 text-xs text-slate-600">Aanvullingen voor deze leerling. Met Voortgang delen worden speciale dagen, opmerkingen, checklistpunten en vinkjes versleuteld gedeeld met de gekoppelde computers. Kies wanneer je voorbereidt en welke punten ook in de boekentas horen. Schoolware blijft ongewijzigd.</p>
     <p className="mt-2 text-xs text-slate-600">Een herinnering volgt vanaf 16 uur op de voorbereidingsdatum, of op de speciale dag als die datum leeg is. Zet systeemmeldingen en dagelijkse to-do herinneringen aan bij Instellingen. Chrome moet draaien; hervatten op dezelfde dag kan de melding later bezorgen.</p>
     <div className="mt-3 flex gap-3 text-sm">
       <button type="button" disabled={!view?.connected || working || Boolean(draft)} onClick={create} className="rounded-lg bg-teal-700 px-3 py-2 text-white disabled:opacity-50">Speciale dag toevoegen</button>

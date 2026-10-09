@@ -12,10 +12,11 @@ import { HistoryRepository, DEFAULT_RETENTION } from '../storage/history';
 import { ActivityRepository, activityInput, type AuditContext } from '../storage/activity';
 import { type ActivityAction, type ActivityData, type ActivityPhase, type ActivityView, type ActivityReporter, type ActivityTrigger } from '../shared/activity';
 import { createTasksView, type TasksView } from '../shared/tasks';
-import { createSchoolbagView, type SchoolbagView } from '../shared/schoolbag';
+import { createStableSchoolbagView, type SchoolbagView } from '../shared/schoolbag';
 import { availablePackingChoices } from '../domain/schoolbag';
 import type { SpecialDaysView } from '../shared/special-days';
 import { specialReminderPlan, specialReminderKey } from '../domain/special-day-reminders';
+import type { PlanningSharingStatus } from '../shared/planning-sync';
 import { isAlertId } from '../shared/browser-alerts';
 import type { Category, HistoryScope } from '../domain/observations';
 import { notificationEventSelection } from '../domain/notification-window';
@@ -69,7 +70,25 @@ const progressReporter = (current: Trace, trigger: ActivityTrigger): ActivityRep
   (action, phase, data = {}) => log(current, action, phase, { ...data, trigger });
 
 async function invalidateTaskViews(): Promise<void> {
+  await configureSpecialDaysAlarm().catch(() => {});
   if (chrome.runtime.sendMessage) await chrome.runtime.sendMessage({ type: 'tasks.updated' }).catch(() => {});
+}
+
+function offerPlanningSync(current: Trace): void {
+  void serializeMutation(async () => {
+    await activeTask;
+    await synchronizeProgress((await readConnection()).requestUrl, progressReporter(current, 'task-edit'), current);
+    await invalidateTaskViews();
+    await refreshBrowserBadge(true, current).catch(() => {});
+  }).catch(() => log(current, 'progress.sync', 'failed', { trigger: 'task-edit', reason: 'unavailable' }));
+}
+
+async function planningSharingStatus(scopeId: string | null): Promise<PlanningSharingStatus> {
+  const state = await progressSync.read();
+  const enabled = Boolean(state && state.scopeId === scopeId);
+  return { enabled, pending: enabled ? state!.outbox.length + (state!.planningOutbox?.length ?? 0) : 0,
+    lastSuccessAt: enabled ? state!.lastSuccessAt : null, error: enabled ? state!.error : false,
+    ...(enabled && state!.cursor < state!.head ? { receiving: true } : {}) };
 }
 
 async function configureWebsite(enabled: boolean, current: Trace): Promise<void> {
@@ -540,22 +559,26 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
         else await history.deleteSpecialDay(connection.requestUrl, message.id, message.revision);
         await invalidateTaskViews();
         await configureSpecialDaysAlarm();
+        offerPlanningSync(current);
       }
-      return { ok: true, connected: Boolean(scope), profileId: scope?.localId ?? null, entries: (await history.read(connection.requestUrl)).scope?.specialDays ?? [] } satisfies SpecialDaysView;
+      return { ok: true, connected: Boolean(scope), profileId: scope?.localId ?? null, entries: (await history.read(connection.requestUrl)).scope?.specialDays ?? [],
+        sharing: await planningSharingStatus(connection.requestUrl) } satisfies SpecialDaysView;
     });
   }
   if (message.type === 'schoolbag.read' || message.type === 'schoolbag.update') {
     return serializeMutation(async () => {
       const connection = await readConnection();
+      if (connection.requestUrl) await history.migratePackingIdentity(connection.requestUrl);
       if (message.type === 'schoolbag.update') {
         if (!connection.requestUrl) throw new Error('Profile unavailable');
-        const agenda = createSchoolbagView((await history.read(connection.requestUrl)).scope);
+        const agenda = await createStableSchoolbagView((await history.read(connection.requestUrl)).scope);
         const day = (await availablePackingChoices(agenda, new Date())).get(message.choiceId);
         if (!day) throw new Error('Packing suggestion unavailable');
         await history.setPackingChoice(connection.requestUrl, message.choiceId, day, message.state);
         await invalidateTaskViews();
+        offerPlanningSync(current);
       }
-      return createSchoolbagView((await history.read(connection.requestUrl)).scope);
+      return { ...await createStableSchoolbagView((await history.read(connection.requestUrl)).scope), sharing: await planningSharingStatus(connection.requestUrl) };
     });
   }
   if (message.type === 'tasks.read') {
@@ -574,11 +597,7 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
       // offline server; the alarm retries after an interrupted deferred upload.
       const sync = await progressSync.read();
       if (sync?.scopeId === connection.requestUrl) {
-        void serializeMutation(async () => {
-          await activeTask;
-          if (await synchronizeProgress((await readConnection()).requestUrl, progressReporter(current, 'task-edit'), current)) await invalidateTaskViews();
-          await refreshBrowserBadge(true, current).catch(() => {});
-        }).catch(() => log(current, 'progress.sync', 'failed', { trigger: 'task-edit', reason: 'unavailable' }));
+        offerPlanningSync(current);
       } else {
         await log(current, 'progress.sync', 'skipped', { trigger: 'task-edit', reason: sync ? 'profile-mismatch' : 'disabled' });
       }
@@ -826,7 +845,8 @@ chrome.alarms.onAlarm.addListener((alarm) => {
       const connection = await readConnection();
       const scope = (await history.read(connection.requestUrl)).scope;
       if (scope?.localId) current.profileId = scope.localId;
-      if (await synchronizeProgress(connection.requestUrl, progressReporter(current, 'alarm'), current)) await invalidateTaskViews();
+      await synchronizeProgress(connection.requestUrl, progressReporter(current, 'alarm'), current);
+      await invalidateTaskViews();
       await refreshBrowserBadge(true, current).catch(() => {});
       await configureProgressSyncAlarm(progressReporter(current, 'alarm'));
     })).catch(() => log(current, 'progress.sync', 'failed', { trigger: 'alarm', reason: 'unavailable' }));

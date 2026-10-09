@@ -26,5 +26,5 @@ ${code}
 
 4. Klik op Koppelen, geef toestemming voor de voortgangsdienst en controleer Laatst gesynchroniseerd. Vul eventueel je naam of rol in.
 
-We delen Open, Bezig en Klaar voor overeenkomende taken. Agenda-inhoud en Schoolware-inloggegevens blijven lokaal. Bewaar dit bericht privé: de code geeft toegang om onze gedeelde voortgang te lezen en wijzigen. Maak geen nieuwe leerlinggroep aan.`;
+We delen Open, Bezig en Klaar voor overeenkomende taken, speciale dagen met opmerkingen en checklists, en boekentaskeuzes. Werk de extensie op alle computers bij. Schoolware-agenda-inhoud en inloggegevens blijven lokaal. Bewaar dit bericht privé: de code geeft toegang om onze gedeelde voortgang en planning te lezen en wijzigen. Maak geen nieuwe leerlinggroep aan.`;
 }

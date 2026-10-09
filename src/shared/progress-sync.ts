@@ -1,5 +1,6 @@
 import { isTaskStatus, type TaskStatus } from '../domain/tasks';
 import { isAlertId } from './browser-alerts';
+import type { PlanningOperation, PlanningRecord, PlanningAssembly } from './planning-sync';
 
 export const SYNC_ORIGIN = 'https://schoolware.bumper.be';
 export const SYNC_PERMISSION = `${SYNC_ORIGIN}/*`;
@@ -29,6 +30,8 @@ export interface SyncState {
   registrationPending?: boolean;
   blocked?: boolean;
   displayName?: string; members?: SyncMember[]; membersError?: boolean;
+  planningInitialized?: boolean; planningOutbox?: PlanningOperation[];
+  planningRemote?: Record<string, PlanningRecord>; planningParts?: Record<string, PlanningAssembly>;
 }
 export interface SyncView { ok: boolean; enabled: boolean; pending: number; lastSuccessAt: string | null; error: boolean; pairingCode?: string; registrationPending?: boolean; blocked?: boolean;
   displayName?: string; members?: (SyncMember & { self: boolean })[]; membersError?: boolean }

@@ -121,6 +121,20 @@ beforeEach(async () => {
 });
 
 describe('special day worker boundaries and reminders', () => {
+  it('shows sharing only for the paired active profile and keeps another profile\'s planning out of that group', async () => {
+    await dispatch({ type: 'agenda.check', requestUrl });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ ok: true, acknowledged: [], cursor: 0, head: 0, operations: [] })));
+    await dispatch({ type: 'sync.connect', code: `sw1.${'a'.repeat(64)}.${'b'.repeat(64)}`, seed: false });
+    expect(await dispatch({ type: 'specialDays.read' })).toMatchObject({ sharing: { enabled: true, pending: 0, error: false } });
+    const otherUrl = requestUrl.replace('CompletedTaskForLL=30', 'CompletedTaskForLL=31');
+    await dispatch({ type: 'agenda.check', requestUrl: otherUrl });
+    const view = validateSpecialDaysView(await dispatch({ type: 'specialDays.read' }))!;
+    expect(view.sharing?.enabled).toBe(false);
+    const saved = await dispatch({ type: 'specialDays.save', profileId: view.profileId, entry: specialDay() });
+    expect(saved).toMatchObject({ ok: true, sharing: { enabled: false, pending: 0 } });
+    expect(await dispatch({ type: 'schoolbag.read' })).toMatchObject({ sharing: { enabled: false } });
+    expect(await dispatch({ type: 'sync.read' })).toMatchObject({ enabled: true, pending: 0 });
+  });
   it('requires a successful profile, rejects website access and stale profile/revision edits without logging text', async () => {
     const entry = specialDay();
     const profileId = crypto.randomUUID();
@@ -202,7 +216,7 @@ describe('schoolbag worker access', () => {
     expect(await packingChoiceId(agenda.points[0]!.day, 'school', material)).not.toBe(await packingChoiceId(agenda.points[0]!.day, 'home', material));
     await dispatch({ type: 'schoolbag.update', choiceId: id, state: 'hidden' });
     stored[CONNECTION_KEY] = { requestUrl: requestUrl.replace('CompletedTaskForLL=30', 'CompletedTaskForLL=40'), lastCheck: null };
-    expect(await dispatch({ type: 'schoolbag.read' })).toEqual({ ok: true, lastSuccessAt: null, points: [] });
+    expect(await dispatch({ type: 'schoolbag.read' })).toEqual({ ok: true, lastSuccessAt: null, points: [], sharing: { enabled: false, pending: 0, lastSuccessAt: null, error: false } });
     expect(await dispatch({ type: 'schoolbag.update', choiceId: id, state: 'packed' })).toMatchObject({ ok: false });
   });
   it('reads only the active profile, includes lessons, survives session errors and clears with history', async () => {
@@ -224,7 +238,7 @@ describe('schoolbag worker access', () => {
     expect(other).toMatchObject({ points: [{ instructions: 'Schrift meebrengen' }] });
     expect(JSON.stringify(other)).not.toContain('Atlas meebrengen');
     await dispatch({ type: 'history.clear' });
-    expect(await dispatch({ type: 'schoolbag.read' })).toEqual({ ok: true, lastSuccessAt: null, points: [] });
+    expect(await dispatch({ type: 'schoolbag.read' })).toEqual({ ok: true, lastSuccessAt: null, points: [], sharing: { enabled: false, pending: 0, lastSuccessAt: null, error: false } });
   });
 });
 

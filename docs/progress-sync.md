@@ -1,5 +1,15 @@
 # Optional self-hosted progress synchronization
 
+## Scope extension on 2026-10-09
+
+The owner explicitly authorized sharing special days, free text, checklists,
+checklist completion and schoolbag packing/hiding choices in the existing
+opt-in encrypted group. See [shared planning](shared-planning.md) for wire
+compatibility, independent checklist edits, bootstrap, deletion and remaining
+source freshness limits. Schoolware source content/history and credentials
+remain local. All paired clients must update to decode the new operation types.
+The existing PHP exchange service/schema and ciphertext limits are unchanged.
+
 ## Live views, notifications and audit limits
 
 Local edits are offered immediately; the receiving computer polls approximately
@@ -36,7 +46,7 @@ they cannot recover details absent from older exports.
 Initial implementation is available locally; not deployed or live-validated. On 2026-10-03 the owner requested
 cross-computer task progress sharing and offered self-hosted infrastructure.
 This request explicitly extends the earlier local-only scope for progress only.
-Agenda content, Schoolware credentials, observation history and notification
+Schoolware agenda content, Schoolware credentials, observation history and notification
 preferences remain local. No analytics or third-party synchronization is added.
 
 The owner and pupil use different Schoolware accounts. A cross-account sample
@@ -89,7 +99,9 @@ Generate a 256-bit AES-GCM encryption key on the first device. Share it only thr
 device-pairing material (shown only on explicit request in a trusted extension page); never send it to the server. Use authenticated
 encryption with fresh nonces. Encrypted operations contain a pupil-scoped opaque
 item key, Open/Bezig/Klaar progress, an operation ID and content-version context.
-Do not upload titles, instructions, names, source URLs or raw source identifiers.
+Do not upload Schoolware source titles/instructions, source URLs or raw source
+identifiers. User-created special-day text and optional participant labels are
+shared encrypted within the explicitly authorized scope.
 The server can still observe request timing, devices and ciphertext sizes;
 encryption does not hide those metadata.
 

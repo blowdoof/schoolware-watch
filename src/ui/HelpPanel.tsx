@@ -37,7 +37,7 @@ const questions = [
   },
   {
     question: 'Waar worden mijn gegevens bewaard en hoe wis ik ze?',
-    answer: 'Je agendageschiedenis blijft lokaal in deze browser. Schoolware Watch bewaart geen Schoolware-inloggegevens. Optioneel kun je Open, Bezig en Klaar en zelfgekozen deelnemersnamen versleuteld delen via schoolware.bumper.be; titels en instructies worden niet verstuurd. Bij Instellingen kun je de bewaartermijn aanpassen, lokale profielgegevens wissen en de voortgangskoppeling beheren.',
+    answer: 'Je Schoolware-agenda en wijzigingsgeschiedenis blijven lokaal. Optioneel deel je taakstatussen, speciale dagen met opmerkingen en checklists, boekentaskeuzes en deelnemersnamen versleuteld via schoolware.bumper.be. Schoolware-titels, instructies en inloggegevens worden niet verstuurd. Werk alle gekoppelde computers bij. Bij Instellingen kun je de bewaartermijn aanpassen, lokale profielgegevens wissen en gedeelde gegevens verwijderen.',
   },
 ];
 

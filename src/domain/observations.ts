@@ -39,6 +39,8 @@ export interface HistoryScope {
   schoolbagChoices?: { id: string; day: string; state: 'packed' | 'hidden' }[];
   specialDays?: SpecialDay[];
   specialDayReminders?: { key: string; claimedAt: string }[];
+  packingIdentityVersion?: 1;
+  specialDayRevision?: number;
   items: ObservedItem[]; events: ObservationEvent[]; checks: RecordedCheck[];
 }
 export interface CheckInput {
@@ -125,6 +127,8 @@ export function compareObservations(previous: HistoryScope | null, input: CheckI
     ...(previous?.todoReminder ? { todoReminder: previous.todoReminder } : {}),
     ...(previous?.specialDays ? { specialDays: previous.specialDays } : {}),
     ...(previous?.specialDayReminders ? { specialDayReminders: previous.specialDayReminders } : {}),
+    ...(previous?.packingIdentityVersion ? { packingIdentityVersion: previous.packingIdentityVersion } : {}),
+    ...(previous?.specialDayRevision ? { specialDayRevision: previous.specialDayRevision } : {}),
     ...(previous?.schoolbagChoices ? { schoolbagChoices: previous.schoolbagChoices.filter((choice) => choice.day >= brusselsWallTime(new Date(input.observedAt)).slice(0, 10)) } : {}),
     baselineAt: previous?.baselineAt ?? (input.points.length ? input.observedAt : null),
     lastSuccessAt: input.observedAt, items: [...items.values()],

@@ -18,7 +18,7 @@ export async function notifyProgressChange(id: string, initial: boolean, record:
     await record('notification.progress', 'started');
     await chrome.notifications.create(`schoolware-watch-progress-${id}`, {
       type: 'basic', iconUrl: chrome.runtime.getURL('icons/icon128.png'), title: 'Schoolware Watch',
-      message: 'Gedeelde taakvoortgang is bijgewerkt. Open het overzicht voor de actuele statussen.',
+      message: 'Gedeelde taakvoortgang of planning is bijgewerkt. Open het overzicht voor de actuele stand.',
     });
     await record('notification.progress', 'succeeded', { reason: 'accepted' });
   } catch { await record('notification.progress', 'failed', { reason: 'api-error' }); }
