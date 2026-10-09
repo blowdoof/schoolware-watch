@@ -9,7 +9,9 @@ Special days, checklist completion and schoolbag packing/hiding choices now
 share through the existing optional encrypted group following explicit owner
 authorization. See [shared planning](shared-planning.md). All paired clients
 must update; the PHP service and schema remain unchanged.
-Help-needed status and external calendar integration remain unimplemented.
+Independent help-needed flags with multiple optional named recipients and
+addressed notifications are also implemented; see [Help requests](task-help.md).
+External calendar integration remains unimplemented.
 Historical phase descriptions below predate several subsequent features.
 
 Recorded on 2026-10-04. These extensions are planned, not implemented; they do

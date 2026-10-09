@@ -6,16 +6,17 @@ import { hasAgendaMarker, isPastTask } from '../domain/tasks';
 import { useNow } from './useNow';
 import { planningWindow } from '../domain/planning';
 import { CsvExport } from './CsvExport';
+import { TaskHelpControls } from './TaskHelpControls';
 
 export function TasksPanel({ refreshToken }: { refreshToken: number }) {
-  const { view, working, error, update, available } = useTasks(refreshToken);
+  const { view, working, error, update, updateHelp, available } = useTasks(refreshToken);
   const [hideDone, setHideDone] = useState(false);
   const [planning, setPlanning] = useState('upcoming');
   const [limit, setLimit] = useState(20);
   const [dayLimit, setDayLimit] = useState(5);
   const now = useNow();
   if (!available) return null;
-  const entries = view?.entries.filter((task) => hasAgendaMarker(task.snapshot.typePunt) && (!hideDone || task.status !== 'done') &&
+  const entries = view?.entries.filter((task) => hasAgendaMarker(task.snapshot.typePunt) && (!hideDone || task.status !== 'done' || task.help?.needed) &&
     (planning === 'all' || (planning === 'upcoming' ? !isPastTask(task.snapshot.endsAt, now) : isPastTask(task.snapshot.endsAt, now)))) ?? [];
   const { days, cutoffDay } = planningWindow(view?.agenda?.days ?? [], entries.map((task) => task.snapshot), now, dayLimit);
   const visibleEntries = planning === 'upcoming' ? entries.filter((task) => cutoffDay !== null && task.snapshot.startsAt.slice(0, 10) <= cutoffDay) : entries;
@@ -23,7 +24,7 @@ export function TasksPanel({ refreshToken }: { refreshToken: number }) {
     <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" aria-label="Taken, toetsen en voortgang">
     <h2 className="text-lg font-semibold">Taken, toetsen en voortgang</h2>
     <CsvExport view={view} />
-    <p className="mt-2 text-sm text-slate-600">Vink Bezig of Klaar aan. Uitvinken zet de taak weer open. Een gewijzigde of opnieuw verschenen voltooide taak gaat automatisch terug naar Bezig. Deze status blijft lokaal en wijzigt niets in Schoolware.</p>
+    <p className="mt-2 text-sm text-slate-600">Vink Bezig of Klaar aan. Hulp nodig kan daarnaast aanstaan, met één of meerdere ontvangers. Een gewijzigde of opnieuw verschenen voltooide taak gaat automatisch terug naar Bezig. Met delen ingeschakeld wordt je voortgang versleuteld gedeeld; Schoolware wordt niet gewijzigd.</p>
     <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
       <label>Planning <select value={planning} onChange={(event) => { setPlanning(event.target.value); setLimit(20); setDayLimit(5); }} className="ml-2 rounded-lg border border-slate-300 p-2">
         <option value="upcoming">Nog gepland</option><option value="past">Eerdere taken</option><option value="all">Alle taken</option>
@@ -63,6 +64,7 @@ export function TasksPanel({ refreshToken }: { refreshToken: number }) {
           </div>
         </details>
         <TaskControls status={task.status} disabled={working} onChange={(status) => { void update(task.id, status); }} />
+        <TaskHelpControls task={task} view={view} disabled={working} onChange={updateHelp} />
         {task.updatedAt && <p className="mt-2 text-xs text-slate-500">Status gewijzigd: {new Date(task.updatedAt).toLocaleString('nl-BE', { timeZone: 'Europe/Brussels' })}</p>}
       </li>)}</ol>
       {visibleEntries.length > limit && <button type="button" onClick={() => setLimit(limit + 20)} className="mt-4 mr-4 text-sm font-medium text-teal-700">Meer taken tonen</button>}

@@ -89,7 +89,7 @@ export function NotificationDetailsPanel({ target, refreshToken }: { target: str
   }, [target, refreshToken]);
   return <div>
     {view?.status === 'todo' && <>
-      <TodoOverview view={tasks.view} now={now} working={tasks.working} update={tasks.update} updateMany={tasks.updateMany} />
+      <TodoOverview view={tasks.view} now={now} working={tasks.working} update={tasks.update} updateMany={tasks.updateMany} updateHelp={tasks.updateHelp} />
       {tasks.error && <p role="alert" className="mt-3 text-sm text-red-700">{tasks.error}</p>}
     </>}
     {error && <p role="alert" className="mt-6 text-sm text-red-700">{error}</p>}

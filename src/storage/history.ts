@@ -3,7 +3,8 @@ import { openHistoryDatabase, ensureLocalIdentity, HISTORY_DB } from './database
 import { activityInput, appendActivity, pruneActivity, type AuditContext } from './activity';
 import { isAlertId } from '../shared/browser-alerts';
 import { isTaskCategory, isTaskStatus, type TaskStatus } from '../domain/tasks';
-import { progressVersion, progressVersionText } from '../domain/progress-sync';
+import { progressVersion, progressVersionText, progressItemKey } from '../domain/progress-sync';
+import { isHelpRecipients } from '../shared/task-help';
 import { SYNC_STATE_KEY } from '../shared/progress-sync';
 import { MAX_TASK_UPDATES, createTasksView } from '../shared/tasks';
 import { todoReminderSelection } from '../domain/todo';
@@ -295,6 +296,40 @@ export class HistoryRepository {
         if (sync?.scopeId === scopeId) await tx.objectStore('sync').put(sync, SYNC_STATE_KEY);
         await done;
       } catch (error) { try { tx.abort(); } catch { /* Already completed. */ } await done.catch(() => {}); throw error; }
+    } finally { db.close(); }
+  }
+
+  async setTaskHelp(scopeId: string, itemId: string, needed: boolean, recipients: string[]): Promise<void> {
+    if (!isAlertId(itemId) || typeof needed !== 'boolean' || !isHelpRecipients(recipients) || (!needed && recipients.length)) throw new Error('Invalid help update');
+    const db = await openHistoryDatabase(this.name);
+    try {
+      const before = await db.get('scopes', scopeId);
+      const item = before?.items.find((entry) => entry.localId === itemId);
+      if (!item) throw new Error('Task unavailable');
+      const state = await db.get('sync', SYNC_STATE_KEY);
+      const sharing = state?.scopeId === scopeId ? state : undefined;
+      const key = sharing ? await progressItemKey(sharing.key, item.sourceKey, new URL(scopeId).origin) : null;
+      const tx = db.transaction(['scopes', 'sync'], 'readwrite');
+      const done = tx.done; void done.catch(() => {});
+      try {
+        const scope = await tx.objectStore('scopes').get(scopeId);
+        const current = await tx.objectStore('sync').get(SYNC_STATE_KEY);
+        const active = current?.scopeId === scopeId ? current : undefined;
+        if (active?.connectionId !== sharing?.connectionId || active?.key !== sharing?.key) throw new Error('Connection changed');
+        if (recipients.some((id) => !active?.members?.some((member) => member.id === id && id !== active.connectionId))) throw new Error('Recipient unavailable');
+        const entry = scope?.items.find((entry) => entry.localId === itemId && entry.present && !entry.snapshot.hidden && !entry.snapshot.cancelled && isTaskCategory(entry.category));
+        if (!entry || entry.sourceKey !== item.sourceKey) throw new Error('Task unavailable');
+        const sorted = [...recipients].sort();
+        if ((entry.taskHelp?.needed ?? false) !== needed || JSON.stringify(entry.taskHelp?.recipients ?? []) !== JSON.stringify(sorted)) {
+          entry.taskHelp = { needed, recipients: sorted, requestId: crypto.randomUUID() };
+          if (active && key) {
+            queuePlanning(active, scopeId, { type: 'help', item: key, help: entry.taskHelp });
+            await tx.objectStore('sync').put(active, SYNC_STATE_KEY);
+          }
+          await tx.objectStore('scopes').put(scope!);
+        }
+        await done;
+      } catch (error) { try { tx.abort(); } catch { /* Completed. */ } await done.catch(() => {}); throw error; }
     } finally { db.close(); }
   }
 

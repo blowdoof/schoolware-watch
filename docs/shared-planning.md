@@ -10,7 +10,9 @@ permission, PHP code, SQL schema or production upload is added.
 Shared encrypted values include special-day date/type/title/notes/preparation,
 the ordinary-timetable switch, checklist IDs/text/material switches, independent
 checklist completion and schoolbag packing/hiding/reset choices. Existing
-Open/Bezig/Klaar and optional participant labels remain shared. Special-day text
+Open/Bezig/Klaar and optional participant labels remain shared. Independent help
+flags and recipient references use this same encrypted channel; see
+[Help requests](task-help.md). Special-day text
 is explicitly user-created; users should include only information they want
 the paired group to read. No Schoolware source title, instruction, source tuple,
 raw pupil ID, history event, source URL or session is included.

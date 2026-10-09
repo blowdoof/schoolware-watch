@@ -42,9 +42,9 @@ worden niet gevolgd.
 
 Alleen wanneer je zelf een groep aanmaakt of koppelt, gebruikt de extensie
 `https://schoolware.bumper.be`. De deelnemende browsers delen versleutelde
-Open/Bezig/Klaar-statussen, zelf ingevoerde speciale dagen met opmerkingen en
+Open/Bezig/Klaar-statussen, hulpvragen met ontvangerverwijzingen, zelf ingevoerde speciale dagen met opmerkingen en
 checklists, checklistvinkjes, boekentaskeuzes en optioneel deelnemerlabels.
-Neem in speciale-dagtekst alleen informatie op die je met de gekoppelde personen
+Iedereen met de volledige koppelcode kan ook hulpvragen en ontvangerverwijzingen lezen en wijzigen. De ontvangerkeuze bepaalt wie een hulpmelding krijgt, niet wie de gedeelde inhoud kan lezen. Namen horen bij computers en bewijzen geen identiteit. Neem in speciale-dagtekst alleen informatie op die je met de gekoppelde personen
 wilt delen. Schoolware-agendatitels, instructies, geschiedenis, ruwe leerling-/bronidentificaties en Schoolware-sessies
 worden niet naar deze dienst verstuurd. De browser maakt een aparte willekeurige
 groepscredential en encryptiesleutel; dit zijn geen Schoolware-inloggegevens.

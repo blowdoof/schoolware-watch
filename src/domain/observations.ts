@@ -4,6 +4,7 @@ import type { TodoReminderState } from './todo';
 import { brusselsWallTime } from './notification-window';
 import { normalizeAgendaText } from './agenda-normalization';
 import type { SpecialDay } from './special-days';
+import type { TaskHelp } from '../shared/task-help';
 
 export type Category = 'tests' | 'assignments' | 'review' | 'other';
 export interface Snapshot {
@@ -16,6 +17,7 @@ export interface ObservationPoint { sourceKey: string; category: Category; snaps
 export interface ObservedItem extends ObservationPoint {
   firstSeenAt: string; lastSeenAt: string; present: boolean;
   taskStatus?: TaskStatus; taskUpdatedAt?: string;
+  taskHelp?: TaskHelp;
 }
 export type EventKind = 'baseline' | 'observed' | 'changed' | 'disappeared' | 'reappeared';
 export interface ObservationEvent {
@@ -98,6 +100,7 @@ export function compareObservations(previous: HistoryScope | null, input: CheckI
     items.set(point.sourceKey, { ...point, firstSeenAt: old?.firstSeenAt ?? input.observedAt,
       lastSeenAt: input.observedAt, present: true,
       ...(old?.localId ? { localId: old.localId } : {}),
+      ...(old?.taskHelp ? { taskHelp: old.taskHelp } : {}),
       ...(taskReopened ? { taskStatus: 'in-progress', taskUpdatedAt: input.observedAt } : {
         ...(old?.taskStatus ? { taskStatus: old.taskStatus } : {}),
         ...(old?.taskUpdatedAt ? { taskUpdatedAt: old.taskUpdatedAt } : {}),

@@ -20,9 +20,9 @@ export function csvCell(value: string): string {
 export function tasksCsv(entries: TaskEntry[]): string {
   const statuses = { open: 'Open', 'in-progress': 'Bezig', done: 'Klaar' };
   const categories = { tests: 'Toets', assignments: 'Taak', review: 'Met sterretje' };
-  const rows = [['Datum', 'Begin (Europe/Brussels)', 'Einde (Europe/Brussels)', 'Vak', 'Soort', 'Titel', 'Instructies', 'Status'],
+  const rows = [['Datum', 'Begin (Europe/Brussels)', 'Einde (Europe/Brussels)', 'Vak', 'Soort', 'Titel', 'Instructies', 'Status', 'Hulp nodig'],
     ...entries.map((entry) => [entry.snapshot.startsAt.slice(0, 10), entry.snapshot.startsAt, entry.snapshot.endsAt,
       agendaText(entry.subject).trim(), categories[entry.category], agendaText(entry.snapshot.title).trim(),
-      agendaText(entry.snapshot.instructions).trim(), statuses[entry.status]])];
+      agendaText(entry.snapshot.instructions).trim(), statuses[entry.status], entry.help?.needed ? 'Ja' : 'Nee'])];
   return '\uFEFF' + rows.map((row) => row.map(csvCell).join(';')).join('\r\n') + '\r\n';
 }

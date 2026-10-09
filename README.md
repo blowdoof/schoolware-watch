@@ -9,6 +9,7 @@ Schoolware agenda changes.
 - Detection of new assignments and tests
 - Change history
 - Schoolbag suggestions with optionally shared packing/hiding choices
+- Independent help flags with optional multiple named recipients and addressed notifications
 - Browser notifications
 - Local data storage
 - Optional encrypted progress, special days and checklist sharing through a self-hosted PHP/MySQL API

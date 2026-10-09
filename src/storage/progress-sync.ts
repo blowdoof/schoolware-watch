@@ -27,6 +27,13 @@ export class ProgressSyncRepository {
     const history = new HistoryRepository(this.name);
     await history.read(scopeId);
     await history.migratePackingIdentity(scopeId);
+    const snapshot = (await history.read(scopeId)).scope;
+    const expected = await this.read();
+    if (!expected || expected.scopeId !== scopeId || expected.planningInitialized) return;
+    const helpSeeds = await Promise.all((snapshot?.items ?? []).filter((item) => item.taskHelp?.needed && isTaskCategory(item.category))
+      .map(async (item) => ({ sourceKey: item.sourceKey, requestId: item.taskHelp!.requestId,
+        value: { type: 'help' as const, item: await progressItemKey(expected.key, item.sourceKey, new URL(scopeId).origin),
+          help: { ...item.taskHelp!, recipients: [] } } })));
     const db = await openHistoryDatabase(this.name);
     try {
       const tx = db.transaction(['scopes', 'sync'], 'readwrite');
@@ -34,12 +41,13 @@ export class ProgressSyncRepository {
       try {
         const state = await tx.objectStore('sync').get(SYNC_STATE_KEY);
         const scope = await tx.objectStore('scopes').get(scopeId);
-        if (state?.scopeId === scopeId && scope && !state.planningInitialized) {
+        if (state?.scopeId === scopeId && state.connectionId === expected?.connectionId && scope && !state.planningInitialized) {
           const values: PlanningValue[] = (scope.specialDays ?? []).flatMap((entry) => [
             { type: 'special-day' as const, day: entry.day, entry: sharedSpecialDay(entry) },
             ...entry.checklist.map((point) => ({ type: 'checklist' as const, eventId: entry.id, pointId: point.id, done: point.done })),
           ]);
           values.push(...(scope.schoolbagChoices ?? []).map((choice) => ({ type: 'packing' as const, ...choice })));
+          values.push(...helpSeeds.filter((seed) => scope.items.some((item) => item.sourceKey === seed.sourceKey && item.taskHelp?.requestId === seed.requestId)).map((seed) => seed.value));
           state.planningOutbox ??= [];
           for (const value of values) if (!state.planningOutbox.some((operation) => operation.resource === planningResource(value)))
             state.planningOutbox.push(...planningOperations(value, true));
@@ -199,7 +207,7 @@ export class ProgressSyncRepository {
       const matches = await Promise.all(before.items.filter((item) => item.present && isTaskCategory(item.category) && hasAgendaMarker(item.snapshot.typePunt) &&
         !item.snapshot.hidden && !item.snapshot.cancelled).map(async (item) => {
         const version = await progressVersion(item.snapshot); const key = await progressItemKey(state.key, item.sourceKey, new URL(state.scopeId).origin);
-        return { sourceKey: item.sourceKey, text: progressVersionText(item.snapshot), remoteKey: `${key}.${version}` };
+        return { sourceKey: item.sourceKey, text: progressVersionText(item.snapshot), remoteKey: `${key}.${version}`, helpKey: `help:${key}` };
       }));
       const tx = db.transaction(['scopes', 'sync', 'activity', 'settings'], 'readwrite');
       const done = tx.done; void done.catch(() => {});
@@ -211,14 +219,20 @@ export class ProgressSyncRepository {
           const now = new Date();
           const retention = await tx.objectStore('settings').get('retentionDays') ?? DEFAULT_RETENTION;
           if (applySharedPlanning(scope, current, retentionCutoff(now.toISOString(), retention), brusselsWallTime(now).slice(0, 10))) changed = true;
+          let ordinaryChanged = changed;
           for (const match of matches) {
             const item = scope.items.find((item) => item.sourceKey === match.sourceKey);
+            const help = current.planningRemote?.[match.helpKey]?.value;
+            if (item?.present && !item.snapshot.hidden && !item.snapshot.cancelled && help?.type === 'help' &&
+                !current.planningOutbox?.some((operation) => operation.resource === match.helpKey) && JSON.stringify(item.taskHelp) !== JSON.stringify(help.help)) {
+              item.taskHelp = structuredClone(help.help); changed = true;
+            }
             const remote = current.remote[match.remoteKey];
             if (!item || !remote || !item.present || item.snapshot.hidden || item.snapshot.cancelled ||
                 progressVersionText(item.snapshot) !== match.text || current.outbox.some((op) => op.sourceKey === match.sourceKey)) continue;
             if ((item.taskStatus ?? 'open') !== remote.status) {
               const previous = item.taskStatus ?? 'open';
-              item.taskStatus = remote.status; item.taskUpdatedAt = new Date().toISOString(); changed = true;
+              item.taskStatus = remote.status; item.taskUpdatedAt = new Date().toISOString(); changed = true; ordinaryChanged = true;
               if (audit) await appendActivity(tx.objectStore('activity'), activityInput({ ...audit, ...(scope.localId ? { profileId: scope.localId } : {}) },
                 'task.status', 'succeeded', { from: previous, to: remote.status, reason: 'remote-sync' },
                 { timestamp: item.taskUpdatedAt, ...(item.localId ? { itemId: item.localId } : {}) }));
@@ -226,10 +240,34 @@ export class ProgressSyncRepository {
           }
           if (changed) await tx.objectStore('scopes').put(scope);
           current.hasAppliedRemote = true;
+          current.lastApplyOrdinaryChanged = ordinaryChanged;
           await tx.objectStore('sync').put(current, SYNC_STATE_KEY);
         }
         await done; return changed;
       } catch (error) { try { tx.abort(); } catch { /* Completed. */ } await done.catch(() => {}); throw error; }
+    } finally { db.close(); }
+  }
+
+  /** Claim before external delivery so worker restarts cannot repeat a request. */
+  async claimHelpNotifications(scopeId: string): Promise<string | null> {
+    const db = await openHistoryDatabase(this.name);
+    try {
+      const tx = db.transaction('sync', 'readwrite');
+      const state = await tx.store.get(SYNC_STATE_KEY);
+      let first: string | null = null;
+      if (state?.scopeId === scopeId && state.cursor === state.head && !state.blocked) {
+        state.helpNotificationClaims ??= {};
+        for (const [resource, record] of Object.entries(state.planningRemote ?? {})) {
+          const value = record.value;
+          if (value.type !== 'help' || !value.help.needed || !value.help.recipients.includes(state.connectionId) ||
+              state.planningOutbox?.some((operation) => operation.resource === resource) ||
+              state.helpNotificationClaims[resource] === value.help.requestId) continue;
+          state.helpNotificationClaims[resource] = value.help.requestId;
+          first ??= value.help.requestId;
+        }
+        if (first) await tx.store.put(state, SYNC_STATE_KEY);
+      }
+      await tx.done; return first;
     } finally { db.close(); }
   }
 }

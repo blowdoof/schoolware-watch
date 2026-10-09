@@ -10,6 +10,7 @@ import { isNotificationTarget, notificationTarget } from './notification-details
 import { MAX_ACTIVITY_ENTRIES } from './activity';
 import { isTaskStatus, type TaskStatus } from '../domain/tasks';
 import { MAX_TASK_UPDATES } from './tasks';
+import { isHelpRecipients } from './task-help';
 import { validateOpenPageMessage, type OpenPageMessage } from './navigation';
 import { validateSpecialDaysMessage, type SpecialDaysMessage } from './special-days';
 
@@ -42,6 +43,7 @@ export type ConnectionMessage = SyncMessage | DiscoveryMessage | OpenPageMessage
   | { type: 'schoolbag.read' }
   | { type: 'schoolbag.update'; choiceId: string; state: 'packed' | 'hidden' | 'open' }
   | { type: 'tasks.update'; itemId: string; status: TaskStatus }
+  | { type: 'tasks.help'; itemId: string; needed: boolean; recipients: string[] }
   | { type: 'tasks.updateMany'; itemIds: string[]; status: TaskStatus }
   | { type: 'activity.read'; limit?: number; correlationId?: string; itemId?: string }
   | { type: 'activity.clear' }
@@ -69,6 +71,10 @@ export function validateConnectionMessage(value: unknown): ConnectionMessage | n
   if (message.type === 'permission.result' && Object.keys(message).length === 3 &&
       ['notifications', 'browser', 'schoolware'].includes(message.permission as string) && typeof message.granted === 'boolean') {
     return { type: 'permission.result', permission: message.permission as 'notifications' | 'browser' | 'schoolware', granted: message.granted };
+  }
+  if (message.type === 'tasks.help' && Object.keys(message).length === 4 && isAlertId(message.itemId) &&
+      typeof message.needed === 'boolean' && isHelpRecipients(message.recipients) && (message.needed || !message.recipients.length)) {
+    return { type: 'tasks.help', itemId: message.itemId, needed: message.needed, recipients: [...message.recipients] };
   }
   if (message.type === 'tasks.update' && Object.keys(message).length === 3 && isAlertId(message.itemId) && isTaskStatus(message.status)) {
     return { type: 'tasks.update', itemId: message.itemId, status: message.status };

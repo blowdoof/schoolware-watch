@@ -3,12 +3,15 @@
 ## Scope extension on 2026-10-09
 
 The owner explicitly authorized sharing special days, free text, checklists,
-checklist completion and schoolbag packing/hiding choices in the existing
+checklist completion, schoolbag packing/hiding choices and independent help
+requests with encrypted recipient references in the existing
 opt-in encrypted group. See [shared planning](shared-planning.md) for wire
 compatibility, independent checklist edits, bootstrap, deletion and remaining
 source freshness limits. Schoolware source content/history and credentials
 remain local. All paired clients must update to decode the new operation types.
 The existing PHP exchange service/schema and ciphertext limits are unchanged.
+See [Help requests](task-help.md) for recipient selection, durable addressed
+notification claims and the limitations of optional participant names.
 
 ## Live views, notifications and audit limits
 

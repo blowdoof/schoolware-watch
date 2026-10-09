@@ -12,7 +12,8 @@ Schoolware Watch has no analytics or telemetry. Agenda history stays local.
 At the owner's explicit request, optional progress and planning synchronization can use
 the owner's PHP service at `https://schoolware.bumper.be`. It is disabled until
 devices are explicitly paired. Encrypted task progress, user-created special
-days/text/checklists, checklist completion, packing/hiding choices and optional
+days/text/checklists, checklist completion, packing/hiding choices, independent
+help flags with recipient device references, and optional
 encrypted participant announcements are uploaded;
 no Schoolware source titles/instructions, raw pupil/source IDs or Schoolware session material is
 sent. The independent sync credential and encryption key are stored locally in
@@ -28,6 +29,11 @@ privately shared pairing code. Only trusted extension pages can explicitly
 request display of that code; routine status and activity logs omit it.
 
 Names are optional in the setup UI. New status/label ciphertext is padded to a
+fixed length. Choosing help recipients requires named devices to have announced
+themselves through the existing participant feature. Recipient references are
+encrypted but readable by all pairing-code holders; targeting controls
+notifications, not access to shared content. See [Help requests](task-help.md).
+New planning/help ciphertext is also padded to a
 fixed length; older unpadded records and clients can still reveal length. Device
 announcements update a last-seen timestamp roughly every minute while Chrome
 runs. Private request/registration rate identities group IPv6 addresses by /64.
@@ -168,7 +174,7 @@ file contains personal information and escape formula-like cell values.
 
 Special-day titles, notes, dates and checklists are stored inside the
 selected IndexedDB profile. With optional sharing enabled, those user-created
-fields, checklist completion and packing/hiding choices are encrypted and sent
+fields, checklist completion and packing/hiding choices, independent help flags and recipient device references are encrypted and sent
 to the existing service (owner-authorized scope expansion on 2026-10-09).
 They are never written into activity logs. Existing history retention, profile
 clearing and disconnect remove local copies; server deletion and retention are

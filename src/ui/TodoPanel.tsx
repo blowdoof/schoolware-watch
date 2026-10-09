@@ -6,14 +6,16 @@ import { TaskControls } from './TaskControls';
 import { useTasks } from './useTasks';
 import { useNow } from './useNow';
 import { displaySnapshotValue } from './agenda-presentation';
+import { TaskHelpControls } from './TaskHelpControls';
 
 const dateLabel = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString('nl-BE', {
   timeZone: 'Europe/Brussels', weekday: 'long', day: 'numeric', month: 'long',
 });
 
-export function TodoOverview({ view, now, working, update, updateMany }: {
+export function TodoOverview({ view, now, working, update, updateMany, updateHelp }: {
   view: TasksView | null; now: Date; working: boolean; update: (id: string, status: TaskStatus) => Promise<void>;
   updateMany: (ids: string[], status: TaskStatus) => Promise<void>;
+  updateHelp?: (id: string, needed: boolean, recipients: string[]) => Promise<void>;
 }) {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const overview = view ? todoOverview(view, now, selectedDay) : null;
@@ -29,11 +31,17 @@ export function TodoOverview({ view, now, working, update, updateMany }: {
         <p className="mt-2 whitespace-pre-wrap break-words text-sm">{displaySnapshotValue('instructions', task.snapshot.instructions) || 'Geen instructies opgegeven.'}</p>
       </details>
       <TaskControls status={task.status} disabled={working} onChange={(status) => { void update(task.id, status); }} />
+      {view && updateHelp && <TaskHelpControls task={task} view={view} disabled={working} onChange={updateHelp} />}
     </li>)}</ol>;
   }
   return <section className="mt-6 rounded-2xl border border-teal-200 bg-teal-50 p-5 shadow-sm" aria-label="To-do voor de volgende schooldag">
     <h2 className="text-lg font-semibold">To-do</h2>
     {!overview ? <p className="mt-2 text-sm">Taken laden…</p> : <>
+      {view?.entries.some((task) => task.help?.needed) && <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3" aria-label="Hulpvragen">
+        <h3 className="font-semibold text-amber-900">Hulp nodig</h3>
+        <p className="mt-1 text-xs text-slate-600">Ook hulpvragen bij afgeronde, eerdere en latere taken blijven hier zichtbaar.</p>
+        {rows(view.entries.filter((task) => task.help?.needed))}
+      </div>}
       <p className="mt-1 text-sm font-medium" aria-live="polite">{overview.targetDay ? `Tegen ${dateLabel(overview.targetDay)}` : 'Voor vandaag'}</p>
       <p className="mt-2 text-xs leading-5 text-slate-600">{overview.browsing ?
         'Open en Bezig voor de gekozen schooldag in je agenda.' : overview.nextDay ?
@@ -76,11 +84,11 @@ export function TodoOverview({ view, now, working, update, updateMany }: {
 }
 
 export function TodoPanel({ refreshToken }: { refreshToken: number }) {
-  const { view, working, error, update, updateMany, available } = useTasks(refreshToken);
+  const { view, working, error, update, updateMany, updateHelp, available } = useTasks(refreshToken);
   const now = useNow();
   if (!available) return null;
   return <>
-    <TodoOverview view={view} now={now} working={working} update={update} updateMany={updateMany} />
+    <TodoOverview view={view} now={now} working={working} update={update} updateMany={updateMany} updateHelp={updateHelp} />
     {error && <p role="alert" className="mt-2 text-sm text-red-700">{error}</p>}
   </>;
 }

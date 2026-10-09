@@ -43,5 +43,15 @@ export function useTasks(refreshToken: number, enabled = true) {
   async function update(itemId: string, status: TaskStatus) {
     await updateMany([itemId], status);
   }
-  return { view, working, error, update, updateMany, available };
+  async function updateHelp(itemId: string, needed: boolean, recipients: string[]) {
+    if (saving.current) return;
+    saving.current = true; setWorking(true); setError('');
+    const current = ++revision.current;
+    try {
+      const next = await send({ type: 'tasks.help', itemId, needed, recipients });
+      if (revision.current === current) setView(next);
+    } catch { if (revision.current === current) setError('De hulpvraag kon niet worden opgeslagen. Vernieuw het overzicht en probeer opnieuw.'); }
+    finally { saving.current = false; setWorking(false); }
+  }
+  return { view, working, error, update, updateMany, updateHelp, available };
 }

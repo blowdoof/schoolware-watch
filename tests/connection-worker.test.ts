@@ -121,6 +121,24 @@ beforeEach(async () => {
 });
 
 describe('special day worker boundaries and reminders', () => {
+  it('saves independent help alongside done, rejects website edits and opens help notifications in the dashboard', async () => {
+    const task = { ...parsed.points[0]!, TypePunt: 1001 };
+    vi.mocked(fetchAgenda).mockResolvedValue({ ...success, points: [task], count: 1,
+      typeCounts: { assignments: 1, tests: 0, review: 0, other: 0 } });
+    await dispatch({ type: 'agenda.check', requestUrl });
+    const id = validateTasksView(await dispatch({ type: 'tasks.read' }))!.entries[0]!.id;
+    await dispatch({ type: 'tasks.update', itemId: id, status: 'done' });
+    expect(await dispatch({ type: 'tasks.help', itemId: id, needed: true, recipients: [] })).toMatchObject({
+      entries: [{ status: 'done', help: { needed: true, recipients: [] } }],
+    });
+    const website = { ...sender, url: 'https://schoolware_siw.ksgwl.be/webouders/start.html', tab: { id: 1 }, frameId: 0 };
+    expect(listener({ type: 'tasks.help', itemId: id, needed: false, recipients: [] }, website, vi.fn())).toBe(false);
+    clicked(`schoolware-watch-help-${crypto.randomUUID()}`);
+    await vi.waitFor(() => expect(chrome.tabs.create).toHaveBeenCalledWith({ url: 'chrome-extension://syntheticextension/dashboard.html' }));
+    vi.resetModules(); await import('../src/background/service-worker');
+    expect(await dispatch({ type: 'tasks.read' })).toMatchObject({ entries: [{ status: 'done', help: { needed: true } }] });
+    expect(await dispatch({ type: 'tasks.help', itemId: id, needed: false, recipients: [] })).toMatchObject({ entries: [{ status: 'done', help: { needed: false } }] });
+  });
   it('shows sharing only for the paired active profile and keeps another profile\'s planning out of that group', async () => {
     await dispatch({ type: 'agenda.check', requestUrl });
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ ok: true, acknowledged: [], cursor: 0, head: 0, operations: [] })));

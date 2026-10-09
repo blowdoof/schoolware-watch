@@ -32,6 +32,8 @@ export interface SyncState {
   displayName?: string; members?: SyncMember[]; membersError?: boolean;
   planningInitialized?: boolean; planningOutbox?: PlanningOperation[];
   planningRemote?: Record<string, PlanningRecord>; planningParts?: Record<string, PlanningAssembly>;
+  helpNotificationClaims?: Record<string, string>;
+  lastApplyOrdinaryChanged?: boolean;
 }
 export interface SyncView { ok: boolean; enabled: boolean; pending: number; lastSuccessAt: string | null; error: boolean; pairingCode?: string; registrationPending?: boolean; blocked?: boolean;
   displayName?: string; members?: (SyncMember & { self: boolean })[]; membersError?: boolean }

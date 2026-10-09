@@ -583,15 +583,16 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
   }
   if (message.type === 'tasks.read') {
     const connection = await readConnection();
-    return createTasksView((await history.read(connection.requestUrl)).scope);
+    return createTasksView((await history.read(connection.requestUrl)).scope, await progressSync.read());
   }
-  if (message.type === 'tasks.update' || message.type === 'tasks.updateMany') {
+  if (message.type === 'tasks.update' || message.type === 'tasks.updateMany' || message.type === 'tasks.help') {
     const pending = activeTask;
     return serializeMutation(async () => {
       await pending;
       const connection = await readConnection();
       if (!connection.requestUrl) throw new Error('Task unavailable');
-      await history.setTaskStatuses(connection.requestUrl,
+      if (message.type === 'tasks.help') await history.setTaskHelp(connection.requestUrl, message.itemId, message.needed, message.recipients);
+      else await history.setTaskStatuses(connection.requestUrl,
         message.type === 'tasks.update' ? [message.itemId] : message.itemIds, message.status, current);
       // Local status/outbox are already durable. Do not delay the UI on an
       // offline server; the alarm retries after an interrupted deferred upload.
@@ -603,7 +604,7 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
       }
       await invalidateTaskViews();
       await refreshBrowserBadge(true, current).catch(() => {});
-      return createTasksView((await history.read(connection.requestUrl)).scope);
+      return createTasksView((await history.read(connection.requestUrl)).scope, await progressSync.read());
     });
   }
   if (message.type === 'permission.result') {
@@ -891,7 +892,8 @@ function registerNotificationListener(): void {
   chrome.notifications.onClicked.addListener((id) => {
     if (!id.startsWith(NOTIFICATION_PREFIX)) return;
     const suffix = id.slice(NOTIFICATION_PREFIX.length);
-    const progress = (suffix.startsWith('progress-') && isAlertId(suffix.slice(9))) || (suffix.startsWith('special-') && isAlertId(suffix.slice(8)));
+    const progress = (suffix.startsWith('progress-') && isAlertId(suffix.slice(9))) || (suffix.startsWith('special-') && isAlertId(suffix.slice(8))) ||
+      (suffix.startsWith('help-') && isAlertId(suffix.slice(5)));
     const target = suffix === 'test' || (suffix.startsWith('test-') && isNotificationTarget(suffix.slice(5))) ? 'test' : suffix;
     if (!progress && !isNotificationTarget(target)) return;
     const current = trace('system', notificationCorrelation(id) ?? crypto.randomUUID());

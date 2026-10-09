@@ -1,8 +1,9 @@
 import { isAlertId } from './browser-alerts';
+import { validateTaskHelp, type TaskHelp } from './task-help';
 import { isDay, validateSpecialDay, type SpecialDay } from '../domain/special-days';
 
 export type SharedSpecialDay = Omit<SpecialDay, 'revision' | 'checklist'> & { checklist: Omit<SpecialDay['checklist'][number], 'done'>[] };
-export type PlanningValue = { type: 'special-day'; day: string; entry: SharedSpecialDay | null } |
+export type PlanningValue = { type: 'help'; item: string; help: TaskHelp } | { type: 'special-day'; day: string; entry: SharedSpecialDay | null } |
   { type: 'special-day-move'; previousDay: string; entry: SharedSpecialDay } |
   { type: 'checklist'; eventId: string; pointId: string; done: boolean } |
   { type: 'packing'; id: string; day: string; state: 'open' | 'packed' | 'hidden' };
@@ -25,12 +26,18 @@ export function sharedSpecialDay(entry: SpecialDay): SharedSpecialDay {
     checklist: entry.checklist.map((point) => ({ id: point.id, text: point.text, pack: point.pack })) };
 }
 export function planningResource(value: PlanningValue): string {
+  if (value.type === 'help') return `help:${value.item}`;
   return value.type === 'special-day' ? `special:${value.day}` : value.type === 'special-day-move' ? `move:${value.previousDay}:${value.entry.day}` : value.type === 'checklist' ?
     `checklist:${value.eventId}:${value.pointId}` : `packing:${value.id}`;
 }
 export function validatePlanningValue(raw: unknown): PlanningValue | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const v = raw as Record<string, unknown>;
+  if (v.type === 'help' && Object.keys(v).length === 3 && typeof v.item === 'string' && /^[a-f0-9]{64}$/.test(v.item)) {
+    const help = validateTaskHelp(v.help);
+    if (help) return { type: 'help', item: v.item, help };
+    return null;
+  }
   if (v.type === 'special-day-move' && Object.keys(v).length === 3 && isDay(v.previousDay) && v.entry && typeof v.entry === 'object') {
     const entry = v.entry as Record<string, unknown>;
     const validated = validatePlanningValue({ type: 'special-day', day: entry.day, entry });

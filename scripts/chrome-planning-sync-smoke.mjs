@@ -19,6 +19,7 @@ const browser = spawn(chromePath, ['--headless=new', '--no-first-run', '--no-def
 let socket; let sequence = 0; let bindingError;
 const pending = new Map();
 const server = new Map();
+const serverMembers = new Map();
 async function poll(operation) {
   for (let attempt = 0; attempt < 100; attempt++) {
     if (bindingError) throw bindingError;
@@ -38,7 +39,7 @@ function command(method, params = {}, sessionId) {
 }
 async function evaluate(sessionId, expression) {
   const result = await command('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }, sessionId);
-  if (result.exceptionDetails) throw new Error('Synthetic Chrome evaluation failed');
+  if (result.exceptionDetails) throw new Error(`Synthetic Chrome evaluation failed: ${result.exceptionDetails.exception?.description ?? result.exceptionDetails.text}`);
   return result.result.value;
 }
 async function routeBinding(message) {
@@ -46,9 +47,16 @@ async function routeBinding(message) {
   assert.equal(request.url, 'https://schoolware.bumper.be/sync.php');
   assert.equal(request.options.credentials, 'omit');
   const body = JSON.parse(request.options.body);
-  assert.equal(body.action, 'exchange');
   assert.ok(!request.options.body.includes('Synthetic shared notes'));
   const token = request.options.headers.Authorization;
+  if (body.action === 'members') {
+    const members = serverMembers.get(token) ?? new Map(); serverMembers.set(token, members);
+    assert.deepEqual(Object.keys(body.device).sort(), ['ciphertext', 'id', 'iv']);
+    members.set(body.device.id, { ...body.device, lastSeenAt: new Date().toISOString().replace(/\.\d{3}Z$/, '.000Z') });
+    await evaluate(message.sessionId, `globalThis.syntheticReply(${JSON.stringify(request.id)}, ${JSON.stringify({ ok: true, members: [...members.values()] })})`);
+    return;
+  }
+  assert.equal(body.action, 'exchange');
   const records = server.get(token) ?? []; server.set(token, records);
   for (const operation of body.operations) {
     assert.deepEqual(Object.keys(operation).sort(), ['ciphertext', 'id', 'iv']);
@@ -88,6 +96,9 @@ try {
     // session or real sync host is contacted, and no real permission is granted.
     await evaluate(workerSession, `(() => {
       chrome.permissions.contains = async () => true;
+      globalThis.syntheticNotifications = [];
+      chrome.notifications ??= {};
+      chrome.notifications.create = async (id, options) => { syntheticNotifications.push({ id, options }); return id; };
       const replies = new Map();
       globalThis.syntheticReply = (id, body) => { replies.get(id)(Response.json(body)); replies.delete(id); };
       globalThis.fetch = async (url, options) => new Promise(resolve => {
@@ -116,7 +127,8 @@ try {
           snapshot: { title: 'Synthetic shared task', instructions: 'Werkboek pagina 10', typePunt: 1001,
             startsAt: day + ' 09:00:00', endsAt: day + ' 09:50:00', validFrom: day + ' 00:00:00', hidden: false, cancelled: false, recurrence: '' } }] });
       await new Promise((resolve, reject) => { tx.oncomplete = resolve; tx.onabort = () => reject(tx.error); }); db.close();
-      const connected = await chrome.runtime.sendMessage({ type: 'sync.connect', code: 'sw1.' + 'a'.repeat(64) + '.' + 'b'.repeat(64), seed: false });
+      const connected = await chrome.runtime.sendMessage({ type: 'sync.connect', code: 'sw1.' + 'a'.repeat(64) + '.' + 'b'.repeat(64), seed: false,
+        label: '${pupil === 30 ? 'Synthetic parent' : 'Synthetic pupil'}' });
       if (!connected.ok) throw new Error('Synthetic connection failed');
       return day;
     })()`);
@@ -160,9 +172,45 @@ try {
   })()`);
   await evaluate(pupil.sessionId, `chrome.runtime.sendMessage({ type: 'sync.run' })`);
   await poll(() => evaluate(pupil.sessionId, `!document.querySelector('[aria-label="Speciale dagen"]').textContent.includes('Synthetic shared notes')`));
+  await evaluate(parent.sessionId, `chrome.runtime.sendMessage({ type: 'sync.run' })`);
+  await poll(() => evaluate(parent.sessionId, `(async () => (await chrome.runtime.sendMessage({ type: 'tasks.read' })).helpRecipients?.some(member => member.label === 'Synthetic pupil'))()`));
+  await evaluate(parent.sessionId, `(() => {
+    const panel = document.querySelector('[aria-label="To-do voor de volgende schooldag"]');
+    [...panel.querySelectorAll('label')].find(label => label.textContent === 'Hulp nodig').querySelector('input').click(); return true;
+  })()`);
+  await poll(() => evaluate(parent.sessionId, `Boolean([...document.querySelectorAll('label')].find(label => label.textContent.trim() === 'Synthetic pupil'))`));
+  await evaluate(parent.sessionId, `(() => {
+    const panel = document.querySelector('[aria-label="To-do voor de volgende schooldag"]');
+    [...panel.querySelectorAll('label')].find(label => label.textContent.trim() === 'Synthetic pupil').querySelector('input').click();
+    [...panel.querySelectorAll('button')].find(button => button.textContent === 'Hulpvraag opslaan').click(); return true;
+  })()`);
+  await poll(() => evaluate(parent.sessionId, `(async () => (await chrome.runtime.sendMessage({ type: 'tasks.read' })).entries[0]?.help?.recipients.length === 1)()`));
+  await evaluate(parent.sessionId, `(async () => {
+    const tasks = await chrome.runtime.sendMessage({ type: 'tasks.read' });
+    await chrome.runtime.sendMessage({ type: 'tasks.update', itemId: tasks.entries[0].id, status: 'done' });
+    return chrome.runtime.sendMessage({ type: 'sync.run' });
+  })()`);
+  await evaluate(pupil.sessionId, `(async () => {
+    const preferences = (await chrome.runtime.sendMessage({ type: 'preferences.read' })).preferences;
+    await chrome.storage.local.set({ schoolwarePreferences: { ...preferences, notificationsEnabled: true } });
+    return chrome.runtime.sendMessage({ type: 'sync.run' });
+  })()`);
+  await poll(() => evaluate(pupil.sessionId, `document.querySelector('[aria-label="Hulpvragen"]')?.textContent.includes('Hulp aan jou gevraagd')`));
+  const help = await evaluate(pupil.sessionId, `(async () => (await chrome.runtime.sendMessage({ type: 'tasks.read' })).entries[0])()`);
+  assert.equal(help.status, 'done'); assert.equal(help.help.needed, true); assert.equal(help.helpForYou, true);
+  assert.equal(await evaluate(pupil.workerSession, `syntheticNotifications.filter(entry => entry.id.startsWith('schoolware-watch-help-')).length`), 1);
+  await evaluate(pupil.sessionId, `chrome.runtime.sendMessage({ type: 'sync.run' })`);
+  assert.equal(await evaluate(pupil.workerSession, `syntheticNotifications.filter(entry => entry.id.startsWith('schoolware-watch-help-')).length`), 1);
+  await evaluate(parent.sessionId, `(async () => {
+    const tasks = await chrome.runtime.sendMessage({ type: 'tasks.read' });
+    await chrome.runtime.sendMessage({ type: 'tasks.help', itemId: tasks.entries[0].id, needed: false, recipients: [] });
+    return chrome.runtime.sendMessage({ type: 'sync.run' });
+  })()`);
+  await evaluate(pupil.sessionId, `chrome.runtime.sendMessage({ type: 'sync.run' })`);
+  await poll(() => evaluate(pupil.sessionId, `!document.querySelector('[aria-label="Hulpvragen"]')`));
   assert.equal(server.size, 1);
   assert.ok([...server.values()][0].length > 0);
-  console.log(`Chrome two-device encrypted planning smoke passed (${version.Browser}): isolated extension stores, real workers, live event/checklist/packing updates and deletion without contacting Schoolware or the production service.`);
+  console.log(`Chrome two-device encrypted planning/help smoke passed (${version.Browser}): isolated stores, real workers, live planning/packing, recipient picker, help alongside completion, targeted notification without replay, cancellation; no Schoolware or production service contacted.`);
 } finally {
   if (socket?.readyState === WebSocket.OPEN) { await command('Browser.close').catch(() => {}); socket.close(); }
   for (const waiter of pending.values()) { clearTimeout(waiter.timer); waiter.reject(new Error('Synthetic browser closed')); }
