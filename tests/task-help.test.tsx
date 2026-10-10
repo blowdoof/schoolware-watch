@@ -1,3 +1,4 @@
+import { withCompatiblePolicy } from './fixtures/sync-compatibility';
 import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -23,6 +24,7 @@ let enabled: boolean;
 let permission: boolean;
 const create = vi.fn();
 beforeEach(() => {
+  vi.spyOn(progressSync, 'announceVersion').mockResolvedValue(undefined);
   vi.setSystemTime(new Date('2026-10-09T12:00:00Z'));
   vi.stubGlobal('indexedDB', new IDBFactory()); enabled = true; permission = true;
   create.mockReset().mockResolvedValue('synthetic');
@@ -45,7 +47,7 @@ function server(pageSize = 200) {
     return Response.json({ ok: true, acknowledged: body.operations.map((op: { id: string }) => op.id), operations,
       cursor: operations.at(-1)?.revision ?? records.length, head: records.length });
   });
-  vi.stubGlobal('fetch', fetcher); return fetcher;
+  stubFetch(fetcher); return fetcher;
 }
 async function drain(scopeId: string) {
   for (let i = 0; i < 100; i++) {
@@ -236,3 +238,5 @@ describe('independent encrypted help requests', () => {
     expect(validateTasksView({ ...view, helpRecipients: [{ id: crypto.randomUUID(), label: '' }] })).toBeNull();
   });
 });
+
+function stubFetch(fetcher: unknown) { vi.stubGlobal('fetch', withCompatiblePolicy(fetcher)); }

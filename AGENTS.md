@@ -13,6 +13,7 @@ Use TypeScript, React, Vite, Tailwind CSS, IndexedDB, Chrome Alarms, and Vitest.
 - Keep Schoolware agenda content, history, and session material local. Do not add analytics or telemetry.
 - The owner authorizes optional encrypted progress and planning synchronization through the existing self-hosted PHP service, including special-day dates/text/checklists, checklist completion, packing/hiding choices, independent help requests with optional recipient device references and optional participant labels (scope expanded on 2026-10-09).
 - Remote sharing must be opt-in and limited to those encrypted fields; never automatically upload Schoolware agenda content/history, raw student/source identifiers, or Schoolware credentials.
+- The owner additionally authorizes encrypted device application/protocol version announcements and transient version headers for compatibility enforcement (2026-10-10); do not expand this into analytics or unpaired-device inventory.
 - Document remote processing, retention, deletion, shared-secret access limits, and hosting metadata accurately. Do not add other backend or cloud synchronization features without explicit authorization.
 - Never persist Schoolware passwords, session cookies, authentication tokens, or authorization headers.
 - Reuse the existing browser session only through the verified integration mechanism.

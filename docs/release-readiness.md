@@ -1,5 +1,31 @@
 # Release readiness and distribution
 
+Current candidate (2026-10-10): 0.3.0 adds fail-closed synchronization compatibility
+checks and encrypted device-version announcements. See
+[version compatibility](version-compatibility.md) for deployment and limitations.
+The PHP endpoint and private helper must be upgraded together; there is no SQL
+migration. No production deployment or Store publication is performed here.
+Matthias's external review and resolution of blocking findings remain mandatory
+before merging or publishing. Validate deployed TLS/WAF controls, scheduled
+retention cleanup, backups and deletion, and real paired-device upgrade/restart
+behavior. Shared-code holders have full group rights; individual revocation and
+verified teacher/parent permissions are not implemented. Suitable for controlled
+family testing after server upgrade, not yet an unrestricted public release.
+
+The older dated observations below are historical evidence, not acceptance of
+the current candidate.
+
+Candidate validation: strict TypeScript, ESLint, 388 Vitest tests and production
+build pass. The isolated PHP 8.2/MySQL integration verifies compatibility gating,
+policy changes before exchange, unchanged cursors on rejected writes, and legacy
+deletion/leave. Old cryptographic fixtures remain readable through a current
+transport. Dependency audit reports zero known vulnerabilities (including dev
+dependencies); this is not proof that the code or deployed host has no flaws.
+Chrome synthetic two-device tests pass for encrypted version announcements,
+planning, packing and help, and for blocked exchange retaining a local edit when
+the minimum version changes. Settings tests pass for permissions, worker restart,
+CSV export and special days. These do not contact Schoolware or production sync.
+
 Current status (2026-10-06): 0.1.0 is published. The owner authorized merging the
 complete 0.2.0 feature branch into main and pushing it, deferring Matthias's review
 until later. Review completion is not claimed. The 2026-10-04 notes below are

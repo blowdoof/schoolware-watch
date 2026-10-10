@@ -1,5 +1,28 @@
 # cPanel installation: schoolware.bumper.be
 
+## Compatibility upgrade (0.3.0 candidate, 2026-10-10)
+
+Copy `sync-policy.php` to `/home/example-account/sync-policy.php` outside the public root,
+then replace `public/sync.php` at the existing HTTPS endpoint. Existing database
+tables remain unchanged; no SQL migration is required for this upgrade.
+Optional configuration defaults are `sync_minimum_protocol = 2`,
+`sync_maximum_protocol = 2`, `sync_minimum_version = '0.3.0'`, and
+`sync_latest_published_version = null`. Set the latter only after actual release availability.
+
+Coordinate the endpoint upgrade with installation of the new client on every
+participating device: old clients without version headers receive HTTP 426 before
+uploads. They cannot show the new update-specific message. New clients pause
+against old endpoints. Do not lower the protocol minimum to bypass this protection.
+Deletion and member departure still accept old clients. Version headers are
+self-reported compatibility claims, not authentication or a security boundary.
+The compatibility response contains no group contents; existing quotas apply.
+
+Test the candidate and existing encrypted records in an isolated environment
+before upgrading production. The legacy-compatibility harness exercises old
+cryptographic formats through a transport with current headers; it does not
+claim that a deployed 0.1.0 client may synchronize against the new policy.
+See [version compatibility](../docs/version-compatibility.md) for release gates.
+
 The API requires PHP 8.2 with PDO MySQL and a dedicated MySQL/MariaDB database.
 No Docker, Node.js server or publicly exposed database port is needed. Schedule
 the private maintenance command daily to remove expired data from idle groups.

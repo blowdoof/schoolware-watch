@@ -1,6 +1,7 @@
 import { isTaskStatus, type TaskStatus } from '../domain/tasks';
 import { isAlertId } from './browser-alerts';
 import type { PlanningOperation, PlanningRecord, PlanningAssembly } from './planning-sync';
+import { validateSyncCompatibility, validateStoreUpdate, isAppVersion, type SyncCompatibility, type StoreUpdate } from './sync-compatibility';
 
 export const SYNC_ORIGIN = 'https://schoolware.bumper.be';
 export const SYNC_PERMISSION = `${SYNC_ORIGIN}/*`;
@@ -10,6 +11,7 @@ export interface ProgressOperation {
   id: string; sourceKey: string; version: string; status: TaskStatus; kind: 'manual' | 'reopen';
 }
 export interface SyncMember { id: string; label: string; lastSeenAt: string }
+export interface SyncDevice { id: string; version: string; protocol: number; reportedAt: string; self: boolean; label?: string }
 export function normalizeSyncLabel(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
   const value = raw.trim().normalize('NFC');
@@ -18,7 +20,8 @@ export function normalizeSyncLabel(raw: unknown): string | null {
 export function isSyncMember(raw: unknown): raw is SyncMember {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
   const value = raw as Record<string, unknown>;
-  return Object.keys(value).length === 3 && isAlertId(value.id) && typeof value.label === 'string' && normalizeSyncLabel(value.label) === value.label &&
+  return Object.keys(value).length === 3 &&
+    isAlertId(value.id) && typeof value.label === 'string' && normalizeSyncLabel(value.label) === value.label &&
     typeof value.lastSeenAt === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.000Z$/.test(value.lastSeenAt) &&
     Number.isFinite(Date.parse(value.lastSeenAt));
 }
@@ -34,10 +37,11 @@ export interface SyncState {
   planningRemote?: Record<string, PlanningRecord>; planningParts?: Record<string, PlanningAssembly>;
   helpNotificationClaims?: Record<string, string>;
   lastApplyOrdinaryChanged?: boolean;
+  compatibility?: SyncCompatibility; storeUpdate?: StoreUpdate; deviceVersionAnnounced?: string;
 }
 export interface SyncView { ok: boolean; enabled: boolean; pending: number; lastSuccessAt: string | null; error: boolean; pairingCode?: string; registrationPending?: boolean; blocked?: boolean;
-  displayName?: string; members?: (SyncMember & { self: boolean })[]; membersError?: boolean }
-type SimpleSyncType = 'sync.read' | 'sync.run' | 'sync.disconnect' | 'sync.delete' | 'sync.pairing';
+  displayName?: string; members?: (SyncMember & { self: boolean })[]; membersError?: boolean; compatibility?: SyncCompatibility; storeUpdate?: StoreUpdate; devices?: SyncDevice[] }
+type SimpleSyncType = 'sync.read' | 'sync.run' | 'sync.disconnect' | 'sync.delete' | 'sync.pairing' | 'sync.update';
 export type SyncMessage = { [T in SimpleSyncType]: { type: T } }[SimpleSyncType] |
   { type: 'sync.create'; code: string; label?: string } |
   { type: 'sync.connect'; code: string; seed: boolean; label?: string } |
@@ -51,7 +55,7 @@ export function parsePairingCode(code: unknown): { token: string; key: string } 
 export function validateSyncMessage(raw: unknown): SyncMessage | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const value = raw as Record<string, unknown>;
-  if (Object.keys(value).length === 1 && ['sync.read', 'sync.run', 'sync.disconnect', 'sync.delete', 'sync.pairing'].includes(value.type as string)) {
+  if (Object.keys(value).length === 1 && ['sync.read', 'sync.run', 'sync.disconnect', 'sync.delete', 'sync.pairing', 'sync.update'].includes(value.type as string)) {
     return { type: value.type } as SyncMessage;
   }
   const label = value.label === undefined ? undefined : normalizeSyncLabel(value.label);
@@ -74,6 +78,15 @@ export function validateSyncView(raw: unknown): SyncView | null {
       (v.blocked !== undefined && typeof v.blocked !== 'boolean') ||
       (v.displayName !== undefined && (typeof v.displayName !== 'string' || normalizeSyncLabel(v.displayName) !== v.displayName)) ||
       (v.membersError !== undefined && typeof v.membersError !== 'boolean') ||
+      (v.compatibility !== undefined && !validateSyncCompatibility(v.compatibility)) ||
+      (v.storeUpdate !== undefined && !validateStoreUpdate(v.storeUpdate)) ||
+      (v.devices !== undefined && (!Array.isArray(v.devices) || v.devices.length > 20000 || !v.devices.every((raw: unknown) => {
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
+        const d = raw as Record<string, unknown>;
+        return Object.keys(d).length === (d.label === undefined ? 5 : 6) && isAlertId(d.id) && isAppVersion(d.version) && Number.isSafeInteger(d.protocol) &&
+          (d.protocol as number) > 0 && (d.protocol as number) <= 1000 && typeof d.self === 'boolean' && typeof d.reportedAt === 'string' && Number.isFinite(Date.parse(d.reportedAt)) &&
+          (d.label === undefined || normalizeSyncLabel(d.label) === d.label);
+      }) || new Set(v.devices.map((raw) => (raw as SyncDevice).id)).size !== v.devices.length)) ||
       (v.members !== undefined && (!Array.isArray(v.members) || v.members.length > 50 ||
         !v.members.every((member: unknown) => {
           if (!member || typeof member !== 'object') return false;

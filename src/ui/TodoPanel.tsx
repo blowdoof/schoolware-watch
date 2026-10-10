@@ -7,6 +7,7 @@ import { useTasks } from './useTasks';
 import { useNow } from './useNow';
 import { displaySnapshotValue } from './agenda-presentation';
 import { TaskHelpControls } from './TaskHelpControls';
+import { compatibilityMessage } from './SyncVersionStatus';
 
 const dateLabel = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString('nl-BE', {
   timeZone: 'Europe/Brussels', weekday: 'long', day: 'numeric', month: 'long',
@@ -36,6 +37,7 @@ export function TodoOverview({ view, now, working, update, updateMany, updateHel
   }
   return <section className="mt-6 rounded-2xl border border-teal-200 bg-teal-50 p-5 shadow-sm" aria-label="To-do voor de volgende schooldag">
     <h2 className="text-lg font-semibold">To-do</h2>
+    {view?.syncIssue && <p role="status" className="mt-2 text-sm text-amber-800">{compatibilityMessage(view.syncIssue)}</p>}
     {!overview ? <p className="mt-2 text-sm">Taken laden…</p> : <>
       {view?.entries.some((task) => task.help?.needed) && <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3" aria-label="Hulpvragen">
         <h3 className="font-semibold text-amber-900">Hulp nodig</h3>

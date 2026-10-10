@@ -1,5 +1,12 @@
 # Privacy
 
+Version 0.3.0 additionally shares encrypted, self-reported device application and
+protocol versions within opted-in groups, with a report timestamp and optional
+existing participant label. Versions follow encrypted operation retention and
+deletion. HTTPS compatibility headers disclose application/protocol versions to
+the service, without agenda contents or Schoolware credentials; they are not
+stored as an analytics inventory. See [version compatibility](version-compatibility.md).
+
 The local information page includes a plain-language Dutch privacy summary and
 external contact/source/site/donation links. No remote resources are embedded.
 The PayPal link opens the owner's public `paypal.biz/bumperpuntbe` profile with

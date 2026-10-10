@@ -4,6 +4,7 @@ import { validateConnectionState } from '../shared/connection';
 import { hex } from '../domain/progress-sync';
 import { extensionInvitation, progressInvitation } from '../shared/progress-invitation';
 import { SYNC_PERMISSION, parsePairingCode, normalizeSyncLabel, validateSyncView, type SyncMessage, type SyncView } from '../shared/progress-sync';
+import { SyncVersionStatus, syncCompatibilityText } from './SyncVersionStatus';
 
 export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { refreshToken: number; initialMode?: 'first' | 'join' }) {
   const available = typeof chrome !== 'undefined' && Boolean(chrome.runtime?.id);
@@ -59,13 +60,13 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
     } catch { setMessage('Koppelen is niet gelukt. Voer eerst een geslaagde agendacontrole uit en controleer de koppelcode.'); }
     finally { setWorking(false); }
   }
-  async function act(type: 'sync.run' | 'sync.disconnect' | 'sync.delete') {
+  async function act(type: 'sync.run' | 'sync.disconnect' | 'sync.delete' | 'sync.update') {
     setWorking(true); setMessage('');
     try {
       const next = await send({ type });
-      if (type !== 'sync.run') { setPairing(''); setInvitation(''); setConfirmDelete(false); setLabel(''); labelEdited.current = false; }
-      setMessage(next.error ? 'Synchronisatie is niet gelukt. Je lokale voortgang blijft bewaard.' :
-        type === 'sync.run' ? 'Synchronisatie uitgevoerd.' : type === 'sync.delete' ? 'Gedeelde voortgang en deelnemermeldingen gewist; deze computer is ontkoppeld. Groepstoegang en revisieteller blijven op de server.' : 'Deze computer is ontkoppeld; lokale voortgang blijft bewaard.');
+      if (type === 'sync.disconnect' || type === 'sync.delete') { setPairing(''); setInvitation(''); setConfirmDelete(false); setLabel(''); labelEdited.current = false; }
+      setMessage(type === 'sync.update' ? 'Updatecontrole verwerkt.' : syncCompatibilityText(next) ?? (next.error ? 'Synchronisatie is niet gelukt. Je lokale voortgang blijft bewaard.' :
+        type === 'sync.run' ? 'Synchronisatie uitgevoerd.' : type === 'sync.delete' ? 'Gedeelde voortgang en deelnemermeldingen gewist; deze computer is ontkoppeld. Groepstoegang en revisieteller blijven op de server.' : 'Deze computer is ontkoppeld; lokale voortgang blijft bewaard.'));
     } catch { setMessage('De actie is niet gelukt. Controleer de serververbinding.'); }
     finally { setWorking(false); }
   }
@@ -133,6 +134,7 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
     <p className="mt-2 text-xs text-amber-800">Werk de extensie op alle gekoppelde computers bij voor hulpvragen, speciale dagen en boekentaskeuzes. Oudere versies kunnen deze wijzigingen niet verwerken. De Schoolware-agenda wordt op elk toestel afzonderlijk ingelezen; een verlopen sessie of oudere controle kan tijdelijk verschillende lijsten geven.</p>
     {!compatible && <p role="status" className="mt-3 text-sm text-amber-800">Koppel eerst een ondersteunde Schoolware-agenda en voer een geslaagde controle uit om voortgang te delen.</p>}
     {view?.enabled ? <>
+      <SyncVersionStatus view={view} working={working} onCheck={() => { void act('sync.update'); }} />
       {view.blocked && <p role="status" className="mt-3 text-sm text-amber-800">Automatische synchronisatie is gestopt: de server weigert deze koppeling. Controleer de koppelcode of vraag de beheerder om hulp. Nu synchroniseren probeert opnieuw; lokale voortgang blijft bewaard.</p>}
       <p className="mt-3 text-sm">{view.registrationPending ? view.blocked ? 'Je nieuwe leerlinggroep is nog niet geregistreerd; automatische pogingen zijn gestopt.' : 'Je nieuwe leerlinggroep wacht nog op registratie; Chrome probeert het automatisch opnieuw.' : 'Ingeschakeld voor de agendaselectie waarmee je hebt gekoppeld.'} {view.pending} wijzigingen wachten op verzending.</p>
       <p className="mt-2 text-xs text-slate-500">{view.lastSuccessAt ? `Laatst gesynchroniseerd: ${new Date(view.lastSuccessAt).toLocaleString('nl-BE', { timeZone: 'Europe/Brussels' })}` : 'Nog geen geslaagde synchronisatie.'}</p>
@@ -144,6 +146,7 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
         {view.members?.some((member) => !member.self) ? <ul className="mt-2 space-y-2">
           {view.members.filter((member) => !member.self).map((member) => <li key={member.id}>
             <span className="font-medium">{member.label}</span>
+            {!view.devices?.some((device) => device.id === member.id) && <span className="block text-xs text-amber-800">Versie niet gemeld. Werk dit toestel bij.</span>}
             <span className="block text-xs text-slate-600">Laatst gemeld: {new Date(member.lastSeenAt).toLocaleString('nl-BE', { timeZone: 'Europe/Brussels' })}</span>
           </li>)}
         </ul> : <p className="mt-2">{view.displayName ? 'Nog geen andere deelnemers gemeld. Laat de andere computer een naam instellen en synchroniseren.' : 'Stel hieronder jouw naam of rol in om deelnemers herkenbaar te delen.'}</p>}

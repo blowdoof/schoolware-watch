@@ -1,4 +1,4 @@
-import { progressSync, synchronizeProgress, leaveSyncMembers, configureProgressSyncAlarm, deleteRemoteProgress, PROGRESS_SYNC_ALARM } from './progress-sync';
+import { progressSync, synchronizeProgress, leaveSyncMembers, configureProgressSyncAlarm, deleteRemoteProgress, checkStoreUpdate, PROGRESS_SYNC_ALARM } from './progress-sync';
 import { SYNC_PERMISSION, type SyncView } from '../shared/progress-sync';
 import { type DiscoveryView } from '../shared/agenda-discovery';
 import { openMainPage } from './navigation';
@@ -17,6 +17,7 @@ import { availablePackingChoices } from '../domain/schoolbag';
 import type { SpecialDaysView } from '../shared/special-days';
 import { specialReminderPlan, specialReminderKey } from '../domain/special-day-reminders';
 import type { PlanningSharingStatus } from '../shared/planning-sync';
+import { isAppVersion } from '../shared/sync-compatibility';
 import { isAlertId } from '../shared/browser-alerts';
 import type { Category, HistoryScope } from '../domain/observations';
 import { notificationEventSelection } from '../domain/notification-window';
@@ -88,6 +89,7 @@ async function planningSharingStatus(scopeId: string | null): Promise<PlanningSh
   const enabled = Boolean(state && state.scopeId === scopeId);
   return { enabled, pending: enabled ? state!.outbox.length + (state!.planningOutbox?.length ?? 0) : 0,
     lastSuccessAt: enabled ? state!.lastSuccessAt : null, error: enabled ? state!.error : false,
+    ...(enabled && state!.compatibility?.issue ? { issue: state!.compatibility.issue } : {}),
     ...(enabled && state!.cursor < state!.head ? { receiving: true } : {}) };
 }
 
@@ -507,6 +509,10 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
     return readActivity();
   });
   if (message.type === 'sync.read') return progressSync.view();
+  if (message.type === 'sync.update') {
+    await checkStoreUpdate();
+    return progressSync.view();
+  }
   if (message.type === 'sync.pairing') {
     const state = await progressSync.read();
     return { ...await progressSync.view(), ...(state ? { pairingCode: `sw1.${state.token}.${state.key}` } : {}) };
@@ -946,4 +952,13 @@ chrome.runtime.onStartup.addListener(() => { void serializeMutation(async () => 
 chrome.runtime.onInstalled.addListener(() => {
   void serializeMutation(async () => { const current = trace('worker'); await log(current, 'worker.installed', 'info');
     await restoreMonitoring(current, 'installation'); }).catch(() => {});
+});
+
+chrome.runtime.onUpdateAvailable?.addListener((details) => {
+  if (!isAppVersion(details.version)) return;
+  void initialization.then(() => serializeMutation(async () => {
+    const state = await progressSync.read();
+    if (state) await progressSync.setStoreUpdate(state, { checkedAt: new Date().toISOString(), status: 'update_available', version: details.version });
+    await invalidateTaskViews();
+  })).catch(() => {});
 });

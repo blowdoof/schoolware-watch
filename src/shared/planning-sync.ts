@@ -1,9 +1,10 @@
 import { isAlertId } from './browser-alerts';
 import { validateTaskHelp, type TaskHelp } from './task-help';
+import { isAppVersion, type CompatibilityIssue } from './sync-compatibility';
 import { isDay, validateSpecialDay, type SpecialDay } from '../domain/special-days';
 
 export type SharedSpecialDay = Omit<SpecialDay, 'revision' | 'checklist'> & { checklist: Omit<SpecialDay['checklist'][number], 'done'>[] };
-export type PlanningValue = { type: 'help'; item: string; help: TaskHelp } | { type: 'special-day'; day: string; entry: SharedSpecialDay | null } |
+export type PlanningValue = { type: 'device-version'; deviceId: string; version: string; protocol: number; reportedAt: string } | { type: 'help'; item: string; help: TaskHelp } | { type: 'special-day'; day: string; entry: SharedSpecialDay | null } |
   { type: 'special-day-move'; previousDay: string; entry: SharedSpecialDay } |
   { type: 'checklist'; eventId: string; pointId: string; done: boolean } |
   { type: 'packing'; id: string; day: string; state: 'open' | 'packed' | 'hidden' };
@@ -11,11 +12,12 @@ export interface PlanningFragment { kind: 'planning-part'; batch: string; index:
 export interface PlanningOperation { id: string; resource: string; fragment: PlanningFragment; relatedResources?: string[] }
 export interface PlanningRecord { value: PlanningValue; seed: boolean; revision: number }
 export interface PlanningAssembly { count: number; parts: Record<string, string>; revision: number }
-export interface PlanningSharingStatus { enabled: boolean; pending: number; lastSuccessAt: string | null; error: boolean; receiving?: boolean }
+export interface PlanningSharingStatus { enabled: boolean; pending: number; lastSuccessAt: string | null; error: boolean; receiving?: boolean; issue?: CompatibilityIssue }
 export function validatePlanningSharingStatus(raw: unknown): PlanningSharingStatus | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const v = raw as Record<string, unknown>;
-  return Object.keys(v).length === (Object.hasOwn(v, 'receiving') ? 5 : 4) &&
+  return Object.keys(v).length === 4 + (Object.hasOwn(v, 'receiving') ? 1 : 0) + (Object.hasOwn(v, 'issue') ? 1 : 0) &&
+    (!Object.hasOwn(v, 'issue') || ['update-required', 'server-update-required', 'check-unavailable'].includes(v.issue as string)) &&
     (!Object.hasOwn(v, 'receiving') || typeof v.receiving === 'boolean') && typeof v.enabled === 'boolean' && typeof v.error === 'boolean' &&
     Number.isSafeInteger(v.pending) && (v.pending as number) >= 0 && (v.lastSuccessAt === null ||
       typeof v.lastSuccessAt === 'string' && Number.isFinite(Date.parse(v.lastSuccessAt))) ? v as unknown as PlanningSharingStatus : null;
@@ -26,6 +28,7 @@ export function sharedSpecialDay(entry: SpecialDay): SharedSpecialDay {
     checklist: entry.checklist.map((point) => ({ id: point.id, text: point.text, pack: point.pack })) };
 }
 export function planningResource(value: PlanningValue): string {
+  if (value.type === 'device-version') return `device:${value.deviceId}`;
   if (value.type === 'help') return `help:${value.item}`;
   return value.type === 'special-day' ? `special:${value.day}` : value.type === 'special-day-move' ? `move:${value.previousDay}:${value.entry.day}` : value.type === 'checklist' ?
     `checklist:${value.eventId}:${value.pointId}` : `packing:${value.id}`;
@@ -33,6 +36,9 @@ export function planningResource(value: PlanningValue): string {
 export function validatePlanningValue(raw: unknown): PlanningValue | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const v = raw as Record<string, unknown>;
+  if (v.type === 'device-version' && Object.keys(v).length === 5 && isAlertId(v.deviceId) && isAppVersion(v.version) && Number.isSafeInteger(v.protocol) &&
+      (v.protocol as number) > 0 && (v.protocol as number) <= 1000 && typeof v.reportedAt === 'string' && Number.isFinite(Date.parse(v.reportedAt)))
+    return { type: v.type, deviceId: v.deviceId, version: v.version, protocol: v.protocol as number, reportedAt: v.reportedAt };
   if (v.type === 'help' && Object.keys(v).length === 3 && typeof v.item === 'string' && /^[a-f0-9]{64}$/.test(v.item)) {
     const help = validateTaskHelp(v.help);
     if (help) return { type: 'help', item: v.item, help };

@@ -40,10 +40,12 @@ def main():
             public = folder / 'public'
             public.mkdir()
             (folder / 'maintenance.php').write_text((root / 'maintenance.php').read_text(), encoding='utf-8')
+            (folder / 'sync-policy.php').write_text((root / 'sync-policy.php').read_text(), encoding='utf-8')
             # Rewrite only the fixed production path in the disposable test copies.
             for source, destination in [(root / 'public/sync.php', public / 'sync.php'),
                                         (root / 'manage-groups.php', folder / 'manage-groups.php')]:
                 destination.write_text(source.read_text().replace(
+                    "'/home/example-account/sync-policy.php'", "'" + (folder / 'sync-policy.php').as_posix() + "'").replace(
                     "'/home/example-account/maintenance.php'",
                     "'" + (folder / 'maintenance.php').as_posix() + "'").replace(
                     "'/home/example-account/schoolware-sync-config.php'",
@@ -93,9 +95,12 @@ def main():
                 processes.append(subprocess.Popen(php + ['-S', f'127.0.0.1:{ports[-1]}', str(router)],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
 
-            def call(body, bearer=token, server=0, include_headers=False):
+            def call(body, bearer=token, server=0, include_headers=False, version='0.3.0', protocol='2'):
+                headers = {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + bearer}
+                if version is not None:
+                    headers.update({'X-Schoolware-Version': version, 'X-Schoolware-Protocol': protocol})
                 request = urllib.request.Request(f'http://127.0.0.1:{ports[server]}/sync.php',
-                    data=json.dumps(body).encode(), headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + bearer})
+                    data=json.dumps(body).encode(), headers=headers)
                 try:
                     with urllib.request.urlopen(request, timeout=5) as result:
                         value = (result.status, json.load(result))
@@ -113,7 +118,20 @@ def main():
                     time.sleep(0.1)
             assert status == 200, (status, result)
             assert result['head'] == 9 and result['operations'][0]['id'] == legacy['id']
-            assert call({'action': 'delete'})[0] == 200
+            # Reject legacy/malformed/too-new clients before any content write.
+            policy = call({'action': 'compatibility'})[1]['policy']
+            assert policy == {'minimumProtocol': 2, 'maximumProtocol': 2, 'minimumVersion': '0.3.0', 'latestVersion': None}
+            rejected = {'action': 'exchange', 'cursor': 9, 'operations': [{'id': str(uuid.uuid4()), 'iv': '0' * 24, 'ciphertext': '4' * 320}]}
+            for version, protocol in [(None, '2'), ('0.2.0', '2'), ('0.3.0', '1'), ('0.3.0', '3'), ('0.3.0-invalid', '2')]:
+                status, response = call(rejected, version=version, protocol=protocol)
+                assert status == 426 and response['error'] == 'update-required'
+                assert call(empty)[1]['head'] == 9
+            # Policy can change between preflight and exchange; the server rechecks.
+            configure(", 'sync_minimum_version'=>'0.4.0'")
+            assert call(rejected)[0] == 426
+            assert call(empty, version='0.4.0')[1]['head'] == 9
+            configure()
+            assert call({'action': 'delete'}, version=None)[0] == 200
             assert call({**empty, 'cursor': 9})[1]['head'] == 9
             if args.legacy_compatibility:
                 subprocess.run(['node', str(root / 'tests/legacy-compatibility.mjs'),
@@ -165,7 +183,7 @@ def main():
             assert call(member_request, 'b' * 64)[0] == 401
             assert call({**member_request, 'group_id': other_id})[0] == 400
             assert call({'action': 'members', 'device': {**member, 'label': 'Synthetic private name'}})[0] == 400
-            assert call({'action': 'member.leave', 'id': member['id']})[0] == 200
+            assert call({'action': 'member.leave', 'id': member['id']}, version=None)[0] == 200
             assert call({'action': 'members', 'device': other_member}, other_token)[1]['members'][0]['ciphertext'] == '8' * 64
             assert call({'action': 'member.leave', 'id': 'invalid'})[0] == 400
             assert call(member_request)[0] == 200

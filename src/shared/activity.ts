@@ -11,12 +11,12 @@ export const ACTIVITY_ACTIONS = ['worker.started', 'worker.installed', 'browser.
   'banner.published', 'banner.rendered', 'banner.opened', 'banner.dismissed', 'banner.broadcast', 'website.script',
   'preferences.saved', 'permission.changed', 'permission.requested', 'task.status', 'log.exported',
   'progress.sync', 'progress.registration', 'progress.exchange', 'progress.apply', 'progress.members',
-  'progress.leave', 'progress.delete', 'progress.connection', 'progress.name', 'notification.todo', 'notification.progress', 'notification.specialDays', 'connection.discovery'] as const;
+  'progress.leave', 'progress.delete', 'progress.connection', 'progress.name', 'progress.compatibility', 'notification.todo', 'notification.progress', 'notification.specialDays', 'connection.discovery'] as const;
 export type ActivityAction = typeof ACTIVITY_ACTIONS[number];
 export type ActivityPhase = 'started' | 'succeeded' | 'failed' | 'skipped' | 'info';
 export type ActivityContext = 'worker' | 'popup' | 'options' | 'dashboard' | 'schoolware' | 'alarm' | 'system';
 export const ACTIVITY_REQUESTS = ['setup.complete', 'ui.open', 'sync.read', 'sync.run', 'sync.create', 'sync.connect', 'sync.disconnect', 'sync.delete', 'sync.pairing', 'connection.read', 'connection.clear', 'history.read', 'history.clear', 'history.retention',
-  'sync.name', 'specialDays.read', 'specialDays.save', 'specialDays.delete',
+  'sync.name', 'sync.update', 'specialDays.read', 'specialDays.save', 'specialDays.delete',
   'connection.discovery.start', 'connection.discovery.read', 'connection.discovery.cancel', 'connection.discovery.confirm',
   'preferences.read', 'preferences.save', 'notifications.test', 'notifications.details', 'browser.alerts.read',
   'browser.alerts.dismiss', 'browser.alerts.test', 'browser.alerts.open', 'browser.alerts.rendered', 'agenda.check',
@@ -25,7 +25,7 @@ export const ACTIVITY_REASONS = ['success', 'session-required', 'redirected', 'a
   'network-error', 'timeout', 'http-error', 'rate-limited', 'invalid-request', 'permission-required', 'busy', 'storage-error',
   'api-error', 'blocked', 'accepted', 'denied', 'granted', 'unavailable', 'disabled', 'backoff', 'no-events',
   'already-claimed', 'cancelled', 'user', 'system', 'invalid-message', 'untrusted-sender', 'unchanged', 'missing', 'test', 'source-changed',
-  'profile-mismatch', 'authentication-failed', 'decryption-failed', 'crypto-error', 'registration-pending', 'pagination-pending', 'partial-success', 'remote-sync', 'no-reminder'] as const;
+  'profile-mismatch', 'authentication-failed', 'decryption-failed', 'crypto-error', 'registration-pending', 'pagination-pending', 'partial-success', 'remote-sync', 'no-reminder', 'update-required', 'server-update-required', 'check-unavailable'] as const;
 export type ActivityReason = typeof ACTIVITY_REASONS[number];
 export const ACTIVITY_TRIGGERS = ['alarm', 'manual', 'task-edit', 'agenda-check', 'startup', 'installation', 'permission-change', 'disconnect'] as const;
 export type ActivityTrigger = typeof ACTIVITY_TRIGGERS[number];

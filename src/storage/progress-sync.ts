@@ -8,6 +8,7 @@ import { HistoryRepository, DEFAULT_RETENTION, retentionCutoff } from './history
 import { planningOperations, sharedSpecialDay, planningResource, assemblePlanning, type PlanningFragment, type PlanningValue } from '../shared/planning-sync';
 import { applySharedPlanning } from '../domain/shared-planning';
 import { brusselsWallTime } from '../domain/notification-window';
+import { APP_VERSION, SYNC_PROTOCOL, type SyncCompatibility, type StoreUpdate } from '../shared/sync-compatibility';
 
 export class ProgressSyncRepository {
   constructor(private readonly name = HISTORY_DB) {}
@@ -19,9 +20,45 @@ export class ProgressSyncRepository {
     const state = await this.read();
     return { ok: true, enabled: Boolean(state), pending: (state?.outbox.length ?? 0) + (state?.planningOutbox?.length ?? 0),
       lastSuccessAt: state?.lastSuccessAt ?? null, error: state?.error ?? false,
+      ...(state?.compatibility ? { compatibility: state.compatibility } : {}), ...(state?.storeUpdate ? { storeUpdate: state.storeUpdate } : {}),
+      ...(state?.planningRemote ? { devices: Object.values(state.planningRemote).flatMap(({ value }) => value.type === 'device-version' ? [{
+        id: value.deviceId, version: value.version, protocol: value.protocol, reportedAt: value.reportedAt, self: value.deviceId === state.connectionId,
+        ...(state.members?.find((member) => member.id === value.deviceId)?.label ? { label: state.members.find((member) => member.id === value.deviceId)!.label } : {}),
+      }] : []) } : {}),
       ...(state?.displayName ? { displayName: state.displayName, membersError: state.membersError ?? false,
         members: (state.members ?? []).map((member) => ({ ...member, self: member.id === state.connectionId })) } : {}),
       ...(state?.registrationPending ? { registrationPending: true } : {}), ...(state?.blocked ? { blocked: true } : {}) };
+  }
+  async setCompatibility(expected: SyncState, compatibility: SyncCompatibility): Promise<boolean> {
+    return this.setClientStatus(expected, { compatibility });
+  }
+  async setStoreUpdate(expected: SyncState, storeUpdate: StoreUpdate): Promise<boolean> {
+    return this.setClientStatus(expected, { storeUpdate });
+  }
+  private async setClientStatus(expected: SyncState, patch: { compatibility?: SyncCompatibility; storeUpdate?: StoreUpdate }): Promise<boolean> {
+    const db = await openHistoryDatabase(this.name);
+    try {
+      const tx = db.transaction('sync', 'readwrite');
+      const state = await tx.store.get(SYNC_STATE_KEY);
+      const accepted = state?.connectionId === expected.connectionId && state?.key === expected.key && state?.token === expected.token;
+      if (state && accepted) await tx.store.put({ ...state, ...patch }, SYNC_STATE_KEY);
+      await tx.done; return accepted;
+    } finally { db.close(); }
+  }
+  async announceVersion(expected: SyncState): Promise<void> {
+    const db = await openHistoryDatabase(this.name);
+    try {
+      const tx = db.transaction('sync', 'readwrite');
+      const state = await tx.store.get(SYNC_STATE_KEY);
+      const marker = `${APP_VERSION}:${SYNC_PROTOCOL}`;
+      if (state?.connectionId === expected.connectionId && state.token === expected.token && state.key === expected.key && state.deviceVersionAnnounced !== marker) {
+        state.planningOutbox ??= [];
+        state.planningOutbox.push(...planningOperations({ type: 'device-version', deviceId: state.connectionId, version: APP_VERSION, protocol: SYNC_PROTOCOL, reportedAt: new Date().toISOString() }));
+        state.deviceVersionAnnounced = marker;
+        await tx.store.put(state, SYNC_STATE_KEY);
+      }
+      await tx.done;
+    } finally { db.close(); }
   }
   async preparePlanning(scopeId: string): Promise<void> {
     const history = new HistoryRepository(this.name);
@@ -192,6 +229,7 @@ export class ProgressSyncRepository {
       const tx = db.transaction('sync', 'readwrite'); const state = await tx.store.get(SYNC_STATE_KEY);
       if (state?.connectionId === expected.connectionId && state.token === expected.token && state.key === expected.key) {
         state.error = true;
+        if (httpStatus === 426) state.compatibility = { checkedAt: new Date().toISOString(), policy: state.compatibility?.policy ?? null, issue: 'update-required' };
         if (httpStatus !== undefined && [401, 403, 409].includes(httpStatus)) state.blocked = true;
         await tx.store.put(state, SYNC_STATE_KEY);
       }

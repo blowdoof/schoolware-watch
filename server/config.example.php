@@ -10,6 +10,11 @@ return [
     // Group token verifiers are stored in sw_sync_groups, not this file.
     // Keep the legacy token_hash temporarily only when migrating an old server.
     'retention_days' => 90,
+    'sync_minimum_protocol' => 2,
+    'sync_maximum_protocol' => 2,
+    'sync_minimum_version' => '0.3.0',
+    // Set only after this version is actually available in the Chrome Web Store.
+    'sync_latest_published_version' => null,
     // Self-registration is enabled separately by the private CLI.
     'max_groups' => 1000,
     'registrations_per_hour' => 50,

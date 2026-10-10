@@ -6,6 +6,7 @@ import type { ActivityAction, ActivityData, ActivityReason, ActivityReporter } f
 import type { AuditContext } from '../storage/activity';
 import { notifyProgressChange, notifyHelpRequests } from './progress-notifications';
 import { isPlanningFragment, type PlanningFragment } from '../shared/planning-sync';
+import { APP_VERSION, SYNC_PROTOCOL, validateSyncPolicy, compatibilityIssue, isAppVersion, type StoreUpdate, type SyncPolicy } from '../shared/sync-compatibility';
 
 export const PROGRESS_SYNC_ALARM = 'schoolware-progress-sync';
 export const progressSync = new ProgressSyncRepository();
@@ -47,14 +48,14 @@ async function request(token: string, body: unknown): Promise<Record<string, unk
   let response: Response;
   try {
     response = await fetch(SYNC_URL, { method: 'POST', credentials: 'omit', redirect: 'error', cache: 'no-store',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'X-Schoolware-Version': APP_VERSION, 'X-Schoolware-Protocol': String(SYNC_PROTOCOL) }, body: JSON.stringify(body),
       signal: AbortSignal.timeout(15000) });
   } catch (error) {
     throw new SyncFailure(error instanceof Error && ['TimeoutError', 'AbortError'].includes(error.name) ? 'timeout' : 'network-error');
   }
   if (!response.ok) {
     await response.body?.cancel().catch(() => {});
-    throw new SyncFailure(response.status === 429 ? 'rate-limited' :
+    throw new SyncFailure(response.status === 426 ? 'update-required' : response.status === 429 ? 'rate-limited' :
       response.status === 401 || response.status === 403 ? 'authentication-failed' : 'http-error', response.status);
   }
   if (Number(response.headers.get('Content-Length') ?? 0) > 1_000_000) {
@@ -80,6 +81,41 @@ async function request(token: string, body: unknown): Promise<Record<string, unk
   try { value = JSON.parse(text); } catch { throw new SyncFailure('invalid-response'); }
   if (!value || typeof value !== 'object' || Array.isArray(value) || (value as Record<string, unknown>).ok !== true) throw new SyncFailure('invalid-response');
   return value as Record<string, unknown>;
+}
+
+async function checkCompatibility(state: SyncState, record: ActivityReporter): Promise<void> {
+  const checkedAt = new Date().toISOString();
+  let policy: SyncPolicy | null = null;
+  try {
+    const response = await audited(record, 'progress.compatibility', () => request(state.token, { action: 'compatibility' }));
+    policy = validateSyncPolicy(response.policy);
+    if (Object.keys(response).length !== 2 || !policy) throw new SyncFailure('server-update-required');
+    const issue = compatibilityIssue(policy);
+    if (!await progressSync.setCompatibility(state, { checkedAt, policy, issue })) throw new SyncFailure('cancelled');
+    if (issue) throw new SyncFailure(issue);
+  } catch (error) {
+    if (error instanceof SyncFailure && error.reason === 'cancelled') throw error;
+    const issue = error instanceof SyncFailure && error.reason === 'update-required' ? 'update-required' :
+      error instanceof SyncFailure && (error.reason === 'server-update-required' || error.httpStatus === 400) ? 'server-update-required' : 'check-unavailable';
+    await progressSync.setCompatibility(state, { checkedAt, policy, issue });
+    if (issue === 'server-update-required') throw new SyncFailure(issue);
+    throw error;
+  }
+}
+
+export async function checkStoreUpdate(): Promise<void> {
+  const state = await progressSync.read();
+  if (!state) return;
+  // Chrome also throttles this API. Preserve a recent result instead of polling.
+  if (state.storeUpdate && Date.now() - Date.parse(state.storeUpdate.checkedAt) < 60000) return;
+  let update: StoreUpdate = { checkedAt: new Date().toISOString(), status: 'unavailable' };
+  try {
+    const result = await chrome.runtime.requestUpdateCheck();
+    if (['update_available', 'no_update', 'throttled'].includes(result.status) &&
+        (result.status !== 'update_available' || isAppVersion(result.version)))
+      update = { checkedAt: update.checkedAt, status: result.status, ...(result.status === 'update_available' ? { version: result.version! } : {}) };
+  } catch { /* Unpacked builds or unavailable Chrome APIs do not imply latest. */ }
+  await progressSync.setStoreUpdate(state, update);
 }
 
 export async function configureProgressSyncAlarm(reporter?: ActivityReporter): Promise<void> {
@@ -162,6 +198,9 @@ export async function synchronizeProgress(scopeId: string | null, reporter?: Act
     if (!state || state.scopeId !== scopeId) {
       await record('progress.sync', 'skipped', { reason: !state ? 'disabled' : 'profile-mismatch' }); return false;
     }
+    if (state.blocked) { await record('progress.sync', 'skipped', { reason: 'blocked' }); return false; }
+    await checkCompatibility(state, record);
+    await progressSync.announceVersion(state);
     await progressSync.preparePlanning(state.scopeId);
     const current = await progressSync.read();
     if (!current || current.connectionId !== state.connectionId) throw new SyncFailure('cancelled');

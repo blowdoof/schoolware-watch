@@ -1,6 +1,14 @@
 # Privacyverklaring Schoolware Watch
 
-Laatst bijgewerkt: 9 oktober 2026. Versie: 0.2.0 (bron voor de volgende update).
+Laatst bijgewerkt: 10 oktober 2026. Versie: 0.3.0 (bron voor de volgende update).
+
+Bij ingeschakelde deling worden ook de zelfgemelde extensieversie en protocolversie
+per toestel versleuteld gedeeld, met een meldtijd en eventueel de bestaande
+deelnemernaam. Dit bevestigt geen identiteit of actuele online status. Deze
+gegevens volgen dezelfde gedeelde bewaartermijnen en verwijderfuncties. De dienst
+ontvangt extensie- en protocolversies ook als technische HTTPS-aanvraagheaders
+voor de compatibiliteitscontrole, zonder agendatekst of Schoolware-inloggegevens.
+Dit vormt geen analytics of inventaris van niet-gekoppelde toestellen.
 
 Schoolware Watch is een onafhankelijk project van Bumper.be. Contact:
 [info@bumper.be](mailto:info@bumper.be). Het is geen officieel product van

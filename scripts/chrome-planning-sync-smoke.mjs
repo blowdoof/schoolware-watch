@@ -20,6 +20,7 @@ let socket; let sequence = 0; let bindingError;
 const pending = new Map();
 const server = new Map();
 const serverMembers = new Map();
+const policy = { minimumProtocol: 2, maximumProtocol: 2, minimumVersion: '0.3.0', latestVersion: null };
 async function poll(operation) {
   for (let attempt = 0; attempt < 100; attempt++) {
     if (bindingError) throw bindingError;
@@ -49,6 +50,12 @@ async function routeBinding(message) {
   const body = JSON.parse(request.options.body);
   assert.ok(!request.options.body.includes('Synthetic shared notes'));
   const token = request.options.headers.Authorization;
+  assert.equal(request.options.headers['X-Schoolware-Version'], '0.3.0');
+  assert.equal(request.options.headers['X-Schoolware-Protocol'], '2');
+  if (body.action === 'compatibility') {
+    await evaluate(message.sessionId, `globalThis.syntheticReply(${JSON.stringify(request.id)}, ${JSON.stringify({ ok: true, policy })})`);
+    return;
+  }
   if (body.action === 'members') {
     const members = serverMembers.get(token) ?? new Map(); serverMembers.set(token, members);
     assert.deepEqual(Object.keys(body.device).sort(), ['ciphertext', 'id', 'iv']);
@@ -221,6 +228,20 @@ try {
   await poll(() => evaluate(pupil.sessionId, `!document.querySelector('[aria-label="Hulpvragen"]')`));
   assert.equal(server.size, 1);
   assert.ok([...server.values()][0].length > 0);
+  const versions = await evaluate(parent.sessionId, `chrome.runtime.sendMessage({ type: 'sync.read' })`);
+  assert.equal(versions.devices.length, 2);
+  assert.ok(versions.devices.every(device => device.version === '0.3.0' && device.protocol === 2));
+  const recordCount = [...server.values()][0].length;
+  policy.minimumVersion = '0.4.0';
+  await evaluate(parent.sessionId, `(async () => {
+    const tasks = await chrome.runtime.sendMessage({ type: 'tasks.read' });
+    await chrome.runtime.sendMessage({ type: 'tasks.update', itemId: tasks.entries[0].id, status: 'in-progress' });
+    return chrome.runtime.sendMessage({ type: 'sync.run' });
+  })()`);
+  const incompatible = await evaluate(parent.sessionId, `chrome.runtime.sendMessage({ type: 'sync.read' })`);
+  assert.equal(incompatible.compatibility.issue, 'update-required');
+  assert.equal([...server.values()][0].length, recordCount);
+  assert.equal(await evaluate(parent.sessionId, `(async () => (await chrome.runtime.sendMessage({ type: 'tasks.read' })).entries[0].status)()`), 'in-progress');
   console.log(`Chrome two-device encrypted planning/help smoke passed (${version.Browser}): isolated stores, real workers, live planning/packing, recipient picker, help alongside completion, targeted notification without replay, cancellation; no Schoolware or production service contacted.`);
 } finally {
   if (socket?.readyState === WebSocket.OPEN) { await command('Browser.close').catch(() => {}); socket.close(); }

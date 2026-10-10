@@ -1,3 +1,4 @@
+import { withCompatiblePolicy } from './fixtures/sync-compatibility';
 import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
@@ -15,6 +16,7 @@ const token = 'a'.repeat(64); const key = 'b'.repeat(64);
 const code = `sw1.${token}.${key}`;
 const history = new HistoryRepository();
 beforeEach(() => {
+  vi.spyOn(progressSync, 'announceVersion').mockResolvedValue(undefined);
   vi.setSystemTime(new Date('2026-10-09T12:00:00Z'));
   vi.stubGlobal('indexedDB', new IDBFactory());
   vi.stubGlobal('chrome', { permissions: { contains: vi.fn().mockResolvedValue(true) }, storage: { local: { get: vi.fn().mockResolvedValue({}) } } });
@@ -37,7 +39,7 @@ function syntheticServer(pageSize = 200) {
     return Response.json({ ok: true, acknowledged: body.operations.map((operation: { id: string }) => operation.id),
       operations, cursor: operations.at(-1)?.revision ?? records.length, head: records.length });
   });
-  vi.stubGlobal('fetch', fetcher); return { fetcher, groups };
+  stubFetch(fetcher); return { fetcher, groups };
 }
 async function drain(scopeId: string) {
   let changed = false;
@@ -219,3 +221,5 @@ describe('encrypted shared planning transport', () => {
     expect(scope.specialDays[0]!.revision).toBeGreaterThan(2);
   });
 });
+
+function stubFetch(fetcher: unknown) { vi.stubGlobal('fetch', withCompatiblePolicy(fetcher)); }
