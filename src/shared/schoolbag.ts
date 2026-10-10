@@ -5,12 +5,14 @@ import { isAlertId } from './browser-alerts';
 import { validateSpecialDays } from '../domain/special-days';
 import { availablePackingChoices } from '../domain/schoolbag';
 import { validatePlanningSharingStatus, type PlanningSharingStatus } from './planning-sync';
+import { isActorMap, type ActionStamp } from './participation';
 
-export interface SchoolbagView extends BagAgenda { ok: boolean; choices?: { id: string; day: string; state: 'packed' | 'hidden' }[]; sharing?: PlanningSharingStatus }
+export interface SchoolbagView extends BagAgenda { ok: boolean; choices?: { id: string; day: string; state: 'packed' | 'hidden' }[]; sharing?: PlanningSharingStatus; actors?: Record<string, ActionStamp> }
 
 /** Latest active selection only: stale retained points cannot invent requirements. */
 export function createSchoolbagView(scope: HistoryScope | null): SchoolbagView {
   return { ok: true, lastSuccessAt: scope?.lastSuccessAt ?? null,
+    ...(scope?.planningActors ? { actors: Object.fromEntries(Object.entries(scope.planningActors).map(([key, value]) => [key, value.actor])) } : {}),
     ...(scope?.schoolbagChoices ? { choices: scope.schoolbagChoices } : {}),
     ...(scope?.specialDays ? { specialDays: scope.specialDays } : {}),
     points: (scope?.items ?? []).filter((item) => item.localId && item.present && !item.snapshot.hidden &&
@@ -46,7 +48,8 @@ export async function packingIdentityMigration(scope: HistoryScope, now: Date): 
 export function validateSchoolbagView(raw: unknown): SchoolbagView | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const view = raw as Record<string, unknown>;
-  if (!Object.keys(view).every((key) => ['ok', 'points', 'lastSuccessAt', 'choices', 'specialDays', 'sharing'].includes(key)) || typeof view.ok !== 'boolean' || !Array.isArray(view.points) ||
+  if (view.actors !== undefined && !isActorMap(view.actors)) return null;
+  if (!Object.keys(view).every((key) => ['ok', 'points', 'lastSuccessAt', 'choices', 'specialDays', 'sharing', 'actors'].includes(key)) || typeof view.ok !== 'boolean' || !Array.isArray(view.points) ||
       !(view.lastSuccessAt === null || (typeof view.lastSuccessAt === 'string' &&
         /^\d{4}-\d{2}-\d{2}T/.test(view.lastSuccessAt) && Number.isFinite(Date.parse(view.lastSuccessAt))))) return null;
   const points: BagPoint[] = [];
@@ -83,5 +86,5 @@ export function validateSchoolbagView(raw: unknown): SchoolbagView | null {
   if (specialDays === null) return null;
   const sharing = Object.hasOwn(view, 'sharing') ? validatePlanningSharingStatus(view.sharing) : undefined;
   if (sharing === null) return null;
-  return { ok: view.ok, points, lastSuccessAt: view.lastSuccessAt as string | null, ...(choices ? { choices } : {}), ...(specialDays ? { specialDays } : {}), ...(sharing ? { sharing } : {}) };
+  return { ok: view.ok, points, lastSuccessAt: view.lastSuccessAt as string | null, ...(choices ? { choices } : {}), ...(specialDays ? { specialDays } : {}), ...(sharing ? { sharing } : {}), ...(view.actors ? { actors: view.actors as Record<string, ActionStamp> } : {}) };
 }

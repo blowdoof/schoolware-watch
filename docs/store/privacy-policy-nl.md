@@ -1,6 +1,16 @@
 # Privacyverklaring Schoolware Watch
 
-Laatst bijgewerkt: 10 oktober 2026. Versie: 0.3.0 (bron voor de volgende update).
+Laatst bijgewerkt: 10 oktober 2026. Versie: 0.4.0 (bron voor de volgende update).
+
+Bij wijzigingen aan taakstatus, hulpvragen, checklistvinkjes en boekentaskeuzes
+bewaren we wie de wijziging deed: een willekeurige deelnemer- en eventueel
+toestelverwijzing, de optionele ingestelde naam en het gemelde tijdstip.
+Nagekeken en verbeterd worden afzonderlijk per deelnemer en taakinhoud bewaard.
+Bij ingeschakelde deling gaan deze gegevens versleuteld naar dezelfde groep.
+Namen bevestigen geen identiteit; alle houders van de koppelcode hebben dezelfde
+groepsrechten. Een gedeelde computer herkent niet automatisch welke persoon
+hem gebruikt. Deze gegevens volgen de lokale profielbewaring en de bestaande
+gedeelde bewaartermijnen en verwijderfuncties.
 
 Bij ingeschakelde deling worden ook de zelfgemelde extensieversie en protocolversie
 per toestel versleuteld gedeeld, met een meldtijd en eventueel de bestaande

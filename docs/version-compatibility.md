@@ -1,8 +1,10 @@
-# Version compatibility (0.3.0 candidate, 2026-10-10)
+# Version compatibility (0.4.0 candidate, 2026-10-10)
 
 Application versions, synchronization protocol versions and task content versions
-have different purposes. Compatible application versions may coexist. Protocol 2
-and minimum application version 0.3.0 are required by the new server defaults.
+have different purposes. Compatible application versions may coexist. Protocol 3
+and minimum application version 0.4.0 are required by the new server defaults.
+This supersedes the unpublished 0.3.0/protocol-2 candidate; the new format adds
+encrypted attribution and [independent reviews](participation-and-reviews.md).
 Task content versions still prevent completion from applying to changed tasks.
 
 Every exchange requires a fresh, validated compatibility response. Unreachable,

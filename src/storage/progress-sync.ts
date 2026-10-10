@@ -9,6 +9,7 @@ import { planningOperations, sharedSpecialDay, planningResource, assemblePlannin
 import { applySharedPlanning } from '../domain/shared-planning';
 import { brusselsWallTime } from '../domain/notification-window';
 import { APP_VERSION, SYNC_PROTOCOL, type SyncCompatibility, type StoreUpdate } from '../shared/sync-compatibility';
+import { reviewIdentity, type ActionStamp } from '../shared/participation';
 
 export class ProgressSyncRepository {
   constructor(private readonly name = HISTORY_DB) {}
@@ -70,7 +71,9 @@ export class ProgressSyncRepository {
     const helpSeeds = await Promise.all((snapshot?.items ?? []).filter((item) => item.taskHelp?.needed && isTaskCategory(item.category))
       .map(async (item) => ({ sourceKey: item.sourceKey, requestId: item.taskHelp!.requestId,
         value: { type: 'help' as const, item: await progressItemKey(expected.key, item.sourceKey, new URL(scopeId).origin),
-          help: { ...item.taskHelp!, recipients: [] } } })));
+          help: { ...item.taskHelp!, recipients: [] }, ...(item.helpActor ? { actor: item.helpActor } : {}) } })));
+    const reviewSeeds = (await Promise.all((snapshot?.items ?? []).filter((item) => isTaskCategory(item.category) && item.reviews?.length)
+      .map(async (item) => ({ sourceKey: item.sourceKey, itemKey: await progressItemKey(expected.key, item.sourceKey, new URL(scopeId).origin), reviews: item.reviews! }))));
     const db = await openHistoryDatabase(this.name);
     try {
       const tx = db.transaction(['scopes', 'sync'], 'readwrite');
@@ -81,9 +84,16 @@ export class ProgressSyncRepository {
         if (state?.scopeId === scopeId && state.connectionId === expected?.connectionId && scope && !state.planningInitialized) {
           const values: PlanningValue[] = (scope.specialDays ?? []).flatMap((entry) => [
             { type: 'special-day' as const, day: entry.day, entry: sharedSpecialDay(entry) },
-            ...entry.checklist.map((point) => ({ type: 'checklist' as const, eventId: entry.id, pointId: point.id, done: point.done })),
+            ...entry.checklist.map((point) => ({ type: 'checklist' as const, eventId: entry.id, pointId: point.id, done: point.done,
+              ...(scope.planningActors?.[`checklist:${entry.id}:${point.id}`]?.actor ? { actor: scope.planningActors[`checklist:${entry.id}:${point.id}`]!.actor } : {}) })),
           ]);
-          values.push(...(scope.schoolbagChoices ?? []).map((choice) => ({ type: 'packing' as const, ...choice })));
+          values.push(...(scope.schoolbagChoices ?? []).map((choice) => ({ type: 'packing' as const, ...choice,
+            ...(scope.planningActors?.[`packing:${choice.id}`]?.actor ? { actor: scope.planningActors[`packing:${choice.id}`]!.actor } : {}) })));
+          for (const seed of reviewSeeds) {
+            const item = scope.items.find((item) => item.sourceKey === seed.sourceKey);
+            for (const review of seed.reviews) if (item?.reviews?.some((current) => JSON.stringify(current) === JSON.stringify(review)))
+              values.push({ type: 'task-review', item: seed.itemKey, review });
+          }
           values.push(...helpSeeds.filter((seed) => scope.items.some((item) => item.sourceKey === seed.sourceKey && item.taskHelp?.requestId === seed.requestId)).map((seed) => seed.value));
           state.planningOutbox ??= [];
           for (const value of values) if (!state.planningOutbox.some((operation) => operation.resource === planningResource(value)))
@@ -105,7 +115,8 @@ export class ProgressSyncRepository {
       if (!scope) throw new Error('Check agenda first');
       const outbox = seed ? await Promise.all(scope.items.filter((item) => item.present && isTaskCategory(item.category) && hasAgendaMarker(item.snapshot.typePunt) &&
         !item.snapshot.hidden && !item.snapshot.cancelled && item.taskStatus && item.taskStatus !== 'open').map(async (item) =>
-        ({ id: crypto.randomUUID(), sourceKey: item.sourceKey, version: await progressVersion(item.snapshot), status: item.taskStatus!, kind: 'manual' as const }))) : [];
+        ({ id: crypto.randomUUID(), sourceKey: item.sourceKey, version: await progressVersion(item.snapshot), status: item.taskStatus!, kind: 'manual' as const,
+          ...(item.statusActor ? { actor: item.statusActor } : {}) }))) : [];
       const tx = db.transaction(['sync', 'scopes'], 'readwrite');
       const current = await tx.objectStore('scopes').get(scopeId);
       if (await tx.objectStore('sync').get(SYNC_STATE_KEY) || !current || JSON.stringify(current) !== JSON.stringify(scope)) {
@@ -161,7 +172,7 @@ export class ProgressSyncRepository {
     } finally { db.close(); }
   }
   async commit(expected: SyncState, acknowledged: string[], cursor: number,
-    remote: Record<string, { version: string; status: TaskStatus; revision: number; kind: 'manual' | 'reopen' }>, head = cursor,
+    remote: Record<string, { version: string; status: TaskStatus; revision: number; kind: 'manual' | 'reopen'; actor?: ActionStamp }>, head = cursor,
     planning: { fragment: PlanningFragment; revision: number }[] = []): Promise<boolean> {
     const db = await openHistoryDatabase(this.name);
     try {
@@ -245,7 +256,7 @@ export class ProgressSyncRepository {
       const matches = await Promise.all(before.items.filter((item) => item.present && isTaskCategory(item.category) && hasAgendaMarker(item.snapshot.typePunt) &&
         !item.snapshot.hidden && !item.snapshot.cancelled).map(async (item) => {
         const version = await progressVersion(item.snapshot); const key = await progressItemKey(state.key, item.sourceKey, new URL(state.scopeId).origin);
-        return { sourceKey: item.sourceKey, text: progressVersionText(item.snapshot), remoteKey: `${key}.${version}`, helpKey: `help:${key}` };
+        return { sourceKey: item.sourceKey, text: progressVersionText(item.snapshot), version, key, remoteKey: `${key}.${version}`, helpKey: `help:${key}` };
       }));
       const tx = db.transaction(['scopes', 'sync', 'activity', 'settings'], 'readwrite');
       const done = tx.done; void done.catch(() => {});
@@ -262,8 +273,19 @@ export class ProgressSyncRepository {
             const item = scope.items.find((item) => item.sourceKey === match.sourceKey);
             const help = current.planningRemote?.[match.helpKey]?.value;
             if (item?.present && !item.snapshot.hidden && !item.snapshot.cancelled && help?.type === 'help' &&
-                !current.planningOutbox?.some((operation) => operation.resource === match.helpKey) && JSON.stringify(item.taskHelp) !== JSON.stringify(help.help)) {
-              item.taskHelp = structuredClone(help.help); changed = true;
+                !current.planningOutbox?.some((operation) => operation.resource === match.helpKey) && JSON.stringify([item.taskHelp, item.helpActor]) !== JSON.stringify([help.help, help.actor])) {
+              item.taskHelp = structuredClone(help.help); if (help.actor) item.helpActor = help.actor; else delete item.helpActor; changed = true;
+            }
+            if (item && progressVersionText(item.snapshot) === match.text) {
+              const previousReviews = JSON.stringify([item.reviews, item.reviewContent, item.reviewVersion]);
+              for (const [resource, record] of Object.entries(current.planningRemote ?? {})) {
+                const value = record.value;
+                if (value.type !== 'task-review' || value.item !== match.key || current.planningOutbox?.some((op) => op.resource === resource)) continue;
+                item.reviews = [...(item.reviews ?? []).filter((old) => reviewIdentity(old) !== reviewIdentity(value.review)), structuredClone(value.review)];
+                if (item.reviews.length > 200) throw new Error('Review limit');
+              }
+              if (item.reviews?.length) { item.reviewContent = match.text; item.reviewVersion = match.version; }
+              if (previousReviews !== JSON.stringify([item.reviews, item.reviewContent, item.reviewVersion])) changed = true;
             }
             const remote = current.remote[match.remoteKey];
             if (!item || !remote || !item.present || item.snapshot.hidden || item.snapshot.cancelled ||
@@ -275,6 +297,7 @@ export class ProgressSyncRepository {
                 'task.status', 'succeeded', { from: previous, to: remote.status, reason: 'remote-sync' },
                 { timestamp: item.taskUpdatedAt, ...(item.localId ? { itemId: item.localId } : {}) }));
             }
+            if (JSON.stringify(item.statusActor) !== JSON.stringify(remote.actor)) { if (remote.actor) item.statusActor = remote.actor; else delete item.statusActor; changed = true; }
           }
           if (changed) await tx.objectStore('scopes').put(scope);
           current.hasAppliedRemote = true;

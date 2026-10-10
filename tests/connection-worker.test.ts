@@ -138,6 +138,8 @@ describe('special day worker boundaries and reminders', () => {
     });
     const website = { ...sender, url: 'https://schoolware_siw.ksgwl.be/webouders/start.html', tab: { id: 1 }, frameId: 0 };
     expect(listener({ type: 'tasks.help', itemId: id, needed: false, recipients: [] }, website, vi.fn())).toBe(false);
+    expect(listener({ type: 'tasks.review', itemId: id, kind: 'corrected', done: true }, website, vi.fn())).toBe(false);
+    expect(await dispatch({ type: 'tasks.review', itemId: id, kind: 'checked', done: true })).toMatchObject({ entries: [{ status: 'done', reviews: [{ kind: 'checked', done: true, self: true, previous: false }] }] });
     clicked(`schoolware-watch-help-${crypto.randomUUID()}`);
     await vi.waitFor(() => expect(chrome.tabs.create).toHaveBeenCalledWith({ url: 'chrome-extension://syntheticextension/dashboard.html' }));
     vi.resetModules();

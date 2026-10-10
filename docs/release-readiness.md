@@ -1,7 +1,8 @@
 # Release readiness and distribution
 
-Current candidate (2026-10-10): 0.3.0 adds fail-closed synchronization compatibility
-checks and encrypted device-version announcements. See
+Current candidate (2026-10-10): 0.4.0 adds fail-closed synchronization compatibility
+checks, encrypted device-version announcements, change attribution and independent
+per-participant checked/corrected reviews. See [participation and reviews](participation-and-reviews.md) and
 [version compatibility](version-compatibility.md) for deployment and limitations.
 The PHP endpoint and private helper must be upgraded together; there is no SQL
 migration. No production deployment or Store publication is performed here.
@@ -15,7 +16,7 @@ family testing after server upgrade, not yet an unrestricted public release.
 The older dated observations below are historical evidence, not acceptance of
 the current candidate.
 
-Candidate validation: strict TypeScript, ESLint, 388 Vitest tests and production
+Candidate validation: strict TypeScript, ESLint, 395 Vitest tests and production
 build pass. The isolated PHP 8.2/MySQL integration verifies compatibility gating,
 policy changes before exchange, unchanged cursors on rejected writes, and legacy
 deletion/leave. Old cryptographic fixtures remain readable through a current
@@ -25,6 +26,9 @@ Chrome synthetic two-device tests pass for encrypted version announcements,
 planning, packing and help, and for blocked exchange retaining a local edit when
 the minimum version changes. Settings tests pass for permissions, worker restart,
 CSV export and special days. These do not contact Schoolware or production sync.
+The 0.4.0 two-device test additionally checks the real review checkbox, two visible
+reviewers, propagated status/help attribution and withdrawal retaining the other
+reviewer. Existing local databases read without invented historical attribution.
 
 Current status (2026-10-06): 0.1.0 is published. The owner authorized merging the
 complete 0.2.0 feature branch into main and pushing it, deferring Matthias's review

@@ -45,7 +45,7 @@ assert.equal(await old.progressItemKey(key, 'synthetic-source'), await current.p
 async function call(body) {
   const response = await globalThis.fetch(url, { method: 'POST', headers: {
     'Content-Type': 'application/json', Authorization: `Bearer ${token}`,
-    'X-Schoolware-Version': '0.3.0', 'X-Schoolware-Protocol': '2',
+    'X-Schoolware-Version': '0.4.0', 'X-Schoolware-Protocol': '3',
   }, body: JSON.stringify(body) });
   assert.equal(response.status, 200);
   return response.json();

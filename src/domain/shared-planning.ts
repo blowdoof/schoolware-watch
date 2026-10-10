@@ -1,6 +1,6 @@
 import type { HistoryScope } from './observations';
 import type { SyncState } from '../shared/progress-sync';
-import { sharedSpecialDay } from '../shared/planning-sync';
+import { sharedSpecialDay, planningResource } from '../shared/planning-sync';
 import { MAX_SPECIAL_DAYS } from './special-days';
 
 /** Apply only fully received, server-ordered values. Unsent local edits retain precedence until acknowledged. */
@@ -8,7 +8,8 @@ export function applySharedPlanning(scope: HistoryScope, state: SyncState, cutof
   const pending = new Set(state.planningOutbox?.flatMap((operation) => [operation.resource, ...(operation.relatedResources ?? [])]) ?? []);
   const records = Object.entries(state.planningRemote ?? {}).filter(([resource]) => !pending.has(resource));
   if (!records.length) return false;
-  const original = JSON.stringify([scope.specialDays ?? [], [...(scope.schoolbagChoices ?? [])].sort((a, b) => a.id.localeCompare(b.id))]);
+  const original = JSON.stringify([scope.specialDays ?? [], [...(scope.schoolbagChoices ?? [])].sort((a, b) => a.id.localeCompare(b.id)), scope.planningActors ?? {}]);
+  const actors = Object.fromEntries(Object.entries(scope.planningActors ?? {}).filter(([key, value]) => value.day >= (key.startsWith('packing:') ? today : cutoff.slice(0, 10))));
   const entries = structuredClone(scope.specialDays ?? []);
   const changedEntries = new Set<string>();
   let deleted = false;
@@ -31,6 +32,10 @@ export function applySharedPlanning(scope: HistoryScope, state: SyncState, cutof
     if (value.type !== 'checklist') continue;
     const entry = entries.find((entry) => entry.id === value.eventId);
     const point = entry?.checklist.find((point) => point.id === value.pointId);
+    if (entry && point) {
+      if (value.actor) actors[planningResource(value)] = { actor: value.actor, day: entry.day };
+      else delete actors[planningResource(value)];
+    }
     if (entry && point && point.done !== value.done) {
       point.done = value.done;
       if (!changedEntries.has(entry.id)) { entry.revision++; changedEntries.add(entry.id); }
@@ -44,14 +49,20 @@ export function applySharedPlanning(scope: HistoryScope, state: SyncState, cutof
   for (const [, record] of records) {
     const value = record.value;
     if (value.type !== 'packing' || value.day < today) continue;
+    if (value.actor) actors[planningResource(value)] = { actor: value.actor, day: value.day };
+    else delete actors[planningResource(value)];
     if (value.state === 'open') choices.delete(value.id);
     else choices.set(value.id, { id: value.id, day: value.day, state: value.state });
   }
   if (choices.size > 5000) throw new Error('Shared packing limit');
   const nextEntries = entries.sort((a, b) => a.day.localeCompare(b.day));
+  const checklistResources = new Set(nextEntries.flatMap((entry) => entry.checklist.map((point) => `checklist:${entry.id}:${point.id}`)));
+  for (const key of Object.keys(actors)) if (key.startsWith('checklist:') && !checklistResources.has(key)) delete actors[key];
   const nextChoices = [...choices.values()].sort((a, b) => a.id.localeCompare(b.id));
-  if (JSON.stringify([nextEntries, nextChoices]) === original) return false;
+  if (Object.keys(actors).length > 13000) throw new Error('Attribution limit');
+  if (JSON.stringify([nextEntries, nextChoices, actors]) === original) return false;
   scope.specialDays = nextEntries; scope.schoolbagChoices = nextChoices;
+  scope.planningActors = actors;
   if (changedEntries.size || deleted) scope.specialDayRevision = clock;
   return true;
 }

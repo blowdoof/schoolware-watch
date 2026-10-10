@@ -567,7 +567,9 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
         await configureSpecialDaysAlarm();
         offerPlanningSync(current);
       }
-      return { ok: true, connected: Boolean(scope), profileId: scope?.localId ?? null, entries: (await history.read(connection.requestUrl)).scope?.specialDays ?? [],
+      const latest = (await history.read(connection.requestUrl)).scope;
+      return { ok: true, connected: Boolean(scope), profileId: scope?.localId ?? null, entries: latest?.specialDays ?? [],
+        ...(latest?.planningActors ? { actors: Object.fromEntries(Object.entries(latest.planningActors).map(([key, value]) => [key, value.actor])) } : {}),
         sharing: await planningSharingStatus(connection.requestUrl) } satisfies SpecialDaysView;
     });
   }
@@ -591,13 +593,14 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
     const connection = await readConnection();
     return createTasksView((await history.read(connection.requestUrl)).scope, await progressSync.read());
   }
-  if (message.type === 'tasks.update' || message.type === 'tasks.updateMany' || message.type === 'tasks.help') {
+  if (message.type === 'tasks.update' || message.type === 'tasks.updateMany' || message.type === 'tasks.help' || message.type === 'tasks.review') {
     const pending = activeTask;
     return serializeMutation(async () => {
       await pending;
       const connection = await readConnection();
       if (!connection.requestUrl) throw new Error('Task unavailable');
-      if (message.type === 'tasks.help') await history.setTaskHelp(connection.requestUrl, message.itemId, message.needed, message.recipients);
+      if (message.type === 'tasks.review') await history.setTaskReview(connection.requestUrl, message.itemId, message.kind, message.done);
+      else if (message.type === 'tasks.help') await history.setTaskHelp(connection.requestUrl, message.itemId, message.needed, message.recipients);
       else await history.setTaskStatuses(connection.requestUrl,
         message.type === 'tasks.update' ? [message.itemId] : message.itemIds, message.status, current);
       // Local status/outbox are already durable. Do not delay the UI on an

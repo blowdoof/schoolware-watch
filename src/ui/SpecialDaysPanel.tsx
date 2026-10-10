@@ -4,6 +4,7 @@ import { validateSpecialDay, type SpecialDay } from '../domain/special-days';
 import { validateSpecialDaysView, type SpecialDaysView, type SpecialDaysMessage } from '../shared/special-days';
 import { useNow } from './useNow';
 import { PlanningSharingStatus } from './PlanningSharingStatus';
+import { ActionAttribution } from './TaskParticipation';
 
 const kinds: Record<SpecialDay['kind'], string> = { 'home-study': 'Thuisstudie', sports: 'Sportdag', trip: 'Uitstap', other: 'Andere speciale dag' };
 const dateLabel = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString('nl-BE', { timeZone: 'Europe/Brussels', weekday: 'long', day: 'numeric', month: 'long' });
@@ -28,6 +29,7 @@ export function SpecialDaysOverview({ view, now, working = false, onEdit, onSave
         <label className="flex items-start gap-2"><input type="checkbox" className="mt-1" checked={item.done} disabled={working || !onSave} onChange={(event) => onSave?.({ ...entry, checklist: entry.checklist.map((point) => point.id === item.id ? { ...point, done: event.target.checked } : point) })} />
           <span className="break-words">{item.text}{item.pack && <span className="ml-2 text-xs text-slate-500">Boekentas</span>}</span>
         </label>
+        {(item.done || view?.actors?.[`checklist:${entry.id}:${item.id}`]) && <ActionAttribution actor={view?.actors?.[`checklist:${entry.id}:${item.id}`]} prefix="Checklist gewijzigd door" />}
       </li>)}</ul>
       <div className="mt-3 flex gap-4 text-xs">
         {onEdit && <button type="button" disabled={working} onClick={() => onEdit(entry)} className="text-teal-800 underline">Bewerken</button>}

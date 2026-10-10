@@ -234,6 +234,7 @@ remove every selection. The existing retention setting also applies to logs.
 - [Architecture](docs/architecture.md)
 - [API investigation](docs/schoolware-api.md)
 - [Privacy](docs/privacy.md)
+- [Change attribution, independent task reviews and API authentication](docs/participation-and-reviews.md)
 - [Security, privacy and notification review](docs/security-review.md)
 - [Roadmap](docs/roadmap.md)
 - [Monitoring and notification smoke checks](docs/monitoring.md)

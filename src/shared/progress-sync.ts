@@ -1,6 +1,7 @@
 import { isTaskStatus, type TaskStatus } from '../domain/tasks';
 import { isAlertId } from './browser-alerts';
 import type { PlanningOperation, PlanningRecord, PlanningAssembly } from './planning-sync';
+import { isActionStamp, type ActionStamp } from './participation';
 import { validateSyncCompatibility, validateStoreUpdate, isAppVersion, type SyncCompatibility, type StoreUpdate } from './sync-compatibility';
 
 export const SYNC_ORIGIN = 'https://schoolware.bumper.be';
@@ -8,7 +9,7 @@ export const SYNC_PERMISSION = `${SYNC_ORIGIN}/*`;
 export const SYNC_URL = `${SYNC_ORIGIN}/sync.php`;
 export const SYNC_STATE_KEY = 'progressSync';
 export interface ProgressOperation {
-  id: string; sourceKey: string; version: string; status: TaskStatus; kind: 'manual' | 'reopen';
+  id: string; sourceKey: string; version: string; status: TaskStatus; kind: 'manual' | 'reopen'; actor?: ActionStamp;
 }
 export interface SyncMember { id: string; label: string; lastSeenAt: string }
 export interface SyncDevice { id: string; version: string; protocol: number; reportedAt: string; self: boolean; label?: string }
@@ -27,7 +28,7 @@ export function isSyncMember(raw: unknown): raw is SyncMember {
 }
 export interface SyncState {
   connectionId: string; scopeId: string; token: string; key: string; cursor: number; head: number;
-  outbox: ProgressOperation[]; remote: Record<string, { version: string; status: TaskStatus; revision: number; kind: 'manual' | 'reopen' }>;
+  outbox: ProgressOperation[]; remote: Record<string, { version: string; status: TaskStatus; revision: number; kind: 'manual' | 'reopen'; actor?: ActionStamp }>;
   lastSuccessAt: string | null; error: boolean;
   hasAppliedRemote?: boolean;
   registrationPending?: boolean;
@@ -95,8 +96,8 @@ export function validateSyncView(raw: unknown): SyncView | null {
         })))) return null;
   return v as unknown as SyncView;
 }
-export const isRemoteProgress = (raw: unknown): raw is { item: string; version: string; status: TaskStatus; kind: 'manual' | 'reopen' } => {
+export const isRemoteProgress = (raw: unknown): raw is { item: string; version: string; status: TaskStatus; kind: 'manual' | 'reopen'; actor?: ActionStamp } => {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
   const v = raw as Record<string, unknown>;
-  return Object.keys(v).length === 4 && ['manual', 'reopen'].includes(v.kind as string) && isSecret(v.item) && isSecret(v.version) && isTaskStatus(v.status);
+  return Object.keys(v).length === (v.actor === undefined ? 4 : 5) && (v.actor === undefined || isActionStamp(v.actor)) && ['manual', 'reopen'].includes(v.kind as string) && isSecret(v.item) && isSecret(v.version) && isTaskStatus(v.status);
 };

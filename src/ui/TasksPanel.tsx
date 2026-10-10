@@ -8,9 +8,10 @@ import { planningWindow } from '../domain/planning';
 import { CsvExport } from './CsvExport';
 import { TaskHelpControls } from './TaskHelpControls';
 import { compatibilityMessage } from './SyncVersionStatus';
+import { TaskParticipation } from './TaskParticipation';
 
 export function TasksPanel({ refreshToken }: { refreshToken: number }) {
-  const { view, working, error, update, updateHelp, available } = useTasks(refreshToken);
+  const { view, working, error, update, updateHelp, updateReview, available } = useTasks(refreshToken);
   const [hideDone, setHideDone] = useState(false);
   const [planning, setPlanning] = useState('upcoming');
   const [limit, setLimit] = useState(20);
@@ -67,6 +68,7 @@ export function TasksPanel({ refreshToken }: { refreshToken: number }) {
         </details>
         <TaskControls status={task.status} disabled={working} onChange={(status) => { void update(task.id, status); }} />
         <TaskHelpControls task={task} view={view} disabled={working} onChange={updateHelp} />
+        <TaskParticipation task={task} disabled={working} onReview={updateReview} />
         {task.updatedAt && <p className="mt-2 text-xs text-slate-500">Status gewijzigd: {new Date(task.updatedAt).toLocaleString('nl-BE', { timeZone: 'Europe/Brussels' })}</p>}
       </li>)}</ol>
       {visibleEntries.length > limit && <button type="button" onClick={() => setLimit(limit + 20)} className="mt-4 mr-4 text-sm font-medium text-teal-700">Meer taken tonen</button>}

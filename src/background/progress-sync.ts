@@ -224,7 +224,7 @@ export async function synchronizeProgress(scopeId: string | null, reporter?: Act
         if ('fragment' in operation) return { id: operation.id, ...await encrypt(current.key, operation.id, operation.fragment) };
         const item = await progressItemKey(current.key, operation.sourceKey, new URL(current.scopeId).origin);
         return { id: operation.id, ...await encrypt(current.key, operation.id,
-          { item, version: operation.version, status: operation.status, kind: operation.kind }) };
+            { item, version: operation.version, status: operation.status, kind: operation.kind, ...(operation.actor ? { actor: operation.actor } : {}) }) };
       }));
       const response = await request(current.token, { action: 'exchange', cursor: current.cursor, operations });
       if (!Array.isArray(response.acknowledged) || response.acknowledged.length !== pending.length ||
@@ -246,7 +246,7 @@ export async function synchronizeProgress(scopeId: string | null, reporter?: Act
           const remoteKey = `${value.item}.${value.version}`;
           const previous = remote[remoteKey];
           if (!previous || previous.kind !== 'manual' || value.kind === 'manual')
-            remote[remoteKey] = { version: value.version, status: value.status, revision: op.revision, kind: value.kind };
+              remote[remoteKey] = { version: value.version, status: value.status, revision: op.revision, kind: value.kind, ...(value.actor ? { actor: value.actor } : {}) };
         } else throw new SyncFailure('invalid-response');
         lastRevision = op.revision;
       }

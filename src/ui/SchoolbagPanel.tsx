@@ -5,15 +5,17 @@ import type { ConnectionMessage } from '../shared/connection';
 import { validatePreferencesView } from '../shared/preferences';
 import { useNow } from './useNow';
 import { PlanningSharingStatus } from './PlanningSharingStatus';
+import { ActionAttribution } from './TaskParticipation';
 
 const dateLabel = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString('nl-BE', {
   timeZone: 'Europe/Brussels', weekday: 'long', day: 'numeric', month: 'long',
 });
 
 type PackingState = 'packed' | 'hidden' | 'open';
-function PackingList({ materials, points, day, direction, choices, working, onChange }: {
+function PackingList({ materials, points, day, direction, choices, actors, working, onChange }: {
   materials: BagMaterial[]; points: BagPoint[]; day: string | null; direction: 'school' | 'home';
   choices: SchoolbagView['choices']; working: boolean; onChange: ((id: string, state: PackingState) => Promise<void>) | undefined;
+  actors?: SchoolbagView['actors'];
 }) {
   const [resolved, setResolved] = useState<{ context: string; ids: Record<string, string> } | null>(null);
   const [showHidden, setShowHidden] = useState(false);
@@ -35,6 +37,7 @@ function PackingList({ materials, points, day, direction, choices, working, onCh
       disabled={working || !ids[key]} onChange={(event) => { void onChange(ids[key]!, event.target.checked ? 'packed' : 'open'); }} />Ingepakt</label>
     <button type="button" disabled={working || !ids[key]} className="text-teal-800 underline disabled:opacity-50"
       onClick={() => { void onChange(ids[key]!, stateFor(key) === 'hidden' ? 'open' : 'hidden'); }}>{stateFor(key) === 'hidden' ? 'Terugzetten' : 'Verbergen'}</button>
+    {(stateFor(key) !== 'open' || actors?.[`packing:${ids[key]}`]) && <ActionAttribution actor={actors?.[`packing:${ids[key]}`]} prefix="Boekentaskeuze gewijzigd door" />}
   </div>;
   const covered = new Set(materials.flatMap((material) => material.sources.map((source) => source.id)));
   const unspecified = points.filter((point) => !covered.has(point.id));
@@ -88,14 +91,14 @@ export function SchoolbagOverview({ view, now, working = false, onChange }: { vi
           </select>
         </label>}
         <p className="mt-2 text-xs text-slate-600">{overview.targetDay ? `Voor ${dateLabel(overview.targetDay)}${overview.special?.useTimetable === false ? ' — materiaal uit je speciale checklist.' : ' — ook materiaal uit gewone lessen.'}` : 'Geen volgende lesdag bekend in de ingelezen agenda. Controleer je agenda opnieuw.'}</p>
-        <PackingList materials={overview.school} points={overview.schoolPoints} day={overview.targetDay} direction="school" choices={view?.choices} working={working} onChange={onChange} />
+        <PackingList materials={overview.school} points={overview.schoolPoints} day={overview.targetDay} direction="school" choices={view?.choices} actors={view?.actors} working={working} onChange={onChange} />
       </div>
       <div className="mt-5 border-t border-teal-200 pt-4">
         <h3 className="font-semibold">Mee naar huis</h3>
         {overview.homePackingDay && <p className="mt-2 text-xs text-slate-600">Meenemen naar huis op {dateLabel(overview.homePackingDay)}.</p>}
         {overview.preparations.map((entry) => <p key={entry.id} className="mt-2 text-sm font-medium text-amber-800">Voorbereiden voor {entry.title} op {dateLabel(entry.day)}.{entry.kind === 'home-study' && entry.useTimetable ? ' Ook materiaal uit gewone lessen en afgeronde taken meenemen.' : ''}</p>)}
         <p className="mt-2 text-xs text-slate-600">{overview.homeDay ? `Voor nog openstaande taken en toetsen tegen ${dateLabel(overview.homeDay)}. Neem het benodigde materiaal mee naar huis.` : 'Geen latere lesdag bekend na de gekozen lesdag. Controleer je agenda opnieuw.'}</p>
-        <PackingList materials={overview.homework} points={overview.homeworkPoints} day={overview.homePackingDay} direction="home" choices={view?.choices} working={working} onChange={onChange} />
+        <PackingList materials={overview.homework} points={overview.homeworkPoints} day={overview.homePackingDay} direction="home" choices={view?.choices} actors={view?.actors} working={working} onChange={onChange} />
         <p className="mt-2 text-xs text-slate-500">Voor gewone huiswerktaken telt Klaar niet mee. Voor thuisstudie telt het hele bekende lesrooster mee. Controleer ook materiaal dat niet in de agenda staat.</p>
       </div>
       {view?.lastSuccessAt && <p className="mt-4 text-xs text-slate-500">Gebaseerd op je agenda van {new Date(view.lastSuccessAt).toLocaleString('nl-BE', { timeZone: 'Europe/Brussels' })}. Alleen laatst opgehaalde punten; een lege dag bewijst niet dat er geen les is.</p>}

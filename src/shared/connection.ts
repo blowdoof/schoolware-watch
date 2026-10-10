@@ -44,6 +44,7 @@ export type ConnectionMessage = SyncMessage | DiscoveryMessage | OpenPageMessage
   | { type: 'schoolbag.update'; choiceId: string; state: 'packed' | 'hidden' | 'open' }
   | { type: 'tasks.update'; itemId: string; status: TaskStatus }
   | { type: 'tasks.help'; itemId: string; needed: boolean; recipients: string[] }
+    | { type: 'tasks.review'; itemId: string; kind: 'checked' | 'corrected'; done: boolean }
   | { type: 'tasks.updateMany'; itemIds: string[]; status: TaskStatus }
   | { type: 'activity.read'; limit?: number; correlationId?: string; itemId?: string }
   | { type: 'activity.clear' }
@@ -72,6 +73,9 @@ export function validateConnectionMessage(value: unknown): ConnectionMessage | n
       ['notifications', 'browser', 'schoolware'].includes(message.permission as string) && typeof message.granted === 'boolean') {
     return { type: 'permission.result', permission: message.permission as 'notifications' | 'browser' | 'schoolware', granted: message.granted };
   }
+  if (message.type === 'tasks.review' && Object.keys(message).length === 4 && isAlertId(message.itemId) &&
+      ['checked', 'corrected'].includes(message.kind as string) && typeof message.done === 'boolean')
+    return { type: 'tasks.review', itemId: message.itemId, kind: message.kind as 'checked' | 'corrected', done: message.done };
   if (message.type === 'tasks.help' && Object.keys(message).length === 4 && isAlertId(message.itemId) &&
       typeof message.needed === 'boolean' && isHelpRecipients(message.recipients) && (message.needed || !message.recipients.length)) {
     return { type: 'tasks.help', itemId: message.itemId, needed: message.needed, recipients: [...message.recipients] };

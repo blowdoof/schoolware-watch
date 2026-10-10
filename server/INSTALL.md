@@ -1,13 +1,16 @@
 # cPanel installation: schoolware.bumper.be
 
-## Compatibility upgrade (0.3.0 candidate, 2026-10-10)
+## Compatibility and attribution upgrade (0.4.0 candidate, 2026-10-10)
 
 Copy `sync-policy.php` to `/home/example-account/sync-policy.php` outside the public root,
 then replace `public/sync.php` at the existing HTTPS endpoint. Existing database
 tables remain unchanged; no SQL migration is required for this upgrade.
-Optional configuration defaults are `sync_minimum_protocol = 2`,
-`sync_maximum_protocol = 2`, `sync_minimum_version = '0.3.0'`, and
+Optional configuration defaults are `sync_minimum_protocol = 3`,
+`sync_maximum_protocol = 3`, `sync_minimum_version = '0.4.0'`, and
 `sync_latest_published_version = null`. Set the latter only after actual release availability.
+If the private configuration explicitly sets the earlier candidate's policy,
+update those values too. Application versions and review/author fields remain
+inside ciphertext; no SQL or local IndexedDB structure migration is needed.
 
 Coordinate the endpoint upgrade with installation of the new client on every
 participating device: old clients without version headers receive HTTP 426 before

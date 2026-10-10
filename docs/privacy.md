@@ -1,5 +1,13 @@
 # Privacy
 
+Version 0.4.0 additionally shares encrypted author metadata for status/help,
+checklist and packing changes and independent checked/corrected reviews per task
+content version. Metadata consists of random participant/device references,
+optional existing self-reported label and sender time. No verified personal
+identity or access restriction follows from those labels. See
+[participation and reviews](participation-and-reviews.md) for local preservation,
+retention, deletion and the capability-based API authentication model.
+
 Version 0.3.0 additionally shares encrypted, self-reported device application and
 protocol versions within opted-in groups, with a report timestamp and optional
 existing participant label. Versions follow encrypted operation retention and

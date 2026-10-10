@@ -53,5 +53,15 @@ export function useTasks(refreshToken: number, enabled = true) {
     } catch { if (revision.current === current) setError('De hulpvraag kon niet worden opgeslagen. Vernieuw het overzicht en probeer opnieuw.'); }
     finally { saving.current = false; setWorking(false); }
   }
-  return { view, working, error, update, updateMany, updateHelp, available };
+  async function updateReview(itemId: string, kind: 'checked' | 'corrected', done: boolean) {
+    if (saving.current) return;
+    saving.current = true; setWorking(true); setError('');
+    const current = ++revision.current;
+    try {
+      const next = await send({ type: 'tasks.review', itemId, kind, done });
+      if (revision.current === current) setView(next);
+    } catch { if (revision.current === current) setError('De controle kon niet worden opgeslagen. Vernieuw het overzicht en probeer opnieuw.'); }
+    finally { saving.current = false; setWorking(false); }
+  }
+  return { view, working, error, update, updateMany, updateHelp, updateReview, available };
 }

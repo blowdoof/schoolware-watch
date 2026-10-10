@@ -13,7 +13,7 @@ import { assemblePlanning, isPlanningFragment } from '../src/shared/planning-syn
 import { SyncVersionStatus } from '../src/ui/SyncVersionStatus';
 import { check, point } from './fixtures/observations';
 
-const policy: SyncPolicy = { minimumProtocol: 2, maximumProtocol: 2, minimumVersion: '0.3.0', latestVersion: null };
+const policy: SyncPolicy = { minimumProtocol: 3, maximumProtocol: 3, minimumVersion: '0.4.0', latestVersion: null };
 const history = new HistoryRepository();
 const code = `sw1.${'a'.repeat(64)}.${'b'.repeat(64)}`;
 const audit = { correlationId: crypto.randomUUID(), spanId: crypto.randomUUID(), context: 'dashboard' as const };
@@ -32,20 +32,20 @@ async function connected() {
 }
 describe('version compatibility before content exchange', () => {
   it('validates Chrome version numbers and compares numerically, independently of supported protocol', () => {
-    expect(compareAppVersions('0.10.0', '0.9.9')).toBe(1); expect(compareAppVersions('0.3', '0.3.0')).toBe(0);
-    for (const v of ['0.3.0-beta', '65536.0', '01.3', '', '1', '1.2.3.4.5']) expect(isAppVersion(v)).toBe(false);
+    expect(compareAppVersions('0.10.0', '0.9.9')).toBe(1); expect(compareAppVersions('0.4', '0.4.0')).toBe(0);
+    for (const v of ['0.4.0-beta', '65536.0', '01.3', '', '1', '1.2.3.4.5']) expect(isAppVersion(v)).toBe(false);
     expect(compatibilityIssue(policy, '0.2.0', 2)).toBe('update-required');
-    expect(compatibilityIssue(policy, '0.3.0', 1)).toBe('update-required');
-    expect(compatibilityIssue(policy, '0.4.0', 3)).toBe('server-update-required');
-    expect(compatibilityIssue(policy, '0.4.0', 2)).toBeNull();
+    expect(compatibilityIssue(policy, '0.4.0', 1)).toBe('update-required');
+    expect(compatibilityIssue(policy, '0.5.0', 4)).toBe('server-update-required');
+    expect(compatibilityIssue(policy, '0.5.0', 3)).toBeNull();
     expect(validateSyncPolicy({ ...policy, latestVersion: '0.2.0' })).toBeNull();
     expect(validateSyncPolicy({ ...policy, maximumProtocol: 1 })).toBeNull();
     expect(validateSyncPolicy({ ...policy, extra: true })).toBeNull();
   });
 
   it.each([
-    { response: () => Response.json({ ok: true, policy: { ...policy, minimumVersion: '0.4.0' } }), issue: 'update-required' },
-    { response: () => Response.json({ ok: true, policy: { ...policy, minimumProtocol: 3, maximumProtocol: 3 } }), issue: 'update-required' },
+    { response: () => Response.json({ ok: true, policy: { ...policy, minimumVersion: '0.5.0' } }), issue: 'update-required' },
+    { response: () => Response.json({ ok: true, policy: { ...policy, minimumProtocol: 4, maximumProtocol: 4 } }), issue: 'update-required' },
     { response: () => Response.json({ ok: true, policy: { ...policy, minimumProtocol: 1, maximumProtocol: 1 } }), issue: 'server-update-required' },
     { response: () => Response.json({ ok: true, acknowledged: [], operations: [], cursor: 0, head: 0 }), issue: 'server-update-required' },
     { response: () => new Response('', { status: 400 }), issue: 'server-update-required' },
@@ -94,7 +94,7 @@ describe('version compatibility before content exchange', () => {
     const fetcher = vi.fn(async (_input: unknown, options: RequestInit) => {
       const body = JSON.parse(options.body as string);
       expect(options.credentials).toBe('omit'); expect(options.redirect).toBe('error');
-      expect(options.headers).toMatchObject({ 'X-Schoolware-Version': APP_VERSION, 'X-Schoolware-Protocol': '2' });
+      expect(options.headers).toMatchObject({ 'X-Schoolware-Version': APP_VERSION, 'X-Schoolware-Protocol': '3' });
       expect(options.body).not.toContain(point.sourceKey); expect(options.body).not.toContain(point.snapshot.title);
       if (body.action === 'compatibility') return Response.json({ ok: true, policy });
       expect(body.action).toBe('exchange');
@@ -108,7 +108,7 @@ describe('version compatibility before content exchange', () => {
     vi.stubGlobal('fetch', fetcher); const deviceA = globalThis.indexedDB;
     const { scope, state } = await connected(); await synchronizeProgress(scope.scopeId);
     const viewA = await progressSync.view(); expect(validateSyncView(viewA)).toEqual(viewA);
-    expect(viewA.devices).toMatchObject([{ id: state.connectionId, version: APP_VERSION, protocol: 2, self: true }]);
+    expect(viewA.devices).toMatchObject([{ id: state.connectionId, version: APP_VERSION, protocol: 3, self: true }]);
     expect(viewA.members).toBeUndefined();
     const sent = records.length;
     await synchronizeProgress(scope.scopeId); expect(records).toHaveLength(sent);
@@ -132,7 +132,7 @@ describe('version compatibility before content exchange', () => {
   it.each(['update_available', 'no_update', 'throttled', 'unavailable'] as const)('records Store result %s without claiming compatibility or reloading unsaved UI', async (status) => {
     await connected();
     if (status === 'unavailable') updateCheck.mockRejectedValue(new Error('Synthetic unavailable'));
-    else updateCheck.mockResolvedValue({ status, ...(status === 'update_available' ? { version: '0.4.0' } : {}) });
+    else updateCheck.mockResolvedValue({ status, ...(status === 'update_available' ? { version: '0.5.0' } : {}) });
     await checkStoreUpdate(); await checkStoreUpdate(); expect(updateCheck).toHaveBeenCalledOnce();
     expect((await progressSync.read())?.storeUpdate?.status).toBe(status);
     expect((await progressSync.read())?.compatibility).toBeUndefined();

@@ -13,9 +13,9 @@ function syncCompareVersions(string $left, string $right): int {
     return 0;
 }
 function syncPolicy(array $config): array {
-    $policy = ['minimumProtocol' => $config['sync_minimum_protocol'] ?? 2,
-        'maximumProtocol' => $config['sync_maximum_protocol'] ?? 2,
-        'minimumVersion' => $config['sync_minimum_version'] ?? '0.3.0',
+    $policy = ['minimumProtocol' => $config['sync_minimum_protocol'] ?? 3,
+        'maximumProtocol' => $config['sync_maximum_protocol'] ?? 3,
+        'minimumVersion' => $config['sync_minimum_version'] ?? '0.4.0',
         'latestVersion' => $config['sync_latest_published_version'] ?? null];
     if (!is_int($policy['minimumProtocol']) || !is_int($policy['maximumProtocol']) || $policy['minimumProtocol'] < 1 ||
         $policy['maximumProtocol'] < $policy['minimumProtocol'] || $policy['maximumProtocol'] > 1000 || !syncVersion($policy['minimumVersion']) ||

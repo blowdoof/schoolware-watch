@@ -17,10 +17,12 @@ const browser = spawn(chromePath, ['--headless=new', '--no-first-run', '--no-def
   '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', '--enable-unsafe-extension-debugging',
   `--user-data-dir=${profile}`, 'about:blank'], { windowsHide: true, stdio: 'ignore' });
 let socket; let sequence = 0; let bindingError;
+let phase = 'setup';
+const recentActions = [];
 const pending = new Map();
 const server = new Map();
 const serverMembers = new Map();
-const policy = { minimumProtocol: 2, maximumProtocol: 2, minimumVersion: '0.3.0', latestVersion: null };
+const policy = { minimumProtocol: 3, maximumProtocol: 3, minimumVersion: '0.4.0', latestVersion: null };
 async function poll(operation) {
   for (let attempt = 0; attempt < 100; attempt++) {
     if (bindingError) throw bindingError;
@@ -33,7 +35,7 @@ async function poll(operation) {
 function command(method, params = {}, sessionId) {
   const id = ++sequence;
   return new Promise((resolveCommand, reject) => {
-    const timer = setTimeout(() => { pending.delete(id); reject(new Error(`CDP timeout: ${method}`)); }, 10000);
+    const timer = setTimeout(() => { pending.delete(id); reject(bindingError ?? new Error(`CDP timeout (${phase}; ${recentActions.join(', ')}): ${method} ${params.expression?.slice(0, 180) ?? ''}`)); }, 10000);
     pending.set(id, { resolve: resolveCommand, reject, timer });
     socket.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
   });
@@ -48,10 +50,11 @@ async function routeBinding(message) {
   assert.equal(request.url, 'https://schoolware.bumper.be/sync.php');
   assert.equal(request.options.credentials, 'omit');
   const body = JSON.parse(request.options.body);
+  recentActions.push(body.action); if (recentActions.length > 8) recentActions.shift();
   assert.ok(!request.options.body.includes('Synthetic shared notes'));
   const token = request.options.headers.Authorization;
-  assert.equal(request.options.headers['X-Schoolware-Version'], '0.3.0');
-  assert.equal(request.options.headers['X-Schoolware-Protocol'], '2');
+  assert.equal(request.options.headers['X-Schoolware-Version'], '0.4.0');
+  assert.equal(request.options.headers['X-Schoolware-Protocol'], '3');
   if (body.action === 'compatibility') {
     await evaluate(message.sessionId, `globalThis.syntheticReply(${JSON.stringify(request.id)}, ${JSON.stringify({ ok: true, policy })})`);
     return;
@@ -176,12 +179,19 @@ try {
   await evaluate(pupil.sessionId, `chrome.runtime.sendMessage({ type: 'sync.run' })`);
   await evaluate(parent.sessionId, `chrome.runtime.sendMessage({ type: 'sync.run' })`);
   await poll(() => evaluate(parent.sessionId, `Boolean([...document.querySelector('[aria-label="Speciale dagen"]').querySelectorAll('label')].find(label => label.textContent.includes('Synthetic shared folders'))?.querySelector('input')?.checked)`));
+  const checklistAuthor = await evaluate(parent.sessionId, `(async () => {
+    const view = await chrome.runtime.sendMessage({ type: 'specialDays.read' });
+    const entry = view.entries[0]; return view.actors['checklist:' + entry.id + ':' + entry.checklist[0].id].label;
+  })()`);
+  assert.equal(checklistAuthor, 'Synthetic pupil');
   await poll(() => evaluate(parent.sessionId, `Boolean(document.querySelector('[aria-label="Boekentas"] input[aria-label="Laptop ingepakt"]:not(:disabled)'))`));
   await evaluate(parent.sessionId, `(() => { document.querySelector('[aria-label="Boekentas"] input[aria-label="Laptop ingepakt"]').click(); return true; })()`);
   await poll(() => evaluate(parent.sessionId, `(async () => (await chrome.runtime.sendMessage({ type: 'schoolbag.read' })).choices?.some(choice => choice.state === 'packed'))()`));
   await evaluate(parent.sessionId, `chrome.runtime.sendMessage({ type: 'sync.run' })`);
   await evaluate(pupil.sessionId, `chrome.runtime.sendMessage({ type: 'sync.run' })`);
   await poll(() => evaluate(pupil.sessionId, `Boolean(document.querySelector('[aria-label="Boekentas"] input[aria-label="Laptop ingepakt"]')?.checked)`));
+  const packingAuthors = await evaluate(pupil.sessionId, `(async () => Object.entries((await chrome.runtime.sendMessage({ type: 'schoolbag.read' })).actors).filter(([key]) => key.startsWith('packing:')).map(([, actor]) => actor.label))()`);
+  assert.ok(packingAuthors.includes('Synthetic parent'));
   await evaluate(parent.sessionId, `(async () => {
     const view = await chrome.runtime.sendMessage({ type: 'specialDays.read' });
     const entry = view.entries[0];
@@ -203,6 +213,17 @@ try {
     [...panel.querySelectorAll('button')].find(button => button.textContent === 'Hulpvraag opslaan').click(); return true;
   })()`);
   await poll(() => evaluate(parent.sessionId, `(async () => (await chrome.runtime.sendMessage({ type: 'tasks.read' })).entries[0]?.help?.recipients.length === 1)()`));
+  phase = 'review controls';
+  await poll(() => evaluate(parent.sessionId, `Boolean([...document.querySelector('[aria-label="To-do voor de volgende schooldag"]').querySelectorAll('label')].find(label => label.textContent === 'Door mij nagekeken')?.querySelector('input:not(:disabled)'))`));
+  await evaluate(parent.sessionId, `(() => {
+    const panel = document.querySelector('[aria-label="To-do voor de volgende schooldag"]');
+    [...panel.querySelectorAll('label')].find(label => label.textContent === 'Door mij nagekeken').querySelector('input').click(); return true;
+  })()`);
+  await poll(() => evaluate(parent.sessionId, `(async () => (await chrome.runtime.sendMessage({ type: 'tasks.read' })).entries[0]?.reviews?.some(review => review.kind === 'checked' && review.done && review.self))()`));
+  await evaluate(pupil.sessionId, `(async () => {
+    const tasks = await chrome.runtime.sendMessage({ type: 'tasks.read' });
+    return chrome.runtime.sendMessage({ type: 'tasks.review', itemId: tasks.entries[0].id, kind: 'checked', done: true });
+  })()`);
   await evaluate(parent.sessionId, `(async () => {
     const tasks = await chrome.runtime.sendMessage({ type: 'tasks.read' });
     await chrome.runtime.sendMessage({ type: 'tasks.update', itemId: tasks.entries[0].id, status: 'done' });
@@ -216,6 +237,21 @@ try {
   await poll(() => evaluate(pupil.sessionId, `document.querySelector('[aria-label="Hulpvragen"]')?.textContent.includes('Hulp aan jou gevraagd')`));
   const help = await evaluate(pupil.sessionId, `(async () => (await chrome.runtime.sendMessage({ type: 'tasks.read' })).entries[0])()`);
   assert.equal(help.status, 'done'); assert.equal(help.help.needed, true); assert.equal(help.helpForYou, true);
+  phase = 'review withdrawal';
+  assert.equal(help.statusActor.label, 'Synthetic parent');
+  assert.equal(help.helpActor.label, 'Synthetic parent');
+  assert.equal(help.reviews.filter(review => review.kind === 'checked' && review.done && !review.previous).length, 2);
+  await evaluate(parent.sessionId, `chrome.runtime.sendMessage({ type: 'sync.run' })`);
+  const bothReviews = await evaluate(parent.sessionId, `(async () => (await chrome.runtime.sendMessage({ type: 'tasks.read' })).entries[0].reviews)()`);
+  assert.equal(bothReviews.filter(review => review.done && !review.previous).length, 2);
+  await evaluate(parent.sessionId, `(async () => {
+    const tasks = await chrome.runtime.sendMessage({ type: 'tasks.read' });
+    await chrome.runtime.sendMessage({ type: 'tasks.review', itemId: tasks.entries[0].id, kind: 'checked', done: false });
+    return chrome.runtime.sendMessage({ type: 'sync.run' });
+  })()`);
+  await evaluate(pupil.sessionId, `chrome.runtime.sendMessage({ type: 'sync.run' })`);
+  const remainingReview = await evaluate(pupil.sessionId, `(async () => (await chrome.runtime.sendMessage({ type: 'tasks.read' })).entries[0].reviews.filter(review => review.done && !review.previous))()`);
+  assert.equal(remainingReview.length, 1); assert.equal(remainingReview[0].actor.label, 'Synthetic pupil');
   assert.equal(await evaluate(pupil.workerSession, `syntheticNotifications.filter(entry => entry.id.startsWith('schoolware-watch-help-')).length`), 1);
   await evaluate(pupil.sessionId, `chrome.runtime.sendMessage({ type: 'sync.run' })`);
   assert.equal(await evaluate(pupil.workerSession, `syntheticNotifications.filter(entry => entry.id.startsWith('schoolware-watch-help-')).length`), 1);
@@ -230,9 +266,9 @@ try {
   assert.ok([...server.values()][0].length > 0);
   const versions = await evaluate(parent.sessionId, `chrome.runtime.sendMessage({ type: 'sync.read' })`);
   assert.equal(versions.devices.length, 2);
-  assert.ok(versions.devices.every(device => device.version === '0.3.0' && device.protocol === 2));
+  assert.ok(versions.devices.every(device => device.version === '0.4.0' && device.protocol === 3));
   const recordCount = [...server.values()][0].length;
-  policy.minimumVersion = '0.4.0';
+  policy.minimumVersion = '0.5.0';
   await evaluate(parent.sessionId, `(async () => {
     const tasks = await chrome.runtime.sendMessage({ type: 'tasks.read' });
     await chrome.runtime.sendMessage({ type: 'tasks.update', itemId: tasks.entries[0].id, status: 'in-progress' });
@@ -242,7 +278,7 @@ try {
   assert.equal(incompatible.compatibility.issue, 'update-required');
   assert.equal([...server.values()][0].length, recordCount);
   assert.equal(await evaluate(parent.sessionId, `(async () => (await chrome.runtime.sendMessage({ type: 'tasks.read' })).entries[0].status)()`), 'in-progress');
-  console.log(`Chrome two-device encrypted planning/help smoke passed (${version.Browser}): isolated stores, real workers, live planning/packing, recipient picker, help alongside completion, targeted notification without replay, cancellation; no Schoolware or production service contacted.`);
+  console.log(`Chrome two-device encrypted planning/help/review smoke passed (${version.Browser}): isolated stores, real workers, planning/packing, status/help authors, real review checkbox, independent reviewers and withdrawal, targeted help without replay, compatibility pause; no Schoolware or production service contacted.`);
 } finally {
   if (socket?.readyState === WebSocket.OPEN) { await command('Browser.close').catch(() => {}); socket.close(); }
   for (const waiter of pending.values()) { clearTimeout(waiter.timer); waiter.reject(new Error('Synthetic browser closed')); }

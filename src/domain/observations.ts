@@ -18,6 +18,11 @@ export interface ObservedItem extends ObservationPoint {
   firstSeenAt: string; lastSeenAt: string; present: boolean;
   taskStatus?: TaskStatus; taskUpdatedAt?: string;
   taskHelp?: TaskHelp;
+  statusActor?: import('../shared/participation').ActionStamp;
+  helpActor?: import('../shared/participation').ActionStamp;
+  reviews?: import('../shared/participation').TaskReview[];
+  reviewContent?: string;
+  reviewVersion?: string;
 }
 export type EventKind = 'baseline' | 'observed' | 'changed' | 'disappeared' | 'reappeared';
 export interface ObservationEvent {
@@ -35,6 +40,7 @@ export interface RecordedCheck {
   notificationDetails?: NotificationDetails;
 }
 export interface HistoryScope {
+  planningActors?: Record<string, { actor: import('../shared/participation').ActionStamp; day: string }>;
   scopeId: string; baselineAt: string | null; lastSuccessAt: string;
   localId?: string;
   todoReminder?: TodoReminderState;
@@ -101,6 +107,9 @@ export function compareObservations(previous: HistoryScope | null, input: CheckI
       lastSeenAt: input.observedAt, present: true,
       ...(old?.localId ? { localId: old.localId } : {}),
       ...(old?.taskHelp ? { taskHelp: old.taskHelp } : {}),
+      ...(old?.helpActor ? { helpActor: old.helpActor } : {}),
+      ...(old?.reviews ? { reviews: old.reviews, reviewContent: old.reviewContent, reviewVersion: old.reviewVersion } : {}),
+      ...(!taskReopened && old?.statusActor ? { statusActor: old.statusActor } : {}),
       ...(taskReopened ? { taskStatus: 'in-progress', taskUpdatedAt: input.observedAt } : {
         ...(old?.taskStatus ? { taskStatus: old.taskStatus } : {}),
         ...(old?.taskUpdatedAt ? { taskUpdatedAt: old.taskUpdatedAt } : {}),
@@ -133,6 +142,7 @@ export function compareObservations(previous: HistoryScope | null, input: CheckI
     ...(previous?.packingIdentityVersion ? { packingIdentityVersion: previous.packingIdentityVersion } : {}),
     ...(previous?.specialDayRevision ? { specialDayRevision: previous.specialDayRevision } : {}),
     ...(previous?.schoolbagChoices ? { schoolbagChoices: previous.schoolbagChoices.filter((choice) => choice.day >= brusselsWallTime(new Date(input.observedAt)).slice(0, 10)) } : {}),
+    ...(previous?.planningActors ? { planningActors: previous.planningActors } : {}),
     baselineAt: previous?.baselineAt ?? (input.points.length ? input.observedAt : null),
     lastSuccessAt: input.observedAt, items: [...items.values()],
     events: [...(previous?.events ?? []), ...events],
@@ -145,6 +155,7 @@ export function compareObservations(previous: HistoryScope | null, input: CheckI
 export function pruneHistory(scope: HistoryScope, cutoff: string): HistoryScope | null {
   if (scope.lastSuccessAt < cutoff) return null;
   return { ...scope,
+    ...(scope.planningActors ? { planningActors: Object.fromEntries(Object.entries(scope.planningActors).filter(([, value]) => value.day >= cutoff.slice(0, 10))) } : {}),
     ...(scope.specialDays ? { specialDays: scope.specialDays.filter((entry) => entry.day >= cutoff.slice(0, 10)) } : {}),
     ...(scope.specialDayReminders ? { specialDayReminders: scope.specialDayReminders.filter((entry) => entry.claimedAt >= cutoff) } : {}),
     items: scope.items.filter((item) => item.lastSeenAt >= cutoff),

@@ -1,7 +1,7 @@
 import manifest from '../../manifest.json';
 
 export const APP_VERSION = manifest.version;
-export const SYNC_PROTOCOL = 2;
+export const SYNC_PROTOCOL = 3;
 export interface SyncPolicy { minimumProtocol: number; maximumProtocol: number; minimumVersion: string; latestVersion: string | null }
 export type CompatibilityIssue = 'update-required' | 'server-update-required' | 'check-unavailable';
 export type UpdateStatus = 'update_available' | 'no_update' | 'throttled' | 'unavailable';

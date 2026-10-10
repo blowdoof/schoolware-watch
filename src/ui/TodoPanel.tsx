@@ -8,15 +8,17 @@ import { useNow } from './useNow';
 import { displaySnapshotValue } from './agenda-presentation';
 import { TaskHelpControls } from './TaskHelpControls';
 import { compatibilityMessage } from './SyncVersionStatus';
+import { TaskParticipation } from './TaskParticipation';
 
 const dateLabel = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString('nl-BE', {
   timeZone: 'Europe/Brussels', weekday: 'long', day: 'numeric', month: 'long',
 });
 
-export function TodoOverview({ view, now, working, update, updateMany, updateHelp }: {
+export function TodoOverview({ view, now, working, update, updateMany, updateHelp, updateReview }: {
   view: TasksView | null; now: Date; working: boolean; update: (id: string, status: TaskStatus) => Promise<void>;
   updateMany: (ids: string[], status: TaskStatus) => Promise<void>;
   updateHelp?: (id: string, needed: boolean, recipients: string[]) => Promise<void>;
+  updateReview?: (id: string, kind: 'checked' | 'corrected', done: boolean) => Promise<void>;
 }) {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const overview = view ? todoOverview(view, now, selectedDay) : null;
@@ -33,6 +35,7 @@ export function TodoOverview({ view, now, working, update, updateMany, updateHel
       </details>
       <TaskControls status={task.status} disabled={working} onChange={(status) => { void update(task.id, status); }} />
       {view && updateHelp && <TaskHelpControls task={task} view={view} disabled={working} onChange={updateHelp} />}
+      <TaskParticipation task={task} disabled={working} onReview={updateReview} />
     </li>)}</ol>;
   }
   return <section className="mt-6 rounded-2xl border border-teal-200 bg-teal-50 p-5 shadow-sm" aria-label="To-do voor de volgende schooldag">
@@ -86,11 +89,11 @@ export function TodoOverview({ view, now, working, update, updateMany, updateHel
 }
 
 export function TodoPanel({ refreshToken }: { refreshToken: number }) {
-  const { view, working, error, update, updateMany, updateHelp, available } = useTasks(refreshToken);
+  const { view, working, error, update, updateMany, updateHelp, updateReview, available } = useTasks(refreshToken);
   const now = useNow();
   if (!available) return null;
   return <>
-    <TodoOverview view={view} now={now} working={working} update={update} updateMany={updateMany} updateHelp={updateHelp} />
+    <TodoOverview view={view} now={now} working={working} update={update} updateMany={updateMany} updateHelp={updateHelp} updateReview={updateReview} />
     {error && <p role="alert" className="mt-2 text-sm text-red-700">{error}</p>}
   </>;
 }

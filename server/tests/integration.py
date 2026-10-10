@@ -95,7 +95,7 @@ def main():
                 processes.append(subprocess.Popen(php + ['-S', f'127.0.0.1:{ports[-1]}', str(router)],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
 
-            def call(body, bearer=token, server=0, include_headers=False, version='0.3.0', protocol='2'):
+            def call(body, bearer=token, server=0, include_headers=False, version='0.4.0', protocol='3'):
                 headers = {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + bearer}
                 if version is not None:
                     headers.update({'X-Schoolware-Version': version, 'X-Schoolware-Protocol': protocol})
@@ -120,16 +120,16 @@ def main():
             assert result['head'] == 9 and result['operations'][0]['id'] == legacy['id']
             # Reject legacy/malformed/too-new clients before any content write.
             policy = call({'action': 'compatibility'})[1]['policy']
-            assert policy == {'minimumProtocol': 2, 'maximumProtocol': 2, 'minimumVersion': '0.3.0', 'latestVersion': None}
+            assert policy == {'minimumProtocol': 3, 'maximumProtocol': 3, 'minimumVersion': '0.4.0', 'latestVersion': None}
             rejected = {'action': 'exchange', 'cursor': 9, 'operations': [{'id': str(uuid.uuid4()), 'iv': '0' * 24, 'ciphertext': '4' * 320}]}
-            for version, protocol in [(None, '2'), ('0.2.0', '2'), ('0.3.0', '1'), ('0.3.0', '3'), ('0.3.0-invalid', '2')]:
+            for version, protocol in [(None, '2'), ('0.2.0', '2'), ('0.4.0', '1'), ('0.4.0', '4'), ('0.4.0-invalid', '2')]:
                 status, response = call(rejected, version=version, protocol=protocol)
                 assert status == 426 and response['error'] == 'update-required'
                 assert call(empty)[1]['head'] == 9
             # Policy can change between preflight and exchange; the server rechecks.
-            configure(", 'sync_minimum_version'=>'0.4.0'")
+            configure(", 'sync_minimum_version'=>'0.5.0'")
             assert call(rejected)[0] == 426
-            assert call(empty, version='0.4.0')[1]['head'] == 9
+            assert call(empty, version='0.5.0')[1]['head'] == 9
             configure()
             assert call({'action': 'delete'}, version=None)[0] == 200
             assert call({**empty, 'cursor': 9})[1]['head'] == 9
