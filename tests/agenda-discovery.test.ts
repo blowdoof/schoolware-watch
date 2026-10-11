@@ -31,6 +31,16 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe('explicit agenda discovery', () => {
+  it('keeps a selected student tab in the intranet and captures its agenda safely', async () => {
+    tabUrl = 'https://schoolware_siw.ksgwl.be/webleerling/start.html#!fn=llagenda';
+    const url = 'https://schoolware_siw.ksgwl.be/webleerling/bin/server.fcgi/REST/AgendaPunt/?Agenda=10,20&NietMappen=20&MapAgendasOp=10&MinTot=2026-10-01T00:00:00&MaxVan=2026-10-31T00:00:00&page=1&start=0&limit=0&_dc=123';
+    await beginAgendaDiscovery('https://schoolware_siw.ksgwl.be', 9);
+    expect(chrome.tabs.update).toHaveBeenCalledWith(9, { url: tabUrl, active: true });
+    expect(await observeAgendaRequest(details({ url, tabId: 8 }))).toBe(false);
+    expect(await observeAgendaRequest(details({ url }))).toBe(true);
+    const found = await readAgendaDiscovery();
+    expect(await takeDiscoveredAgenda(found.id!)).toBe(validateAgendaRequest(url));
+  });
   it('binds an existing selected tab to its exact installation and survives restoration', async () => {
     const origin = 'https://synthetic.schoolware.be';
     const selectedUrl = requestUrl.replace('https://schoolware_siw.ksgwl.be', origin);

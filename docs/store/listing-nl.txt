@@ -4,9 +4,9 @@ Korte beschrijving
 Volg Schoolware-agendawijzigingen, taken en je boekentas. Agenda-inhoud blijft lokaal in je browser.
 
 Volledige beschrijving
-Schoolware Watch helpt ouders de Schoolware-agenda op te volgen: wat is veranderd, welk werk staat nog open en welk materiaal moet mee?
+Schoolware Watch helpt ouders en leerlingen de Schoolware-agenda op te volgen: wat is veranderd, welk werk staat nog open en welk materiaal moet mee?
 
-Ondersteunt Schoolware-websites met het ondersteunde ouderagendaformaat, ook buiten KSGWL. De extensie herkent het schooladres en de agenda-aanvraag nadat je bij je eigen school bent ingelogd. Taken en toetsen worden herkend via standaard Schoolware-typecodes, gecontroleerd in publieke omgevingen van twee andere scholengroepen. De volledige werking is tot nu toe met een echt account getest bij KSGWL; afwijkende Schoolware-versies of agendaformaten kunnen niet worden gekoppeld. Een installatiehulp begeleidt je bij koppelen, instellingen en optioneel aansluiten met een bestaande koppelcode. Je hebt een eigen, geldig Schoolware-account nodig. Schoolware Watch is een onafhankelijk project van Bumper.be en geen officieel product van Schoolware of WISA.
+Ondersteunt Schoolware-websites met het ondersteunde ouder- of leerlingagendaformaat, ook buiten KSGWL. De extensie herkent het schooladres en de agenda-aanvraag nadat je bij je eigen school bent ingelogd. Taken en toetsen worden herkend via standaard Schoolware-typecodes, gecontroleerd in publieke omgevingen van twee andere scholengroepen. De ouderkoppeling is met een echt account getest bij KSGWL. De leerlingkoppeling is gecontroleerd aan de hand van aangeleverde antwoorden uit dezelfde installatie en synthetische tests; een volledige praktijktest met een ingelogd leerlingaccount blijft nodig. afwijkende Schoolware-versies of agendaformaten kunnen niet worden gekoppeld. Een installatiehulp begeleidt je bij koppelen, instellingen en optioneel aansluiten met een bestaande koppelcode. Je hebt een eigen, geldig Schoolware-account nodig. Schoolware Watch is een onafhankelijk project van Bumper.be en geen officieel product van Schoolware of WISA.
 
 Wat kun je ermee?
 - Veranderingen volgen tegenover eerdere lokale waarnemingen.
@@ -32,4 +32,4 @@ Contact en ondersteuning: info@bumper.be
 Project: https://github.com/blowdoof/schoolware-watch
 
 Enig doel
-Ouders helpen de agenda en taakvoortgang van hun gekoppelde Schoolware-profiel op te volgen, met lokale geschiedenis, meldingen en materiaaloverzichten.
+Ouders en leerlingen helpen de agenda en taakvoortgang van hun gekoppelde Schoolware-profiel op te volgen, met lokale geschiedenis, meldingen en materiaaloverzichten.

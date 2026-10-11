@@ -88,7 +88,7 @@ export function ConnectionPanel({ showSetup, refreshToken, onHistoryChanged }: {
   async function check(event: FormEvent, manual = false) {
     event.preventDefault();
     const url = validateAgendaRequest(manual ? requestUrl : connection.requestUrl);
-    if (!url) { setError('Gebruik de volledige Request URL van de AgendaPunt-request, met de vijf agenda- en datumparameters.'); return; }
+    if (!url) { setError('Gebruik de volledige Request URL van de ondersteunde ouder- of leerlingagenda, inclusief agenda- en datumparameters.'); return; }
     setError('');
     setWorking(true);
     try {
