@@ -22,6 +22,11 @@ presentation state; durable results and retries remain repository-backed.
 Quick-navigation buttons replace the overview's instruction paragraph. They open
 the selected section, focus its summary and scroll it into view, respecting reduced
 motion. The hidden-book-bag preference also hides its quick-navigation button.
+On wide overview windows (at least 1280 CSS pixels), shortcuts form a fixed
+chapter rail in the left margin. Smaller windows and the popup keep them sticky
+below the global navigation. The current chapter has a tinted button and an
+accessible current-location indication; scrolling updates it when a section
+crosses the reading boundary. Heading scroll offsets leave room for navigation.
 
 Settings starts with all five groups collapsed: Schoolware connection,
 checks/notifications, paired sharing, privacy/retention/deletion and activity log.

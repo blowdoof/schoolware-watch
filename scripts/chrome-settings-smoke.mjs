@@ -188,8 +188,16 @@ try {
   await poll(() => evaluate(bagSession, `Boolean(document.getElementById('overview-status'))`));
   assert.equal(await evaluate(bagSession, `document.getElementById('overview-status').open`), false);
   assert.equal(await evaluate(bagSession, `document.querySelector('[aria-label="Snel naar onderdeel"]').querySelectorAll('button').length`), 5);
+  await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 800, deviceScaleFactor: 1, mobile: false }, bagSession);
+  assert.equal(await evaluate(bagSession, `getComputedStyle(document.querySelector('.workspace-navigation')).position`), 'fixed');
+  assert.ok(await evaluate(bagSession, `document.querySelector('.workspace-navigation').getBoundingClientRect().right < document.getElementById('overview-todo').getBoundingClientRect().left`), 'Chapter rail stays outside the content');
+  await command('Emulation.setDeviceMetricsOverride', { width: 600, height: 500, deviceScaleFactor: 1, mobile: false }, bagSession);
+  assert.equal(await evaluate(bagSession, `getComputedStyle(document.querySelector('.workspace-navigation')).position`), 'sticky');
   await evaluate(bagSession, `document.querySelector('button[aria-controls="overview-schoolbag"]').click()`);
   await poll(() => evaluate(bagSession, `document.getElementById('overview-schoolbag').open && document.activeElement === document.getElementById('overview-schoolbag').querySelector('summary')`));
+  await poll(() => evaluate(bagSession, `(() => { const nav = document.querySelector('.workspace-navigation').getBoundingClientRect(); const heading = document.getElementById('overview-schoolbag').getBoundingClientRect(); return window.scrollY > 0 && nav.top >= 0 && nav.bottom <= heading.top; })()`));
+  await poll(() => evaluate(bagSession, `document.querySelector('button[aria-controls="overview-schoolbag"]').getAttribute('aria-current') === 'location'`));
+  await command('Emulation.setDeviceMetricsOverride', { width: 1000, height: 800, deviceScaleFactor: 1, mobile: false }, bagSession);
   await evaluate(bagSession, `document.getElementById('overview-schoolbag').querySelector('summary').click()`);
   await poll(() => evaluate(bagSession, `!document.getElementById('overview-schoolbag').open`));
   await evaluate(bagSession, `document.querySelector('[aria-label="Speciale dagen"]').closest('.workspace-section').querySelector('summary').focus()`);

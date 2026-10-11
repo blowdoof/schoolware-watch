@@ -14,6 +14,49 @@
 
 .workspace-section > summary::-webkit-details-marker { display: none; }
 
+/* Keep chapter shortcuts available without covering the selected heading. */
+.workspace-navigation {
+  position: sticky;
+  top: 3.25rem;
+  z-index: 9;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding: 0.75rem 0;
+  background: rgb(248 250 252 / 96%);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid #e2e8f0;
+}
+.workspace-navigation button[aria-current="location"] {
+  background: #ccfbf1;
+  border-color: #0d9488;
+  color: #115e59;
+}
+.workspace-section { scroll-margin-top: 11rem; }
+
+@media (min-width: 1280px) {
+  .workspace-navigation--full {
+    position: fixed;
+    top: 8.5rem;
+    left: calc(50% - 35rem);
+    width: 9.5rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.375rem;
+    margin: 0;
+    padding: 0.5rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    box-shadow: 0 2px 6px rgb(15 23 42 / 5%);
+  }
+  .workspace-navigation--full button {
+    text-align: left;
+    border-left-width: 3px;
+  }
+  .workspace-section { scroll-margin-top: 5rem; }
+}
+
 /* Preserve preferences such as hiding the book bag when its panel returns null. */
 .workspace-section:has(> .workspace-content:empty) { display: none; }
 main:has(#overview-schoolbag > .workspace-content:empty) button[aria-controls="overview-schoolbag"] { display: none; }
