@@ -65,6 +65,11 @@ try {
     const { sessionId } = await command('Target.attachToTarget', { targetId, flatten: true });
     await poll(() => evaluate(sessionId, `document.querySelectorAll('.workspace-section').length === 5`));
     assert.equal(await evaluate(sessionId, `document.querySelectorAll('.workspace-section[open]').length`), 0);
+    assert.equal(await evaluate(sessionId, `document.querySelectorAll('.workspace-navigation-status [role="img"]').length`), 2);
+    await evaluate(sessionId, `document.querySelector('.workspace-status-link[aria-controls="settings-sharing"]').click()`);
+    await poll(() => evaluate(sessionId, `document.getElementById('settings-sharing').open && document.activeElement === document.getElementById('settings-sharing').querySelector('summary')`));
+    await evaluate(sessionId, `document.getElementById('settings-sharing').querySelector('summary').click()`);
+    await poll(() => evaluate(sessionId, `!document.getElementById('settings-sharing').open`));
     // Open the groups through their native summaries for the existing full-form checks.
     await evaluate(sessionId, `(() => { for (const section of document.querySelectorAll('.workspace-section:not([open])')) section.querySelector('summary').click(); return true; })()`);
     if (checkGuide) {
@@ -187,7 +192,9 @@ try {
   assert.equal(await evaluate(bagSession, `document.querySelectorAll('.workspace-section[open]').length`), 1);
   await poll(() => evaluate(bagSession, `Boolean(document.getElementById('overview-status'))`));
   assert.equal(await evaluate(bagSession, `document.getElementById('overview-status').open`), false);
-  assert.equal(await evaluate(bagSession, `document.querySelector('[aria-label="Snel naar onderdeel"]').querySelectorAll('button').length`), 5);
+  assert.equal(await evaluate(bagSession, `document.querySelector('[aria-label="Snel naar onderdeel"]').querySelectorAll('button').length`), 8);
+  assert.equal(await evaluate(bagSession, `document.querySelectorAll('.workspace-navigation-status [role="img"]').length`), 2);
+  assert.ok(await evaluate(bagSession, `Boolean(document.querySelector('button[aria-controls="overview-status"]')) && document.getElementById('overview-status').compareDocumentPosition(document.getElementById('overview-history')) === Node.DOCUMENT_POSITION_PRECEDING`));
   await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 800, deviceScaleFactor: 1, mobile: false }, bagSession);
   assert.equal(await evaluate(bagSession, `getComputedStyle(document.querySelector('.workspace-navigation')).position`), 'fixed');
   assert.ok(await evaluate(bagSession, `document.querySelector('.workspace-navigation').getBoundingClientRect().right < document.getElementById('overview-todo').getBoundingClientRect().left`), 'Chapter rail stays outside the content');

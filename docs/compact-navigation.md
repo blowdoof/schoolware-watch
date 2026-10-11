@@ -8,7 +8,7 @@ Overview starts with To-do expanded. Book bag, agenda/progress (including CSV),
 special days and change history are collapsed. The popup offers To-do, book bag
 and special days; the full overview includes agenda and history as well.
 
-Connection health and automatic-check details are grouped in a collapsed
+Connection health and automatic-check details follow the overview chapters in a collapsed
 "Controle en synchronisatie" header. Its accessible icon shows active work,
 confirmed success, an issue or an unconfirmed state. Success requires the latest
 agenda check and any enabled sharing to have succeeded, without pending uploads,
@@ -16,6 +16,12 @@ partial downloads, registration, member errors or compatibility blocks. Sharing
 disabled is explained explicitly. Expanded content separates agenda and sharing.
 The UI refreshes local status every two seconds while visible; this starts no
 network check or synchronization and does not append polling activity records.
+Both overview and settings show separate Schoolware-check and shared-sync icons
+at the top of their persistent chapter navigation, using the same local status
+snapshot and a single polling subscription per page. Disabled sharing is explicitly
+labeled, and failed sharing does not turn a successful agenda check red (or vice
+versa). Clicking a status opens the overview's details or the matching settings
+group. The overview also has a dedicated control/sync chapter shortcut.
 Running indicators are transient worker
 presentation state; durable results and retries remain repository-backed.
 
@@ -28,7 +34,7 @@ below the global navigation. The current chapter has a tinted button and an
 accessible current-location indication; scrolling updates it when a section
 crosses the reading boundary. Heading scroll offsets leave room for navigation.
 
-Settings starts with all five groups collapsed: Schoolware connection,
+Settings uses the same responsive persistent chapter navigation and starts with all five groups collapsed: Schoolware connection,
 checks/notifications, paired sharing, privacy/retention/deletion and activity log.
 Section summaries describe the actions inside. Full-page navigation buttons show
 text labels; popup navigation keeps compact icons.

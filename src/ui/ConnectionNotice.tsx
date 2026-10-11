@@ -23,10 +23,8 @@ export function connectionHealth(state: ConnectionState): string {
   return 'De laatste agendacontrole is niet geslaagd.';
 }
 
-export function ConnectionNotice({ refreshToken, onSettings, navigationPending, compact = false, children }: {
-  refreshToken: number; onSettings: () => void; navigationPending: boolean; compact?: boolean; children?: ReactNode;
-}) {
-  const available = typeof chrome !== 'undefined' && Boolean(chrome.runtime?.id);
+export function useConnectionStatus(refreshToken: number, enabled = true) {
+  const available = typeof chrome !== 'undefined' && Boolean(chrome.runtime?.id) && enabled;
   const [connection, setConnection] = useState<ConnectionState | null>(null);
   const [error, setError] = useState(false);
   const [sync, setSync] = useState<SyncView | null>(null);
@@ -53,6 +51,32 @@ export function ConnectionNotice({ refreshToken, onSettings, navigationPending, 
     document.addEventListener('visibilitychange', refresh);
     return () => { mounted = false; window.clearInterval(timer); document.removeEventListener('visibilitychange', refresh); };
   }, [available, refreshToken]);
+
+  return { available, connection, sync, error };
+}
+
+export type ConnectionStatus = ReturnType<typeof useConnectionStatus>;
+
+export function agendaStatus(connection: ConnectionState | null, error: boolean): Status {
+  if (error) return 'issue';
+  if (connection?.lastCheck?.status === 'busy') return 'busy';
+  if (connection?.lastCheck && connection.lastCheck.status !== 'success') return 'issue';
+  return connection?.lastCheck?.status === 'success' ? 'ok' : 'unknown';
+}
+
+export function sharingStatus(sync: SyncView | null, error: boolean): Status {
+  if (error) return 'issue';
+  if (sync?.checking) return 'busy';
+  if (!sync?.enabled) return 'unknown';
+  if (sync.error || sync.blocked || sync.membersError || sync.compatibility?.issue) return 'issue';
+  if (sync.pending || sync.receiving || sync.registrationPending || !sync.lastSuccessAt) return 'unknown';
+  return 'ok';
+}
+
+export function ConnectionNotice({ snapshot, onSettings, navigationPending, compact = false, children }: {
+  snapshot: ConnectionStatus; onSettings: () => void; navigationPending: boolean; compact?: boolean; children?: ReactNode;
+}) {
+  const { available, connection, sync, error } = snapshot;
 
   const connected = connection?.requestUrl ? true : connection ? false : null;
   const needsLogin = ['session-required', 'redirected'].includes(connection?.lastCheck?.status ?? '');

@@ -1,6 +1,6 @@
 import { SetupWizard } from './SetupWizard';
 import { ConnectionPanel } from './ConnectionPanel';
-import { ConnectionNotice } from './ConnectionNotice';
+import { ConnectionNotice, useConnectionStatus } from './ConnectionNotice';
 import { HistoryPanel } from './HistoryPanel';
 import { useEffect, useState } from 'react';
 import { PreferencesPanel } from './PreferencesPanel';
@@ -35,6 +35,7 @@ export function App({ page: initialPage }: { page: Page }) {
   const [infoSection, setInfoSection] = useState<InfoSection>('about');
   const [navigationPending, setNavigationPending] = useState(false);
   const [navigationError, setNavigationError] = useState(false);
+  const status = useConnectionStatus(historyRevision, !target && page !== 'info');
   function navigate(next: Page) {
     if (initialPage === 'popup' && (next === 'dashboard' || next === 'options') &&
         typeof chrome !== 'undefined' && chrome.runtime?.id) {
@@ -108,29 +109,26 @@ export function App({ page: initialPage }: { page: Page }) {
       {!target && page !== 'info' && <SetupWizard inlineConnection={page === 'popup'} onSettings={() => navigate('options')} refreshToken={historyRevision} onChanged={() => setHistoryRevision((revision) => revision + 1)} />}
       {target ? <NotificationDetailsPanel target={target} refreshToken={historyRevision} /> : page === 'info' ?
         <InfoPanel section={infoSection} onSectionChange={setInfoSection} onSettings={() => navigate('options')} /> : <>
-      <ConnectionNotice refreshToken={historyRevision} onSettings={() => navigate('options')} navigationPending={navigationPending} compact={page !== 'options'}>
-        {page !== 'options' && <PreferencesPanel settings={false} refreshToken={historyRevision} onSaved={() => setHistoryRevision((revision) => revision + 1)} />}
-      </ConnectionNotice>
       {page === 'options' ? <div key="settings-sections" aria-label="Onderdelen van instellingen">
-        <p className="mt-4 text-sm text-slate-600">Open het onderdeel dat je wilt aanpassen. Je andere instellingen en invoer blijven behouden.</p>
-        <WorkspaceSection title="Schoolware-koppeling" description="Agenda verbinden, sessie herstellen en nu controleren">
+        <WorkspaceNavigation full settings snapshot={status} />
+        <WorkspaceSection id="settings-connection" title="Schoolware-koppeling" description="Agenda verbinden, sessie herstellen en nu controleren">
           <ConnectionPanel showSetup refreshToken={historyRevision} onHistoryChanged={() => setHistoryRevision((revision) => revision + 1)} />
         </WorkspaceSection>
-        <WorkspaceSection title="Controles en meldingen" description="Automatische controles, meldingen, kleuren en boekentas">
+        <WorkspaceSection id="settings-preferences" title="Controles en meldingen" description="Automatische controles, meldingen, kleuren en boekentas">
           <PreferencesPanel settings refreshToken={historyRevision} onSaved={() => setHistoryRevision((revision) => revision + 1)} />
         </WorkspaceSection>
-        <WorkspaceSection title="Delen tussen toestellen" description="Koppelen, deelnemers, synchronisatie en versiecontrole">
+        <WorkspaceSection id="settings-sharing" title="Delen tussen toestellen" description="Koppelen, deelnemers, synchronisatie en versiecontrole">
           <ProgressSyncPanel refreshToken={historyRevision} />
         </WorkspaceSection>
-        <WorkspaceSection title="Privacy, bewaren en wissen" description="Bewaartermijn en lokale gegevens verwijderen">
+        <WorkspaceSection id="settings-privacy" title="Privacy, bewaren en wissen" description="Bewaartermijn en lokale gegevens verwijderen">
           <HistoryPanel settings refreshToken={historyRevision} />
           <p className="px-5 pb-5 text-sm leading-6 text-slate-600">Je Schoolware-agendageschiedenis blijft lokaal in deze browser. Schoolware Watch bewaart geen Schoolware-inloggegevens. Gedeelde gegevens beheer je bij Delen tussen toestellen.</p>
         </WorkspaceSection>
-        <WorkspaceSection title="Activiteitenlog" description="Technische gebeurtenissen bekijken en exporteren">
+        <WorkspaceSection id="settings-activity" title="Activiteitenlog" description="Technische gebeurtenissen bekijken en exporteren">
           <ActivityPanel refreshToken={historyRevision} />
         </WorkspaceSection>
       </div> : <div key="overview-sections" aria-label="Onderdelen van overzicht">
-        <WorkspaceNavigation full={page === 'dashboard'} />
+        <WorkspaceNavigation full={page === 'dashboard'} snapshot={status} />
         <WorkspaceSection id="overview-todo" title="To-do" description="Wat moet klaar zijn voor de volgende schooldag?" defaultOpen>
           <TodoPanel refreshToken={historyRevision} />
         </WorkspaceSection>
@@ -146,6 +144,9 @@ export function App({ page: initialPage }: { page: Page }) {
         {page === 'dashboard' && <WorkspaceSection id="overview-history" title="Wijzigingsgeschiedenis" description="Wat is er veranderd sinds de vorige waarnemingen?">
           <HistoryPanel settings={false} refreshToken={historyRevision} />
         </WorkspaceSection>}
+        <ConnectionNotice snapshot={status} onSettings={() => navigate('options')} navigationPending={navigationPending} compact>
+          <PreferencesPanel settings={false} refreshToken={historyRevision} onSaved={() => setHistoryRevision((revision) => revision + 1)} />
+        </ConnectionNotice>
       </div>}
       </>}
       <footer className="mt-8 border-t border-slate-200 pt-4 text-xs text-slate-500">
