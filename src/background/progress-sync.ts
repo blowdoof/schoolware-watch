@@ -4,7 +4,9 @@ import { SYNC_URL, SYNC_PERMISSION, isRemoteProgress, isSyncMember, type SyncSta
 import { isAlertId } from '../shared/browser-alerts';
 import type { ActivityAction, ActivityData, ActivityReason, ActivityReporter } from '../shared/activity';
 import type { AuditContext } from '../storage/activity';
-import { notifyProgressChange } from './progress-notifications';
+import { notifyProgressChange, notifyHelpRequests } from './progress-notifications';
+import { isPlanningFragment, type PlanningFragment } from '../shared/planning-sync';
+import { APP_VERSION, SYNC_PROTOCOL, validateSyncPolicy, compatibilityIssue, isAppVersion, type StoreUpdate, type SyncPolicy } from '../shared/sync-compatibility';
 
 export const PROGRESS_SYNC_ALARM = 'schoolware-progress-sync';
 export const progressSync = new ProgressSyncRepository();
@@ -46,14 +48,14 @@ async function request(token: string, body: unknown): Promise<Record<string, unk
   let response: Response;
   try {
     response = await fetch(SYNC_URL, { method: 'POST', credentials: 'omit', redirect: 'error', cache: 'no-store',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'X-Schoolware-Version': APP_VERSION, 'X-Schoolware-Protocol': String(SYNC_PROTOCOL) }, body: JSON.stringify(body),
       signal: AbortSignal.timeout(15000) });
   } catch (error) {
     throw new SyncFailure(error instanceof Error && ['TimeoutError', 'AbortError'].includes(error.name) ? 'timeout' : 'network-error');
   }
   if (!response.ok) {
     await response.body?.cancel().catch(() => {});
-    throw new SyncFailure(response.status === 429 ? 'rate-limited' :
+    throw new SyncFailure(response.status === 426 ? 'update-required' : response.status === 429 ? 'rate-limited' :
       response.status === 401 || response.status === 403 ? 'authentication-failed' : 'http-error', response.status);
   }
   if (Number(response.headers.get('Content-Length') ?? 0) > 1_000_000) {
@@ -79,6 +81,41 @@ async function request(token: string, body: unknown): Promise<Record<string, unk
   try { value = JSON.parse(text); } catch { throw new SyncFailure('invalid-response'); }
   if (!value || typeof value !== 'object' || Array.isArray(value) || (value as Record<string, unknown>).ok !== true) throw new SyncFailure('invalid-response');
   return value as Record<string, unknown>;
+}
+
+async function checkCompatibility(state: SyncState, record: ActivityReporter): Promise<void> {
+  const checkedAt = new Date().toISOString();
+  let policy: SyncPolicy | null = null;
+  try {
+    const response = await audited(record, 'progress.compatibility', () => request(state.token, { action: 'compatibility' }));
+    policy = validateSyncPolicy(response.policy);
+    if (Object.keys(response).length !== 2 || !policy) throw new SyncFailure('server-update-required');
+    const issue = compatibilityIssue(policy);
+    if (!await progressSync.setCompatibility(state, { checkedAt, policy, issue })) throw new SyncFailure('cancelled');
+    if (issue) throw new SyncFailure(issue);
+  } catch (error) {
+    if (error instanceof SyncFailure && error.reason === 'cancelled') throw error;
+    const issue = error instanceof SyncFailure && error.reason === 'update-required' ? 'update-required' :
+      error instanceof SyncFailure && (error.reason === 'server-update-required' || error.httpStatus === 400) ? 'server-update-required' : 'check-unavailable';
+    await progressSync.setCompatibility(state, { checkedAt, policy, issue });
+    if (issue === 'server-update-required') throw new SyncFailure(issue);
+    throw error;
+  }
+}
+
+export async function checkStoreUpdate(): Promise<void> {
+  const state = await progressSync.read();
+  if (!state) return;
+  // Chrome also throttles this API. Preserve a recent result instead of polling.
+  if (state.storeUpdate && Date.now() - Date.parse(state.storeUpdate.checkedAt) < 60000) return;
+  let update: StoreUpdate = { checkedAt: new Date().toISOString(), status: 'unavailable' };
+  try {
+    const result = await chrome.runtime.requestUpdateCheck();
+    if (['update_available', 'no_update', 'throttled'].includes(result.status) &&
+        (result.status !== 'update_available' || isAppVersion(result.version)))
+      update = { checkedAt: update.checkedAt, status: result.status, ...(result.status === 'update_available' ? { version: result.version! } : {}) };
+  } catch { /* Unpacked builds or unavailable Chrome APIs do not imply latest. */ }
+  await progressSync.setStoreUpdate(state, update);
 }
 
 export async function configureProgressSyncAlarm(reporter?: ActivityReporter): Promise<void> {
@@ -151,17 +188,27 @@ export async function leaveSyncMembers(reporter?: ActivityReporter): Promise<voi
   }
 }
 
+// Presentation only; durable progress and retry state remain in repositories.
+const runningScopes = new Map<string, number>();
+export function isProgressSyncRunning(scopeId: string | null): boolean { return Boolean(scopeId && runningScopes.has(scopeId)); }
 export async function synchronizeProgress(scopeId: string | null, reporter?: ActivityReporter, audit?: AuditContext): Promise<boolean> {
   const record = safeReporter(reporter);
   const started = Date.now();
   await record('progress.sync', 'started');
   let state: SyncState | undefined;
+  if (scopeId) runningScopes.set(scopeId, (runningScopes.get(scopeId) ?? 0) + 1);
   try {
     state = await progressSync.read();
     if (!state || state.scopeId !== scopeId) {
       await record('progress.sync', 'skipped', { reason: !state ? 'disabled' : 'profile-mismatch' }); return false;
     }
-    const current = state;
+    if (state.blocked) { await record('progress.sync', 'skipped', { reason: 'blocked' }); return false; }
+    await checkCompatibility(state, record);
+    await progressSync.announceVersion(state);
+    await progressSync.preparePlanning(state.scopeId);
+    const current = await progressSync.read();
+    if (!current || current.connectionId !== state.connectionId) throw new SyncFailure('cancelled');
+    state = current;
     if (current.blocked) {
       await record('progress.sync', 'skipped', { reason: 'blocked' }); return false;
     }
@@ -173,14 +220,15 @@ export async function synchronizeProgress(scopeId: string | null, reporter?: Act
         delete current.registrationPending;
       });
     }
-    await record('progress.exchange', 'info', { pendingCount: current.outbox.length });
+    await record('progress.exchange', 'info', { pendingCount: current.outbox.length + (current.planningOutbox?.length ?? 0) });
     const exchanged = await audited(record, 'progress.exchange', async () => {
       // IDs survive retries; a fresh nonce does not change operation identity.
-      const pending = current.outbox.slice(0, 50);
+      const pending = [...current.outbox.slice(0, 50), ...(current.planningOutbox ?? []).slice(0, Math.max(0, 50 - current.outbox.length))];
       const operations = await Promise.all(pending.map(async (operation) => {
+        if ('fragment' in operation) return { id: operation.id, ...await encrypt(current.key, operation.id, operation.fragment) };
         const item = await progressItemKey(current.key, operation.sourceKey, new URL(current.scopeId).origin);
         return { id: operation.id, ...await encrypt(current.key, operation.id,
-          { item, version: operation.version, status: operation.status, kind: operation.kind }) };
+            { item, version: operation.version, status: operation.status, kind: operation.kind, ...(operation.actor ? { actor: operation.actor } : {}) }) };
       }));
       const response = await request(current.token, { action: 'exchange', cursor: current.cursor, operations });
       if (!Array.isArray(response.acknowledged) || response.acknowledged.length !== pending.length ||
@@ -189,6 +237,7 @@ export async function synchronizeProgress(scopeId: string | null, reporter?: Act
           !Number.isSafeInteger(response.cursor) || response.cursor < current.cursor ||
           typeof response.head !== 'number' || !Number.isSafeInteger(response.head) || response.head < response.cursor) throw new SyncFailure('invalid-response');
       const remote: typeof current.remote = {}; let lastRevision = current.cursor;
+      const planning: { fragment: PlanningFragment; revision: number }[] = [];
       for (const raw of response.operations) {
         if (!raw || typeof raw !== 'object') throw new SyncFailure('invalid-response');
         const op = raw as Record<string, unknown>;
@@ -196,18 +245,19 @@ export async function synchronizeProgress(scopeId: string | null, reporter?: Act
             typeof op.iv !== 'string' || !/^[a-f0-9]{24}$/.test(op.iv) ||
             typeof op.ciphertext !== 'string' || !/^[a-f0-9]{32,2048}$/.test(op.ciphertext)) throw new SyncFailure('invalid-response');
         const value = await decrypt(current.key, op.id, op.iv, op.ciphertext);
-        if (!isRemoteProgress(value)) throw new SyncFailure('invalid-response');
-        const remoteKey = `${value.item}.${value.version}`;
-        const previous = remote[remoteKey];
-        if (!previous || previous.kind !== 'manual' || value.kind === 'manual') {
-          remote[remoteKey] = { version: value.version, status: value.status, revision: op.revision, kind: value.kind };
-        }
+        if (isPlanningFragment(value)) planning.push({ fragment: value, revision: op.revision });
+        else if (isRemoteProgress(value)) {
+          const remoteKey = `${value.item}.${value.version}`;
+          const previous = remote[remoteKey];
+          if (!previous || previous.kind !== 'manual' || value.kind === 'manual')
+              remote[remoteKey] = { version: value.version, status: value.status, revision: op.revision, kind: value.kind, ...(value.actor ? { actor: value.actor } : {}) };
+        } else throw new SyncFailure('invalid-response');
         lastRevision = op.revision;
       }
       if (response.operations.length ? response.cursor !== lastRevision : response.cursor !== response.head) throw new SyncFailure('invalid-response');
-      if (!await progressSync.commit(current, pending.map((op) => op.id), response.cursor, remote, response.head)) throw new SyncFailure('cancelled');
+      if (!await progressSync.commit(current, pending.map((op) => op.id), response.cursor, remote, response.head, planning)) throw new SyncFailure('cancelled');
       return { reason: 'success' as const, uploadedCount: pending.length, downloadedCount: response.operations.length,
-        pendingCount: (await progressSync.read())?.outbox.length ?? 0, hasMore: response.cursor < response.head };
+        pendingCount: (await progressSync.view()).pending, hasMore: response.cursor < response.head };
     }, (value) => value);
     let changed = false;
     if (exchanged.hasMore) {
@@ -215,14 +265,15 @@ export async function synchronizeProgress(scopeId: string | null, reporter?: Act
     } else {
       changed = await audited(record, 'progress.apply', () => progressSync.apply(current.scopeId, audit),
         (applied) => ({ reason: applied ? 'success' : 'unchanged', applied }));
-      if (changed) await notifyProgressChange(audit?.correlationId ?? crypto.randomUUID(),
+      if (changed && (await progressSync.read())?.lastApplyOrdinaryChanged) await notifyProgressChange(audit?.correlationId ?? crypto.randomUUID(),
         !(current.hasAppliedRemote ?? (current.lastSuccessAt !== null && current.cursor === current.head)), record);
+      await notifyHelpRequests(progressSync, current.scopeId, record);
     }
     const membersChanged = await synchronizeMembers(current, record);
     const after = await progressSync.read();
     if (!after || after.connectionId !== current.connectionId) throw new SyncFailure('cancelled');
     await record('progress.sync', 'succeeded', { reason: after.membersError || after.cursor < after.head ? 'partial-success' : 'success',
-      applied: changed, membersUpdated: membersChanged, pendingCount: after.outbox.length,
+      applied: changed, membersUpdated: membersChanged, pendingCount: after.outbox.length + (after.planningOutbox?.length ?? 0),
       hasMore: after.cursor < after.head,
       durationMs: Math.max(0, Date.now() - started) });
     return changed || membersChanged;
@@ -230,5 +281,10 @@ export async function synchronizeProgress(scopeId: string | null, reporter?: Act
     await record('progress.sync', 'failed', { ...failureData(error, 'storage-error'), durationMs: Math.max(0, Date.now() - started) });
     if (state) await progressSync.failed(state, error instanceof SyncFailure ? error.httpStatus : undefined);
     return false;
+  } finally {
+    if (scopeId) {
+      const remaining = (runningScopes.get(scopeId) ?? 1) - 1;
+      if (remaining) runningScopes.set(scopeId, remaining); else runningScopes.delete(scopeId);
+    }
   }
 }

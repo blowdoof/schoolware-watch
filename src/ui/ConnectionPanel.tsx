@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { useSettingsChanges } from './SettingsChanges';
 import { recordPermissionResult } from './permission-log';
 import { SCHOOLWARE_ORIGIN, schoolwareOrigin, schoolwarePermission, isSchoolwarePage, validateAgendaRequest } from '../schoolware/agenda-request';
 import { discoveryPermissions, validateDiscoveryView, type DiscoveryMessage, type DiscoveryView } from '../shared/agenda-discovery';
@@ -39,6 +40,7 @@ export function ConnectionPanel({ showSetup, refreshToken, onHistoryChanged }: {
   const [candidate, setCandidate] = useState<{ origin: string; tabId: number } | null>(null);
   const [schoolAddress, setSchoolAddress] = useState('');
   const [confirmedId, setConfirmedId] = useState<string | null>(null);
+  useSettingsChanges('connection', !loading && (requestUrl !== (connection.requestUrl ?? '') || Boolean(schoolAddress) || confirmedId !== null));
 
   useEffect(() => {
     if (!extensionAvailable || !chrome.tabs?.query) return;
@@ -146,6 +148,7 @@ export function ConnectionPanel({ showSetup, refreshToken, onHistoryChanged }: {
       const state = await send({ type: 'connection.discovery.confirm', id: discovery.id });
       if (!state.requestUrl) throw new Error('Discovery changed');
       setConnection(state); setRequestUrl(state.requestUrl);
+      setSchoolAddress(''); setConfirmedId(null);
       setDiscovery({ status: 'idle', id: null });
       onHistoryChanged?.();
     } catch { setError('De agendaselectie is veranderd of de koppeling is verlopen. Open de gewenste agenda opnieuw en probeer nogmaals.'); }

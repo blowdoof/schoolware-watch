@@ -22,7 +22,7 @@ describe('received progress notifications', () => {
   it('uses generic text and records delivery without task or participant content', async () => {
     await notifyProgressChange(id, false, report);
     expect(create).toHaveBeenCalledWith(`schoolware-watch-progress-${id}`, expect.objectContaining({
-      message: 'Gedeelde taakvoortgang is bijgewerkt. Open het overzicht voor de actuele statussen.',
+      message: 'Gedeelde taakvoortgang of planning is bijgewerkt. Open het overzicht voor de actuele stand.',
     }));
     expect(report).toHaveBeenCalledWith('notification.progress', 'succeeded', { reason: 'accepted' });
   });

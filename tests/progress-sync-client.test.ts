@@ -1,8 +1,9 @@
+import { withCompatiblePolicy } from './fixtures/sync-compatibility';
 import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HistoryRepository } from '../src/storage/history';
-import { progressSync, synchronizeProgress, synchronizeMembers, leaveSyncMembers } from '../src/background/progress-sync';
+import { progressSync, synchronizeProgress, isProgressSyncRunning, synchronizeMembers, leaveSyncMembers } from '../src/background/progress-sync';
 import { decryptProgress, encryptProgress } from '../src/domain/progress-sync';
 import { SYNC_URL } from '../src/shared/progress-sync';
 import { check } from './fixtures/observations';
@@ -11,17 +12,31 @@ const token = 'a'.repeat(64); const key = 'b'.repeat(64);
 const history = new HistoryRepository();
 const audit = () => ({ correlationId: crypto.randomUUID(), spanId: crypto.randomUUID(), context: 'dashboard' as const });
 beforeEach(() => {
+  vi.spyOn(progressSync, 'announceVersion').mockResolvedValue(undefined);
   vi.stubGlobal('indexedDB', new IDBFactory());
   vi.stubGlobal('chrome', { permissions: { contains: vi.fn().mockResolvedValue(true) } });
 });
 afterEach(() => vi.unstubAllGlobals());
 
 describe('bounded progress transport', () => {
+  it('reports running requests and clears the transient indicator after a failed synchronization', async () => {
+    const scope = await history.record(check());
+    await progressSync.connect(scope.scopeId, `sw1.${token}.${key}`, false);
+    let release!: (response: Response) => void;
+    const fetcher = vi.fn(() => new Promise<Response>((resolve) => { release = resolve; }));
+    stubFetch(fetcher);
+    const pending = synchronizeProgress(scope.scopeId);
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalled());
+    expect(isProgressSyncRunning(scope.scopeId)).toBe(true);
+    expect(isProgressSyncRunning('synthetic-other-profile')).toBe(false);
+    release(new Response('', { status: 503 })); await pending;
+    expect(isProgressSyncRunning(scope.scopeId)).toBe(false);
+  });
   it.each([401, 403, 409])('stops durable automatic retries after HTTP %s until explicitly resumed', async (status) => {
     const scope = await history.record(check());
     await progressSync.connect(scope.scopeId, `sw1.${token}.${key}`, false, status === 403);
     const fetcher = vi.fn().mockResolvedValue(new Response('', { status }));
-    vi.stubGlobal('fetch', fetcher);
+    stubFetch(fetcher);
     await synchronizeProgress(scope.scopeId);
     expect((await progressSync.view()).blocked).toBe(true);
     await synchronizeProgress(scope.scopeId);
@@ -37,7 +52,7 @@ describe('bounded progress transport', () => {
     const other = crypto.randomUUID();
     const encrypted = await encryptProgress(key, `member:${other}`, { label: 'Synthetic pupil' });
     const lastSeenAt = '2026-10-04T09:00:00.000Z';
-    vi.stubGlobal('fetch', vi.fn(async (_url: string, options: RequestInit) => {
+    stubFetch(vi.fn(async (_url: string, options: RequestInit) => {
       const body = JSON.parse(options.body as string);
       expect(body.action).toBe('members'); expect(body.device.id).toBe(state.connectionId);
       expect(options.body).not.toContain('Synthetic parent');
@@ -53,7 +68,7 @@ describe('bounded progress transport', () => {
     expect((await progressSync.read())!.cursor).toBe(0);
     expect((await history.read(scope.scopeId)).scope!.events).toEqual(scope.events);
     // Tampering never partially replaces a previously verified participant list.
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ ok: true, members: [{ id: other, ...encrypted, ciphertext: '0'.repeat(64), lastSeenAt }] })));
+    stubFetch(vi.fn().mockResolvedValue(Response.json({ ok: true, members: [{ id: other, ...encrypted, ciphertext: '0'.repeat(64), lastSeenAt }] })));
     await synchronizeMembers(state);
     expect((await progressSync.view()).membersError).toBe(true);
     expect((await progressSync.view()).members).toHaveLength(2);
@@ -62,7 +77,7 @@ describe('bounded progress transport', () => {
     const scope = await history.record(check());
     await progressSync.connect(scope.scopeId, `sw1.${token}.${key}`, false, false, 'Synthetic parent');
     await history.setTaskStatus(scope.scopeId, scope.items[0]!.localId!, 'done', audit());
-    vi.stubGlobal('fetch', vi.fn(async (_url: string, options: RequestInit) => {
+    stubFetch(vi.fn(async (_url: string, options: RequestInit) => {
       const body = JSON.parse(options.body as string);
       if (body.action === 'members') return new Response('{"ok":false}', { status: 400 });
       return Response.json({ ok: true, acknowledged: body.operations.map((operation: { id: string }) => operation.id),
@@ -71,7 +86,7 @@ describe('bounded progress transport', () => {
     await synchronizeProgress(scope.scopeId);
     expect(await progressSync.view()).toMatchObject({ pending: 0, error: false, membersError: true });
     expect((await history.read(scope.scopeId)).scope!.items[0]!.taskStatus).toBe('done');
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Synthetic offline')));
+    stubFetch(vi.fn().mockRejectedValue(new Error('Synthetic offline')));
     await leaveSyncMembers(); await progressSync.disconnect();
     expect(await progressSync.read()).toBeUndefined();
   });
@@ -91,7 +106,7 @@ describe('bounded progress transport', () => {
       if (body.action === 'register') return Response.json({ ok: true });
       return Response.json({ ok: true, acknowledged: [], cursor: 0, head: 0, operations: [] });
     });
-    vi.stubGlobal('fetch', fetcher);
+    stubFetch(fetcher);
     await synchronizeProgress(scope.scopeId);
     expect((await progressSync.read())!.registrationPending).toBe(true);
     expect((await progressSync.read())!.connectionId).toBe(initial.connectionId);
@@ -106,7 +121,7 @@ describe('bounded progress transport', () => {
     const scope = await history.record(check());
     await progressSync.connect(scope.scopeId, `sw1.${token}.${key}`, true, true);
     const fetcher = vi.fn().mockResolvedValue(new Response('{"ok":false}', { status: 429 }));
-    vi.stubGlobal('fetch', fetcher);
+    stubFetch(fetcher);
     await synchronizeProgress(scope.scopeId);
     expect((await progressSync.read())!.registrationPending).toBe(true);
     expect((await progressSync.view()).error).toBe(true);
@@ -129,7 +144,7 @@ describe('bounded progress transport', () => {
       return Response.json({ ok: true, acknowledged: [operation.id], cursor: 1, head: 1,
         operations: [{ ...operation, revision: 1 }] });
     });
-    vi.stubGlobal('fetch', fetcher);
+    stubFetch(fetcher);
     await synchronizeProgress(scope.scopeId);
     expect((await progressSync.read())!.outbox).toEqual([]);
     expect((await progressSync.view()).error).toBe(false);
@@ -139,10 +154,10 @@ describe('bounded progress transport', () => {
     const scope = await history.record(check()); await progressSync.connect(scope.scopeId, `sw1.${token}.${key}`, false);
     await history.setTaskStatus(scope.scopeId, scope.items[0]!.localId!, 'done', audit());
     const state = (await progressSync.read())!;
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Synthetic offline')));
+    stubFetch(vi.fn().mockRejectedValue(new Error('Synthetic offline')));
     expect(await synchronizeProgress(scope.scopeId)).toBe(false);
     expect((await progressSync.read())!.outbox).toEqual(state.outbox);
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ ok: true, acknowledged: [state.outbox[0]!.id], cursor: 1, head: 1,
+    stubFetch(vi.fn().mockResolvedValue(Response.json({ ok: true, acknowledged: [state.outbox[0]!.id], cursor: 1, head: 1,
       operations: [{ id: state.outbox[0]!.id, revision: 1, iv: '0'.repeat(24), ciphertext: '0'.repeat(320) }] })));
     expect(await synchronizeProgress(scope.scopeId)).toBe(false);
     const after = (await progressSync.read())!;
@@ -151,10 +166,12 @@ describe('bounded progress transport', () => {
   });
   it('does not contact the server for a different local pupil scope or without optional permission', async () => {
     const scope = await history.record(check()); await progressSync.connect(scope.scopeId, `sw1.${token}.${key}`, false);
-    const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher);
+    const fetcher = vi.fn(); stubFetch(fetcher);
     await synchronizeProgress('another-synthetic-profile');
     vi.stubGlobal('chrome', { permissions: { contains: vi.fn().mockResolvedValue(false) } });
     await synchronizeProgress(scope.scopeId);
     expect(fetcher).not.toHaveBeenCalled();
   });
 });
+
+function stubFetch(fetcher: unknown) { vi.stubGlobal('fetch', withCompatiblePolicy(fetcher)); }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 // PHP 8.2 / PDO MySQL. No Schoolware transport or plaintext agenda data.
 ini_set('display_errors', '0');
 require '/home/example-account/maintenance.php';
+require '/home/example-account/sync-policy.php';
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
@@ -132,8 +133,8 @@ try {
     $raw = file_get_contents('php://input', false, null, 0, 150001);
     if ($raw === false || strlen($raw) > 150000) reply(413, ['ok' => false]);
     $body = json_decode($raw, true, 16, JSON_THROW_ON_ERROR);
-    if (!is_array($body) || !in_array($body['action'] ?? null, ['register', 'exchange', 'delete', 'members', 'member.leave'], true)) reply(400, ['ok' => false]);
-    if ($body['action'] === 'delete' || $body['action'] === 'register') {
+    if (!is_array($body) || !in_array($body['action'] ?? null, ['compatibility', 'register', 'exchange', 'delete', 'members', 'member.leave'], true)) reply(400, ['ok' => false]);
+    if ($body['action'] === 'delete' || $body['action'] === 'register' || $body['action'] === 'compatibility') {
         if (!exactKeys($body, ['action'])) reply(400, ['ok' => false]);
     } elseif ($body['action'] === 'members') {
         if (!exactKeys($body, ['action', 'device']) || !validOperation($body['device'])) reply(400, ['ok' => false]);
@@ -156,6 +157,12 @@ try {
     ]);
     $pdo->exec("SET time_zone = '+00:00'");
     enforceRequestLimits($pdo, $config, hash('sha256', $matches[1]));
+    $policy = syncPolicy($config);
+    if ($body['action'] === 'compatibility') reply(200, ['ok' => true, 'policy' => $policy]);
+    // Erasure and leaving remain available to old clients. No content upload can
+    // occur before this check, including a policy change after client preflight.
+    if (!in_array($body['action'], ['delete', 'member.leave'], true) && !syncClientCompatible($policy, $_SERVER))
+        reply(426, ['ok' => false, 'error' => 'update-required', 'policy' => $policy]);
     $pdo->beginTransaction();
     if ($body['action'] === 'register') registerGroup($pdo, $config, hash('sha256', $matches[1]));
     // Serialize revision allocation and pull visibility. AUTO_INCREMENT alone

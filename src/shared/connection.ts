@@ -10,7 +10,9 @@ import { isNotificationTarget, notificationTarget } from './notification-details
 import { MAX_ACTIVITY_ENTRIES } from './activity';
 import { isTaskStatus, type TaskStatus } from '../domain/tasks';
 import { MAX_TASK_UPDATES } from './tasks';
+import { isHelpRecipients } from './task-help';
 import { validateOpenPageMessage, type OpenPageMessage } from './navigation';
+import { validateSpecialDaysMessage, type SpecialDaysMessage } from './special-days';
 
 export type CheckStatus = FetchStatus | 'permission-required' | 'busy' | 'storage-error';
 export interface CheckSummary { status: CheckStatus; checkedAt: string; count: number | null; typeCounts?: AgendaTypeCounts }
@@ -22,7 +24,8 @@ const statuses: CheckStatus[] = ['success', 'session-required', 'redirected', 'a
   'invalid-response', 'network-error', 'timeout', 'http-error', 'rate-limited',
   'invalid-request', 'permission-required', 'busy', 'storage-error'];
 
-export type ConnectionMessage = SyncMessage | DiscoveryMessage | OpenPageMessage
+export type ConnectionMessage = SyncMessage | DiscoveryMessage | OpenPageMessage | SpecialDaysMessage
+  | { type: 'status.read' }
   | { type: 'setup.complete' }
   | { type: 'connection.read' }
   | { type: 'connection.clear' }
@@ -41,6 +44,8 @@ export type ConnectionMessage = SyncMessage | DiscoveryMessage | OpenPageMessage
   | { type: 'schoolbag.read' }
   | { type: 'schoolbag.update'; choiceId: string; state: 'packed' | 'hidden' | 'open' }
   | { type: 'tasks.update'; itemId: string; status: TaskStatus }
+  | { type: 'tasks.help'; itemId: string; needed: boolean; recipients: string[] }
+    | { type: 'tasks.review'; itemId: string; kind: 'checked' | 'corrected'; done: boolean }
   | { type: 'tasks.updateMany'; itemIds: string[]; status: TaskStatus }
   | { type: 'activity.read'; limit?: number; correlationId?: string; itemId?: string }
   | { type: 'activity.clear' }
@@ -50,6 +55,8 @@ export type ConnectionMessage = SyncMessage | DiscoveryMessage | OpenPageMessage
   | { type: 'agenda.check'; requestUrl: string };
 
 export function validateConnectionMessage(value: unknown): ConnectionMessage | null {
+  const special = validateSpecialDaysMessage(value);
+  if (special) return special;
   const navigation = validateOpenPageMessage(value);
   if (navigation) return navigation;
   const sync = validateSyncMessage(value);
@@ -66,6 +73,13 @@ export function validateConnectionMessage(value: unknown): ConnectionMessage | n
   if (message.type === 'permission.result' && Object.keys(message).length === 3 &&
       ['notifications', 'browser', 'schoolware'].includes(message.permission as string) && typeof message.granted === 'boolean') {
     return { type: 'permission.result', permission: message.permission as 'notifications' | 'browser' | 'schoolware', granted: message.granted };
+  }
+  if (message.type === 'tasks.review' && Object.keys(message).length === 4 && isAlertId(message.itemId) &&
+      ['checked', 'corrected'].includes(message.kind as string) && typeof message.done === 'boolean')
+    return { type: 'tasks.review', itemId: message.itemId, kind: message.kind as 'checked' | 'corrected', done: message.done };
+  if (message.type === 'tasks.help' && Object.keys(message).length === 4 && isAlertId(message.itemId) &&
+      typeof message.needed === 'boolean' && isHelpRecipients(message.recipients) && (message.needed || !message.recipients.length)) {
+    return { type: 'tasks.help', itemId: message.itemId, needed: message.needed, recipients: [...message.recipients] };
   }
   if (message.type === 'tasks.update' && Object.keys(message).length === 3 && isAlertId(message.itemId) && isTaskStatus(message.status)) {
     return { type: 'tasks.update', itemId: message.itemId, status: message.status };
@@ -96,7 +110,7 @@ export function validateConnectionMessage(value: unknown): ConnectionMessage | n
   if (message.type === 'notifications.details' && Object.keys(message).length === 2 && isNotificationTarget(message.target)) {
     return { type: 'notifications.details', target: message.target };
   }
-  if (['setup.complete', 'connection.read', 'connection.clear', 'history.clear', 'preferences.read', 'notifications.test',
+  if (['setup.complete', 'status.read', 'connection.read', 'connection.clear', 'history.clear', 'preferences.read', 'notifications.test',
     'browser.alerts.read', 'browser.alerts.dismiss', 'browser.alerts.test', 'browser.alerts.open', 'tasks.read', 'schoolbag.read', 'activity.clear'].includes(message.type as string) && Object.keys(message).length === 1) {
     return { type: message.type } as ConnectionMessage;
   }

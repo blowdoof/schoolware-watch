@@ -1,6 +1,30 @@
 # Privacyverklaring Schoolware Watch
 
-Laatst bijgewerkt: 6 oktober 2026. Versie: 0.2.0 (bron voor de volgende update).
+Laatst bijgewerkt: 11 oktober 2026. Versie: 0.4.0 (bron voor de volgende update).
+
+Bij wijzigingen aan taakstatus, hulpvragen, checklistvinkjes en boekentaskeuzes
+bewaren we wie de wijziging deed: een willekeurige deelnemer- en eventueel
+toestelverwijzing, de optionele ingestelde naam en het gemelde tijdstip.
+Nagekeken en verbeterd worden afzonderlijk per deelnemer en taakinhoud bewaard.
+Bij ingeschakelde deling gaan deze gegevens versleuteld naar dezelfde groep.
+Namen bevestigen geen identiteit; alle houders van de koppelcode hebben dezelfde
+groepsrechten. Een gedeelde computer herkent niet automatisch welke persoon
+hem gebruikt. Deze gegevens volgen de lokale profielbewaring en de bestaande
+gedeelde bewaartermijnen en verwijderfuncties.
+
+Het lokale overzicht toont maximaal 200 controles per taak, met voorrang voor
+de huidige taakinhoud en ingetrokken controles. Oudere controles kunnen uit het
+overzicht verdwijnen; het is geen permanent volledig auditarchief. Bij inhoudelijk
+gewijzigde checklisttekst vervalt het oude vinkje en moet het nieuwe punt opnieuw
+worden bevestigd.
+
+Bij ingeschakelde deling worden ook de zelfgemelde extensieversie en protocolversie
+per toestel versleuteld gedeeld, met een meldtijd en eventueel de bestaande
+deelnemernaam. Dit bevestigt geen identiteit of actuele online status. Deze
+gegevens volgen dezelfde gedeelde bewaartermijnen en verwijderfuncties. De dienst
+ontvangt extensie- en protocolversies ook als technische HTTPS-aanvraagheaders
+voor de compatibiliteitscontrole, zonder agendatekst of Schoolware-inloggegevens.
+Dit vormt geen analytics of inventaris van niet-gekoppelde toestellen.
 
 Schoolware Watch is een onafhankelijk project van Bumper.be. Contact:
 [info@bumper.be](mailto:info@bumper.be). Het is geen officieel product van
@@ -16,11 +40,20 @@ Agenda-inhoud kan persoonlijke informatie bevatten.
 
 De extensie gebruikt deze gegevens voor lokale wijzigingsgeschiedenis,
 taakstatussen, meldingen, een to-do overzicht en boekentassuggesties. Ingepakt- en
-verbergkeuzes voor de boekentas blijven lokaal, per leerling en lesdag, en worden
-niet gedeeld via de voortgangsdienst.
+verbergkeuzes voor de boekentas worden per leerling en lesdag bewaard en met
+ingeschakelde voortgangsdeling versleuteld gedeeld.
 Een lokale activiteitenlog bevat tijden, aantallen, technische resultaten en
 willekeurige lokale verwijzingen, geen agendatekst of Schoolware-inloggegevens.
 Logexport is een expliciete actie naar een bestand op je eigen computer.
+
+Zelf ingevoerde speciale dagen, opmerkingen, checklistpunten en voorbereidingsdatums
+staan bij het gekozen leerlingprofiel. Met voortgangsdeling worden ze samen met
+checklistvinkjes en boekentaskeuzes versleuteld gesynchroniseerd. Deze tekst wordt
+niet in het activiteitenlog opgenomen. Lokale en gedeelde gegevens volgen hun
+afzonderlijke bewaartermijnen en verwijderfuncties. Voorbereidingsmeldingen bevatten
+alleen algemene tekst.
+Je kunt taken en voortgang lokaal als CSV downloaden. Dat bestand kan
+persoonlijke agendatekst bevatten; bewaar en verwijder geëxporteerde bestanden zelf.
 
 De extensie gebruikt je bestaande Schoolware-browsersessie. Ze vraagt of bewaart
 geen Schoolware-wachtwoorden, sessiecookies, authenticatietokens of
@@ -33,8 +66,10 @@ worden niet gevolgd.
 
 Alleen wanneer je zelf een groep aanmaakt of koppelt, gebruikt de extensie
 `https://schoolware.bumper.be`. De deelnemende browsers delen versleutelde
-Open/Bezig/Klaar-statussen en optioneel versleutelde, zelfgekozen deelnemerlabels.
-Agendatitels, instructies, ruwe leerling-/bronidentificaties en Schoolware-sessies
+Open/Bezig/Klaar-statussen, hulpvragen met ontvangerverwijzingen, zelf ingevoerde speciale dagen met opmerkingen en
+checklists, checklistvinkjes, boekentaskeuzes en optioneel deelnemerlabels.
+Iedereen met de volledige koppelcode kan ook hulpvragen en ontvangerverwijzingen lezen en wijzigen. De ontvangerkeuze bepaalt wie een hulpmelding krijgt, niet wie de gedeelde inhoud kan lezen. Namen horen bij computers en bewijzen geen identiteit. Neem in speciale-dagtekst alleen informatie op die je met de gekoppelde personen
+wilt delen. Schoolware-agendatitels, instructies, geschiedenis, ruwe leerling-/bronidentificaties en Schoolware-sessies
 worden niet naar deze dienst verstuurd. De browser maakt een aparte willekeurige
 groepscredential en encryptiesleutel; dit zijn geen Schoolware-inloggegevens.
 

@@ -3,13 +3,25 @@ import { openHistoryDatabase, ensureLocalIdentity, HISTORY_DB } from './database
 import { activityInput, appendActivity, pruneActivity, type AuditContext } from './activity';
 import { isAlertId } from '../shared/browser-alerts';
 import { isTaskCategory, isTaskStatus, type TaskStatus } from '../domain/tasks';
-import { progressVersion, progressVersionText } from '../domain/progress-sync';
+import { progressVersion, progressVersionText, progressItemKey } from '../domain/progress-sync';
+import { isHelpRecipients } from '../shared/task-help';
 import { SYNC_STATE_KEY } from '../shared/progress-sync';
 import { MAX_TASK_UPDATES, createTasksView } from '../shared/tasks';
 import { todoReminderSelection } from '../domain/todo';
 import type { Category } from '../domain/observations';
 import { brusselsWallTime } from '../domain/notification-window';
 import { agendaProfileKey, validateAgendaRequest } from '../schoolware/agenda-request';
+import { validateSpecialDay, MAX_SPECIAL_DAYS, isDay, type SpecialDay } from '../domain/special-days';
+import { planningOperations, planningResource, sharedSpecialDay, type PlanningValue } from '../shared/planning-sync';
+import type { SyncState } from '../shared/progress-sync';
+import { packingIdentityMigration } from '../shared/schoolbag';
+import { actionStamp, reviewIdentity, boundedReviews, type TaskReview } from '../shared/participation';
+
+function queuePlanning(state: SyncState | undefined, scopeId: string, value: PlanningValue): void {
+  if (state?.scopeId !== scopeId) return;
+  const resource = planningResource(value);
+  state.planningOutbox = [...(state.planningOutbox ?? []).filter((operation) => operation.resource !== resource), ...planningOperations(value)];
+}
 
 export { HISTORY_DB, HISTORY_VERSION, openHistoryDatabase } from './database';
 
@@ -178,23 +190,205 @@ export class HistoryRepository {
     await this.setTaskStatuses(scopeId, [itemId], status, trace);
   }
 
-  async setPackingChoice(scopeId: string, id: string, day: string, state: 'packed' | 'hidden' | 'open'): Promise<void> {
-    if (!/^[a-f0-9]{64}$/.test(id) || !/^\d{4}-\d{2}-\d{2}$/.test(day) || !['packed', 'hidden', 'open'].includes(state)) throw new Error('Invalid packing choice');
+  /** Optimistic revisions prevent stale popup/dashboard writes from losing checklist edits. */
+  async saveSpecialDay(scopeId: string, entry: SpecialDay): Promise<void> {
+    const validated = validateSpecialDay(entry);
+    if (!validated) throw new Error('Invalid special day');
+    await this.editSpecialDays(scopeId, (entries, state) => {
+      const previous = entries.find((item) => item.id === validated.id);
+      if ((previous?.revision ?? 0) !== validated.revision || (!previous && validated.revision !== 0) ||
+          entries.some((item) => item.day === validated.day && item.id !== validated.id)) throw new Error('Special day changed');
+      // A changed instruction is new work. Old/offline completion operations
+      // refer to the retired UUID and cannot complete its replacement.
+      validated.checklist = validated.checklist.map((point) => {
+        const old = previous?.checklist.find((item) => item.id === point.id);
+        return old && old.text.trim().replace(/\s+/g, ' ') !== point.text.trim().replace(/\s+/g, ' ')
+          ? { ...point, id: crypto.randomUUID(), done: false } : point;
+      });
+      const next = entries.filter((item) => item.id !== validated.id);
+      if (previous && previous.day !== validated.day) queuePlanning(state, scopeId, { type: 'special-day-move', previousDay: previous.day, entry: sharedSpecialDay(validated) });
+      else if (!previous || JSON.stringify(sharedSpecialDay(previous)) !== JSON.stringify(sharedSpecialDay(validated)))
+        queuePlanning(state, scopeId, { type: 'special-day', day: validated.day, entry: sharedSpecialDay(validated) });
+      next.push({ ...validated, revision: validated.revision + 1 });
+      if (next.length > MAX_SPECIAL_DAYS) throw new Error('Special day limit');
+      return next.sort((a, b) => a.day.localeCompare(b.day));
+    });
+  }
+
+  async deleteSpecialDay(scopeId: string, id: string, revision: number): Promise<void> {
+    if (!isAlertId(id) || !Number.isSafeInteger(revision) || revision < 1) throw new Error('Invalid special day deletion');
+    await this.editSpecialDays(scopeId, (entries, state) => {
+      if (!entries.some((item) => item.id === id && item.revision === revision)) throw new Error('Special day changed');
+      queuePlanning(state, scopeId, { type: 'special-day', day: entries.find((item) => item.id === id)!.day, entry: null });
+      return entries.filter((item) => item.id !== id);
+    });
+  }
+
+  private async editSpecialDays(scopeId: string, edit: (entries: SpecialDay[], state: SyncState | undefined) => SpecialDay[]): Promise<void> {
+    const db = await openHistoryDatabase(this.name);
+    try {
+      const tx = db.transaction(['scopes', 'sync'], 'readwrite');
+      const done = tx.done; void done.catch(() => {});
+      try {
+        const scope = await tx.objectStore('scopes').get(scopeId);
+        if (!scope) throw new Error('Profile unavailable');
+        const state = await tx.objectStore('sync').get(SYNC_STATE_KEY);
+        const previous = scope.specialDays ?? [];
+        scope.specialDays = edit(scope.specialDays ?? [], state);
+        for (const entry of scope.specialDays) for (const point of entry.checklist) {
+          if ((previous.find((old) => old.id === entry.id)?.checklist.find((old) => old.id === point.id)?.done ?? false) !== point.done) {
+            scope.planningActors ??= {};
+            const actor = actionStamp(scope.localId!, state?.scopeId === scopeId ? state : undefined);
+            scope.planningActors[`checklist:${entry.id}:${point.id}`] = { actor, day: entry.day };
+            queuePlanning(state, scopeId, { type: 'checklist', eventId: entry.id, pointId: point.id, done: point.done, actor });
+          }
+        }
+        if (scope.planningActors) {
+          const resources = new Set(scope.specialDays.flatMap((entry) => entry.checklist.map((point) => `checklist:${entry.id}:${point.id}`)));
+          scope.planningActors = Object.fromEntries(Object.entries(scope.planningActors).filter(([key, value]) =>
+            key.startsWith('checklist:') ? resources.has(key) : value.day >= brusselsWallTime(new Date()).slice(0, 10)));
+        }
+        const clock = Math.max(scope.specialDayRevision ?? 0, ...previous.map((entry) => entry.revision), 0) + 1;
+        if (!Number.isSafeInteger(clock)) throw new Error('Special day revision exhausted');
+        for (const entry of scope.specialDays) if (JSON.stringify(entry) !== JSON.stringify(previous.find((old) => old.id === entry.id))) entry.revision = clock;
+        scope.specialDayRevision = clock;
+        await tx.objectStore('scopes').put(scope);
+        if (state?.scopeId === scopeId) await tx.objectStore('sync').put(state, SYNC_STATE_KEY);
+        await done;
+      } catch (error) { try { tx.abort(); } catch { /* Already completed. */ } await done.catch(() => {}); throw error; }
+    } finally { db.close(); }
+  }
+
+  async migratePackingIdentity(scopeId: string): Promise<void> {
+    const db = await openHistoryDatabase(this.name);
+    try {
+      const before = await db.get('scopes', scopeId);
+      if (!before || before.packingIdentityVersion === 1) return;
+      const mapping = await packingIdentityMigration(before, new Date());
+      const tx = db.transaction('scopes', 'readwrite');
+      const done = tx.done; void done.catch(() => {});
+      try {
+        const current = await tx.store.get(scopeId);
+        if (!current || JSON.stringify(current) !== JSON.stringify(before)) throw new Error('Packing view changed');
+        current.schoolbagChoices = (current.schoolbagChoices ?? []).flatMap((choice) => {
+          const id = mapping.get(choice.id); return id ? [{ ...choice, id }] : [];
+        });
+        current.packingIdentityVersion = 1;
+        await tx.store.put(current); await done;
+      } catch (error) { try { tx.abort(); } catch { /* Completed. */ } await done.catch(() => {}); throw error; }
+    } finally { db.close(); }
+  }
+
+  async claimSpecialDayReminder(scopeId: string, key: string, now: string): Promise<boolean> {
     const db = await openHistoryDatabase(this.name);
     try {
       const tx = db.transaction('scopes', 'readwrite');
+      const done = tx.done; void done.catch(() => {});
+      try {
+        const scope = await tx.store.get(scopeId);
+        if (!scope || scope.specialDayReminders?.some((entry) => entry.key === key)) { await done; return false; }
+        scope.specialDayReminders = [...(scope.specialDayReminders ?? []).filter((entry) => entry.claimedAt >= retentionCutoff(now, DEFAULT_RETENTION)), { key, claimedAt: now }];
+        await tx.store.put(scope); await done; return true;
+      } catch (error) { try { tx.abort(); } catch { /* Already completed. */ } await done.catch(() => {}); throw error; }
+    } finally { db.close(); }
+  }
+
+  async setPackingChoice(scopeId: string, id: string, day: string, state: 'packed' | 'hidden' | 'open'): Promise<void> {
+    if (!/^[a-f0-9]{64}$/.test(id) || !isDay(day) || !['packed', 'hidden', 'open'].includes(state)) throw new Error('Invalid packing choice');
+    const db = await openHistoryDatabase(this.name);
+    try {
+      const tx = db.transaction(['scopes', 'sync'], 'readwrite');
       const done = tx.done;
       void done.catch(() => {});
       try {
-        const scope = await tx.store.get(scopeId);
+        const scope = await tx.objectStore('scopes').get(scopeId);
         if (!scope) throw new Error('Profile unavailable');
         const choices = (scope.schoolbagChoices ?? []).filter((choice) => choice.id !== id && choice.day >= brusselsWallTime(new Date()).slice(0, 10));
         if (state !== 'open') choices.push({ id, day, state });
         if (choices.length > 5000) throw new Error('Packing choice limit');
         scope.schoolbagChoices = choices;
-        await tx.store.put(scope);
+        const sync = await tx.objectStore('sync').get(SYNC_STATE_KEY);
+        const actor = actionStamp(scope.localId!, sync?.scopeId === scopeId ? sync : undefined);
+        scope.planningActors = Object.fromEntries(Object.entries(scope.planningActors ?? {}).filter(([key, value]) =>
+          !key.startsWith('packing:') || value.day >= brusselsWallTime(new Date()).slice(0, 10)));
+        scope.planningActors[`packing:${id}`] = { actor, day };
+        if (Object.keys(scope.planningActors).length > 13000) throw new Error('Attribution limit');
+        queuePlanning(sync, scopeId, { type: 'packing', id, day, state, actor });
+        await tx.objectStore('scopes').put(scope);
+        if (sync?.scopeId === scopeId) await tx.objectStore('sync').put(sync, SYNC_STATE_KEY);
         await done;
       } catch (error) { try { tx.abort(); } catch { /* Already completed. */ } await done.catch(() => {}); throw error; }
+    } finally { db.close(); }
+  }
+
+  async setTaskHelp(scopeId: string, itemId: string, needed: boolean, recipients: string[]): Promise<void> {
+    if (!isAlertId(itemId) || typeof needed !== 'boolean' || !isHelpRecipients(recipients) || (!needed && recipients.length)) throw new Error('Invalid help update');
+    const db = await openHistoryDatabase(this.name);
+    try {
+      const before = await db.get('scopes', scopeId);
+      const item = before?.items.find((entry) => entry.localId === itemId);
+      if (!item) throw new Error('Task unavailable');
+      const state = await db.get('sync', SYNC_STATE_KEY);
+      const sharing = state?.scopeId === scopeId ? state : undefined;
+      const key = sharing ? await progressItemKey(sharing.key, item.sourceKey, new URL(scopeId).origin) : null;
+      const tx = db.transaction(['scopes', 'sync'], 'readwrite');
+      const done = tx.done; void done.catch(() => {});
+      try {
+        const scope = await tx.objectStore('scopes').get(scopeId);
+        const current = await tx.objectStore('sync').get(SYNC_STATE_KEY);
+        const active = current?.scopeId === scopeId ? current : undefined;
+        if (active?.connectionId !== sharing?.connectionId || active?.key !== sharing?.key) throw new Error('Connection changed');
+        if (recipients.some((id) => !active?.members?.some((member) => member.id === id && id !== active.connectionId))) throw new Error('Recipient unavailable');
+        const entry = scope?.items.find((entry) => entry.localId === itemId && entry.present && !entry.snapshot.hidden && !entry.snapshot.cancelled && isTaskCategory(entry.category));
+        if (!entry || entry.sourceKey !== item.sourceKey) throw new Error('Task unavailable');
+        const sorted = [...recipients].sort();
+        if ((entry.taskHelp?.needed ?? false) !== needed || JSON.stringify(entry.taskHelp?.recipients ?? []) !== JSON.stringify(sorted)) {
+          entry.taskHelp = { needed, recipients: sorted, requestId: crypto.randomUUID() };
+          entry.helpActor = actionStamp(scope!.localId!, active);
+          if (active && key) {
+            queuePlanning(active, scopeId, { type: 'help', item: key, help: entry.taskHelp, actor: entry.helpActor });
+            await tx.objectStore('sync').put(active, SYNC_STATE_KEY);
+          }
+          await tx.objectStore('scopes').put(scope!);
+        }
+        await done;
+      } catch (error) { try { tx.abort(); } catch { /* Completed. */ } await done.catch(() => {}); throw error; }
+    } finally { db.close(); }
+  }
+
+  async setTaskReview(scopeId: string, itemId: string, kind: TaskReview['kind'], done: boolean): Promise<void> {
+    if (!isAlertId(itemId) || !['checked', 'corrected'].includes(kind) || typeof done !== 'boolean') throw new Error('Invalid review');
+    const db = await openHistoryDatabase(this.name);
+    try {
+      const before = await db.get('scopes', scopeId);
+      const item = before?.items.find((entry) => entry.localId === itemId);
+      if (!item) throw new Error('Task unavailable');
+      const state = await db.get('sync', SYNC_STATE_KEY);
+      const sharing = state?.scopeId === scopeId ? state : undefined;
+      const version = await progressVersion(item.snapshot);
+      const text = progressVersionText(item.snapshot);
+      const key = sharing ? await progressItemKey(sharing.key, item.sourceKey, new URL(scopeId).origin) : null;
+      const tx = db.transaction(['scopes', 'sync'], 'readwrite');
+      const completion = tx.done; void completion.catch(() => {});
+      try {
+        const scope = await tx.objectStore('scopes').get(scopeId);
+        const current = await tx.objectStore('sync').get(SYNC_STATE_KEY);
+        const active = current?.scopeId === scopeId ? current : undefined;
+        if (active?.connectionId !== sharing?.connectionId || active?.key !== sharing?.key) throw new Error('Connection changed');
+        const entry = scope?.items.find((entry) => entry.localId === itemId && entry.present && !entry.snapshot.hidden && !entry.snapshot.cancelled && isTaskCategory(entry.category));
+        if (!entry || !scope?.localId || entry.sourceKey !== item.sourceKey || progressVersionText(entry.snapshot) !== text) throw new Error('Task changed');
+        const review: TaskReview = { version, kind, done, actor: actionStamp(scope.localId, active) };
+        const identity = reviewIdentity(review);
+        if (entry.reviews?.find((old) => reviewIdentity(old) === identity)?.done !== done ||
+            entry.reviewContent !== text || entry.reviewVersion !== version) {
+          entry.reviews = boundedReviews([...(entry.reviews ?? []).filter((old) => reviewIdentity(old) !== identity), review], version);
+          entry.reviewContent = text;
+          entry.reviewVersion = version;
+          if (active && key) { queuePlanning(active, scopeId, { type: 'task-review', item: key, review }); await tx.objectStore('sync').put(active, SYNC_STATE_KEY); }
+          await tx.objectStore('scopes').put(scope);
+        }
+        await completion;
+      } catch (error) { try { tx.abort(); } catch { /* Completed. */ } await completion.catch(() => {}); throw error; }
     } finally { db.close(); }
   }
 
@@ -223,11 +417,11 @@ export class HistoryRepository {
           if (!item) throw new Error('Task unavailable');
           if (progressVersionText(snapshot) !== progressVersionText(item.snapshot)) throw new Error('Task changed');
           const from = item.taskStatus ?? 'open';
-          if (from !== status) { item.taskStatus = status; item.taskUpdatedAt = timestamp; changed = true; }
+          if (from !== status) { item.taskStatus = status; item.taskUpdatedAt = timestamp; item.statusActor = actionStamp(scope.localId, sync?.scopeId === scopeId ? sync : undefined); changed = true; }
           if (from !== status && sync?.scopeId === scopeId) {
             // Coalesce unsent edits without replacing an operation in flight.
             sync.outbox = sync.outbox.filter((operation) => operation.sourceKey !== item.sourceKey);
-            sync.outbox.push({ id: crypto.randomUUID(), sourceKey: item.sourceKey, version, status, kind: 'manual' });
+            sync.outbox.push({ id: crypto.randomUUID(), sourceKey: item.sourceKey, version, status, kind: 'manual', actor: item.statusActor! });
           }
           await appendActivity(tx.objectStore('activity'), activityInput({ ...trace, profileId: scope.localId }, 'task.status',
             from === status ? 'skipped' : 'succeeded', { from, to: status, ...(from === status ? { reason: 'unchanged' as const } : {}) }, { itemId, timestamp }));

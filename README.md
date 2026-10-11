@@ -8,16 +8,20 @@ Schoolware agenda changes.
 - Automatic agenda monitoring
 - Detection of new assignments and tests
 - Change history
-- Local schoolbag suggestions for school and homework
+- Schoolbag suggestions with optionally shared packing/hiding choices
+- Independent help flags with optional multiple named recipients and addressed notifications
 - Browser notifications
 - Local data storage
-- Optional encrypted progress sharing through a self-hosted PHP/MySQL API
+- Optional encrypted progress, special days and checklist sharing through a self-hosted PHP/MySQL API
+- Filtered local CSV task export
 
 For the owner's cPanel host, see [server/INSTALL.md](server/INSTALL.md).
-This optional service shares Open/Bezig/Klaar only. Agenda content and history
-remain local. Live cPanel and two-device Chrome checks are pending installation.
+This optional service shares task progress, user-created special days and
+checklists, and schoolbag choices. Schoolware source agenda content/history
+remain local. All paired extensions must update for planning sharing. See
+[shared planning](docs/shared-planning.md) for compatibility and acceptance.
 
-Multiple student profiles and CSV export remain planned.
+Multiple student profiles remain planned; CSV export is implemented.
 
 ## Technology
 
@@ -230,6 +234,7 @@ remove every selection. The existing retention setting also applies to logs.
 - [Architecture](docs/architecture.md)
 - [API investigation](docs/schoolware-api.md)
 - [Privacy](docs/privacy.md)
+- [Change attribution, independent task reviews and API authentication](docs/participation-and-reviews.md)
 - [Security, privacy and notification review](docs/security-review.md)
 - [Roadmap](docs/roadmap.md)
 - [Monitoring and notification smoke checks](docs/monitoring.md)
@@ -314,7 +319,7 @@ These choices are stored only in the existing local IndexedDB profile, separatel
 for each selected day and packing direction. SHA-256 fingerprints of the suggestion
 and its source evidence invalidate choices when instructions change, without
 duplicating agenda text in packing metadata. Choices are not progress updates and
-are never synchronized. Past choices are pruned during successful observations;
+are encrypted and synchronized when optional group sharing is enabled. Past choices are pruned during successful observations;
 profile deletion and history retention remove their enclosing profile. No schema
 upgrade or additional permission is needed.
 
@@ -322,4 +327,15 @@ Upcoming planning initially shows five positively known agenda days and at most
 20 tasks. Parents can expand by five days or show more tasks. Ongoing tasks and
 observed weekend deadlines remain eligible; unknown dates are not assumed to be
 school holidays. Earlier/all-task selections remain available. The dashboard has
-one to-do overview, followed by the optional schoolbag and planning.
+one to-do overview, followed by local special days, the optional schoolbag and planning.
+
+The dashboard supports filtered local CSV export of all retained tasks,
+independent of the visible planning window. Popup and dashboard support local
+special days with preparation dates, checklists and schoolbag additions. Home
+study preparation includes ordinary lesson material and completed tasks.
+Generic preparation reminders use each device's existing system/to-do preferences.
+Special days, checklist completion and packing/hiding choices now share through
+the existing optional encrypted group. Schoolware agenda content stays local;
+different source freshness can temporarily produce different suggestions.
+All paired extensions must update. No PHP/SQL update or new permission is required. See
+[CSV and special days](docs/csv-and-special-days.md) for behavior and validation.

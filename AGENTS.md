@@ -11,8 +11,10 @@ Use TypeScript, React, Vite, Tailwind CSS, IndexedDB, Chrome Alarms, and Vitest.
 
 ## Privacy
 - Keep Schoolware agenda content, history, and session material local. Do not add analytics or telemetry.
-- The owner authorizes optional encrypted progress-only synchronization through the existing self-hosted PHP service.
-- Remote sharing must be opt-in and limited to encrypted progress and optional encrypted participant labels; never upload agenda content, raw student/source identifiers, or Schoolware credentials.
+- The owner authorizes optional encrypted progress and planning synchronization through the existing self-hosted PHP service, including special-day dates/text/checklists, checklist completion, packing/hiding choices, independent help requests with optional recipient device references and optional participant labels (scope expanded on 2026-10-09).
+- Remote sharing must be opt-in and limited to those encrypted fields; never automatically upload Schoolware agenda content/history, raw student/source identifiers, or Schoolware credentials.
+- The owner additionally authorizes encrypted device application/protocol version announcements and transient version headers for compatibility enforcement (2026-10-10); do not expand this into analytics or unpaired-device inventory.
+- The owner authorizes encrypted change attribution (random participant/device references, optional self-reported label and action time) and independent checked/corrected task reviews per participant/content version (2026-10-10). These are not verified identities or per-person authorization.
 - Document remote processing, retention, deletion, shared-secret access limits, and hosting metadata accurately. Do not add other backend or cloud synchronization features without explicit authorization.
 - Never persist Schoolware passwords, session cookies, authentication tokens, or authorization headers.
 - Reuse the existing browser session only through the verified integration mechanism.
@@ -59,6 +61,7 @@ Use TypeScript, React, Vite, Tailwind CSS, IndexedDB, Chrome Alarms, and Vitest.
 - Always commit and push on the single active feature branch for the current work; include all current project changes on that branch and never push directly to `main`.
 - Keep `main` and branches created by other contributors. Remove obsolete project-owned feature branches only after verifying their work is included in the active branch.
 - Require Matthias's external review and resolution of blocking findings before merging to `main` or publishing the next release. Review completion does not itself authorize merging or publication.
+- Owner exception (2026-10-11): merge candidate 0.4.0 and prepare the local Store release package before Matthias's review, which is deferred until later in the week. This exception does not authorize Store upload or publication; external review remains required before publication.
 - Keep changes focused on the approved task.
 - Do not publish, push, deploy, or upload artifacts unless authorized.
 - Inspect staged changes for private data before committing.

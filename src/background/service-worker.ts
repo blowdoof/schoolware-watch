@@ -1,4 +1,4 @@
-import { progressSync, synchronizeProgress, leaveSyncMembers, configureProgressSyncAlarm, deleteRemoteProgress, PROGRESS_SYNC_ALARM } from './progress-sync';
+import { progressSync, synchronizeProgress, isProgressSyncRunning, leaveSyncMembers, configureProgressSyncAlarm, deleteRemoteProgress, checkStoreUpdate, PROGRESS_SYNC_ALARM } from './progress-sync';
 import { SYNC_PERMISSION, type SyncView } from '../shared/progress-sync';
 import { type DiscoveryView } from '../shared/agenda-discovery';
 import { openMainPage } from './navigation';
@@ -12,8 +12,12 @@ import { HistoryRepository, DEFAULT_RETENTION } from '../storage/history';
 import { ActivityRepository, activityInput, type AuditContext } from '../storage/activity';
 import { type ActivityAction, type ActivityData, type ActivityPhase, type ActivityView, type ActivityReporter, type ActivityTrigger } from '../shared/activity';
 import { createTasksView, type TasksView } from '../shared/tasks';
-import { createSchoolbagView, type SchoolbagView } from '../shared/schoolbag';
+import { createStableSchoolbagView, type SchoolbagView } from '../shared/schoolbag';
 import { availablePackingChoices } from '../domain/schoolbag';
+import type { SpecialDaysView } from '../shared/special-days';
+import { specialReminderPlan, specialReminderKey } from '../domain/special-day-reminders';
+import type { PlanningSharingStatus } from '../shared/planning-sync';
+import { isAppVersion } from '../shared/sync-compatibility';
 import { isAlertId } from '../shared/browser-alerts';
 import type { Category, HistoryScope } from '../domain/observations';
 import { notificationEventSelection } from '../domain/notification-window';
@@ -35,6 +39,7 @@ import { SETUP_KEY } from '../shared/setup';
 export const MONITOR_ALARM = 'schoolware-monitor';
 export const MONITOR_STATE_KEY = 'schoolwareMonitoringState';
 const NOTIFICATION_PREFIX = 'schoolware-watch-';
+const SPECIAL_DAYS_ALARM = 'schoolware-special-days';
 let notificationListenerRegistered = false;
 const history = new HistoryRepository();
 const browserInbox = new BrowserAlertInbox();
@@ -66,7 +71,26 @@ const progressReporter = (current: Trace, trigger: ActivityTrigger): ActivityRep
   (action, phase, data = {}) => log(current, action, phase, { ...data, trigger });
 
 async function invalidateTaskViews(): Promise<void> {
+  await configureSpecialDaysAlarm().catch(() => {});
   if (chrome.runtime.sendMessage) await chrome.runtime.sendMessage({ type: 'tasks.updated' }).catch(() => {});
+}
+
+function offerPlanningSync(current: Trace): void {
+  void serializeMutation(async () => {
+    await activeTask;
+    await synchronizeProgress((await readConnection()).requestUrl, progressReporter(current, 'task-edit'), current);
+    await invalidateTaskViews();
+    await refreshBrowserBadge(true, current).catch(() => {});
+  }).catch(() => log(current, 'progress.sync', 'failed', { trigger: 'task-edit', reason: 'unavailable' }));
+}
+
+async function planningSharingStatus(scopeId: string | null): Promise<PlanningSharingStatus> {
+  const state = await progressSync.read();
+  const enabled = Boolean(state && state.scopeId === scopeId);
+  return { enabled, pending: enabled ? state!.outbox.length + (state!.planningOutbox?.length ?? 0) : 0,
+    lastSuccessAt: enabled ? state!.lastSuccessAt : null, error: enabled ? state!.error : false,
+    ...(enabled && state!.compatibility?.issue ? { issue: state!.compatibility.issue } : {}),
+    ...(enabled && state!.cursor < state!.head ? { receiving: true } : {}) };
 }
 
 async function configureWebsite(enabled: boolean, current: Trace): Promise<void> {
@@ -172,9 +196,45 @@ async function restoreMonitoring(current = trace('worker'), trigger: ActivityTri
   await restoreAgendaDiscovery();
   await ensureAlarm(current);
   await configureProgressSyncAlarm(progressReporter(current, trigger));
+  await configureSpecialDaysAlarm();
   const prefs = await readPreferences();
   await configureWebsite(prefs.browserNotificationsEnabled, current);
   await refreshBrowserBadge(false);
+}
+
+async function configureSpecialDaysAlarm(): Promise<void> {
+  const connection = await readConnection();
+  const prefs = await readPreferences();
+  const scope = (await history.read(connection.requestUrl)).scope;
+  const plan = specialReminderPlan(scope?.specialDays ?? [], scope?.specialDayReminders?.map((entry) => entry.key) ?? [], new Date());
+  if (!prefs.notificationsEnabled || !prefs.todoRemindersEnabled || plan.nextAt === null ||
+      !await chrome.permissions.contains({ permissions: ['notifications'] })) {
+    await chrome.alarms.clear(SPECIAL_DAYS_ALARM); return;
+  }
+  const existing = await chrome.alarms.get(SPECIAL_DAYS_ALARM);
+  if (!existing || Math.abs(existing.scheduledTime - plan.nextAt) > 60000) await chrome.alarms.create(SPECIAL_DAYS_ALARM, { when: plan.nextAt });
+}
+
+async function notifySpecialDays(current: Trace): Promise<void> {
+  const connection = await readConnection();
+  const prefs = await readPreferences();
+  if (!connection.requestUrl || !prefs.notificationsEnabled || !prefs.todoRemindersEnabled ||
+      !await chrome.permissions.contains({ permissions: ['notifications'] })) { await configureSpecialDaysAlarm(); return; }
+  const scope = (await history.read(connection.requestUrl)).scope;
+  const plan = specialReminderPlan(scope?.specialDays ?? [], scope?.specialDayReminders?.map((entry) => entry.key) ?? [], new Date());
+  if (scope?.localId) current.profileId = scope.localId;
+  for (const entry of plan.due) {
+    if (!await history.claimSpecialDayReminder(connection.requestUrl, specialReminderKey(entry), new Date().toISOString())) continue;
+    // No event title or checklist leaves local storage.
+    await log(current, 'notification.specialDays', 'started');
+    try {
+      await chrome.notifications.create(`${NOTIFICATION_PREFIX}special-${current.correlationId}`, { type: 'basic',
+        iconUrl: chrome.runtime.getURL('icons/icon128.png'), title: 'Schoolware Watch',
+        message: 'Er staat een speciale dag gepland. Controleer de voorbereiding en je boekentas in het overzicht.' });
+      await log(current, 'notification.specialDays', 'succeeded', { reason: 'accepted' });
+    } catch { await log(current, 'notification.specialDays', 'failed', { reason: 'api-error' }); }
+  }
+  await configureSpecialDaysAlarm();
 }
 
 async function readHistory(category: Category | 'all' = 'all'): Promise<HistoryView> {
@@ -355,6 +415,7 @@ async function runCheck(requestUrl: string, controller: AbortController, current
     const failures = result.status === 'success' ? 0 : Math.min(retry.failures + 1, 20);
     const retryAt = failures ? new Date(now.getTime() + Math.min(360, prefs.intervalMinutes * 2 ** failures) * 60000).toISOString() : null;
     await chrome.storage.local.set({ [CONNECTION_KEY]: state, [MONITOR_STATE_KEY]: { failures, retryAt } });
+    await configureSpecialDaysAlarm().catch(() => {});
     if (retryAt) await log(current, 'retry.scheduled', 'info', { retryAt });
     if (result.status !== 'success') await log(current, 'check', 'failed', { reason: result.status });
     await ensureAlarm(current);
@@ -392,7 +453,7 @@ function startCheck(requestUrl: string, current = trace('worker')): Promise<Conn
   return task.finally(() => { activeTask = null; activeCheck = null; });
 }
 
-type Reply = OpenPageResult | DiscoveryView | SyncView | ConnectionState | HistoryView | PreferencesView | NotificationTestResult | BrowserAlertsView | NotificationDetailsView | TasksView | SchoolbagView | ActivityView;
+type Reply = OpenPageResult | DiscoveryView | SyncView | ConnectionState | { connection: ConnectionState; sync: SyncView } | HistoryView | PreferencesView | NotificationTestResult | BrowserAlertsView | NotificationDetailsView | TasksView | SchoolbagView | ActivityView | SpecialDaysView;
 async function readActivity(message: { limit?: number; correlationId?: string; itemId?: string } = {}): Promise<ActivityView> {
   const view = await activity.read(message.limit, message);
   const health = await chrome.storage.local.get(LOG_HEALTH_KEY);
@@ -447,7 +508,11 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
     await chrome.storage.local.remove(LOG_HEALTH_KEY);
     return readActivity();
   });
-  if (message.type === 'sync.read') return progressSync.view();
+  if (message.type === 'sync.read') return { ...await progressSync.view(), checking: isProgressSyncRunning((await readConnection()).requestUrl) };
+  if (message.type === 'sync.update') {
+    await checkStoreUpdate();
+    return progressSync.view();
+  }
   if (message.type === 'sync.pairing') {
     const state = await progressSync.read();
     return { ...await progressSync.view(), ...(state ? { pairingCode: `sw1.${state.token}.${state.key}` } : {}) };
@@ -490,47 +555,65 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
       return progressSync.view();
     });
   }
+  if (message.type === 'specialDays.read' || message.type === 'specialDays.save' || message.type === 'specialDays.delete') {
+    return serializeMutation(async () => {
+      const connection = await readConnection();
+      const scope = (await history.read(connection.requestUrl)).scope;
+      if (message.type !== 'specialDays.read') {
+        if (!scope || !connection.requestUrl || scope.localId !== message.profileId) throw new Error('Profile unavailable');
+        if (message.type === 'specialDays.save') await history.saveSpecialDay(connection.requestUrl, message.entry);
+        else await history.deleteSpecialDay(connection.requestUrl, message.id, message.revision);
+        await invalidateTaskViews();
+        await configureSpecialDaysAlarm();
+        offerPlanningSync(current);
+      }
+      const latest = (await history.read(connection.requestUrl)).scope;
+      return { ok: true, connected: Boolean(scope), profileId: scope?.localId ?? null, entries: latest?.specialDays ?? [],
+        ...(latest?.planningActors ? { actors: Object.fromEntries(Object.entries(latest.planningActors).map(([key, value]) => [key, value.actor])) } : {}),
+        sharing: await planningSharingStatus(connection.requestUrl) } satisfies SpecialDaysView;
+    });
+  }
   if (message.type === 'schoolbag.read' || message.type === 'schoolbag.update') {
     return serializeMutation(async () => {
       const connection = await readConnection();
+      if (connection.requestUrl) await history.migratePackingIdentity(connection.requestUrl);
       if (message.type === 'schoolbag.update') {
         if (!connection.requestUrl) throw new Error('Profile unavailable');
-        const agenda = createSchoolbagView((await history.read(connection.requestUrl)).scope);
+        const agenda = await createStableSchoolbagView((await history.read(connection.requestUrl)).scope);
         const day = (await availablePackingChoices(agenda, new Date())).get(message.choiceId);
         if (!day) throw new Error('Packing suggestion unavailable');
         await history.setPackingChoice(connection.requestUrl, message.choiceId, day, message.state);
         await invalidateTaskViews();
+        offerPlanningSync(current);
       }
-      return createSchoolbagView((await history.read(connection.requestUrl)).scope);
+      return { ...await createStableSchoolbagView((await history.read(connection.requestUrl)).scope), sharing: await planningSharingStatus(connection.requestUrl) };
     });
   }
   if (message.type === 'tasks.read') {
     const connection = await readConnection();
-    return createTasksView((await history.read(connection.requestUrl)).scope);
+    return createTasksView((await history.read(connection.requestUrl)).scope, await progressSync.read());
   }
-  if (message.type === 'tasks.update' || message.type === 'tasks.updateMany') {
+  if (message.type === 'tasks.update' || message.type === 'tasks.updateMany' || message.type === 'tasks.help' || message.type === 'tasks.review') {
     const pending = activeTask;
     return serializeMutation(async () => {
       await pending;
       const connection = await readConnection();
       if (!connection.requestUrl) throw new Error('Task unavailable');
-      await history.setTaskStatuses(connection.requestUrl,
+      if (message.type === 'tasks.review') await history.setTaskReview(connection.requestUrl, message.itemId, message.kind, message.done);
+      else if (message.type === 'tasks.help') await history.setTaskHelp(connection.requestUrl, message.itemId, message.needed, message.recipients);
+      else await history.setTaskStatuses(connection.requestUrl,
         message.type === 'tasks.update' ? [message.itemId] : message.itemIds, message.status, current);
       // Local status/outbox are already durable. Do not delay the UI on an
       // offline server; the alarm retries after an interrupted deferred upload.
       const sync = await progressSync.read();
       if (sync?.scopeId === connection.requestUrl) {
-        void serializeMutation(async () => {
-          await activeTask;
-          if (await synchronizeProgress((await readConnection()).requestUrl, progressReporter(current, 'task-edit'), current)) await invalidateTaskViews();
-          await refreshBrowserBadge(true, current).catch(() => {});
-        }).catch(() => log(current, 'progress.sync', 'failed', { trigger: 'task-edit', reason: 'unavailable' }));
+        offerPlanningSync(current);
       } else {
         await log(current, 'progress.sync', 'skipped', { trigger: 'task-edit', reason: sync ? 'profile-mismatch' : 'disabled' });
       }
       await invalidateTaskViews();
       await refreshBrowserBadge(true, current).catch(() => {});
-      return createTasksView((await history.read(connection.requestUrl)).scope);
+      return createTasksView((await history.read(connection.requestUrl)).scope, await progressSync.read());
     });
   }
   if (message.type === 'permission.result') {
@@ -539,7 +622,14 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
   }
   if (message.type === 'connection.read') {
     const connection = await readConnection();
-    return { ...connection, lastSuccessAt: (await history.read(connection.requestUrl)).scope?.lastSuccessAt ?? null };
+    return { ...connection, ...(activeTask ? { lastCheck: summary('busy').lastCheck } : {}),
+      lastSuccessAt: (await history.read(connection.requestUrl)).scope?.lastSuccessAt ?? null };
+  }
+  if (message.type === 'status.read') {
+    const connection = await readConnection();
+    return { connection: { ...connection, ...(activeTask ? { lastCheck: summary('busy').lastCheck } : {}),
+      lastSuccessAt: (await history.read(connection.requestUrl)).scope?.lastSuccessAt ?? null },
+      sync: { ...await progressSync.view(), checking: isProgressSyncRunning(connection.requestUrl) } };
   }
   if (message.type === 'history.read') return readHistory(message.category);
   if (message.type === 'preferences.read') return preferencesView();
@@ -619,6 +709,7 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
           todoRemindersEnabled: message.preferences.todoRemindersEnabled, schoolbagEnabled: message.preferences.schoolbagEnabled,
           newColor: message.preferences.newColor, changedColor: message.preferences.changedColor });
         await ensureAlarm(current);
+        await configureSpecialDaysAlarm();
         await configureWebsite(message.preferences.browserNotificationsEnabled, current);
         await refreshBrowserBadge(true, current);
         return preferencesView();
@@ -629,6 +720,7 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
         const oldConnection = await readConnection();
         await cancelAgendaDiscovery(false, false);
         await chrome.alarms.clear(MONITOR_ALARM);
+        await chrome.alarms.clear(SPECIAL_DAYS_ALARM);
         await configureWebsiteAlerts(false);
         const notifications = chrome.notifications ? await chrome.notifications.getAll().catch(() => ({})) : {};
         for (const id of Object.keys(notifications)) if (id.startsWith(NOTIFICATION_PREFIX)) await chrome.notifications.clear(id);
@@ -656,6 +748,7 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
         await browserInbox.dismiss(connection.requestUrl ?? UNCONNECTED_TEST_SCOPE, stored.retentionDays);
         await invalidateTaskViews();
       } else await history.setRetention(message.days);
+      await configureSpecialDaysAlarm();
       await refreshBrowserBadge(true, current);
       return readHistory();
     });
@@ -664,8 +757,8 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
 }
 
 async function loggedHandle(message: ConnectionMessage, current: Trace): Promise<Reply> {
-  // Polling discovery status must not fill the activity store or expose candidates.
-  if (message.type === 'connection.discovery.read') return handle(message, current);
+  // Read-only status polling must not fill the activity store or expose candidates.
+  if (message.type === 'connection.discovery.read' || message.type === 'status.read') return handle(message, current);
   if (message.type === 'activity.read') {
     await initialization.catch(() => {});
     await log(current, 'request', 'started', { request: message.type });
@@ -731,6 +824,7 @@ chrome.runtime.onMessage.addListener((raw: unknown, sender, sendResponse) => {
     else if (message.type.startsWith('browser.alerts.')) sendResponse({ ok: false, enabled: false, entries: [] });
     else if (message.type === 'notifications.test') sendResponse({ status: 'api-error', permissionLevel: 'unknown', registered: null });
     else if (message.type === 'notifications.details') sendResponse({ ok: false, status: 'missing', details: null });
+    else if (message.type.startsWith('specialDays.')) sendResponse({ ok: false, connected: false, profileId: null, entries: [] });
     else if (message.type === 'schoolbag.read' || message.type === 'schoolbag.update') sendResponse({ ok: false, lastSuccessAt: null, points: [] });
     else if (message.type.startsWith('tasks.')) sendResponse({ ok: false, entries: [] });
     else if (message.type.startsWith('activity.')) sendResponse({ ok: false, healthy: false, entries: [], total: 0, retentionDays: DEFAULT_RETENTION });
@@ -744,6 +838,14 @@ chrome.runtime.onMessage.addListener((raw: unknown, sender, sendResponse) => {
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === SPECIAL_DAYS_ALARM) {
+    const current = trace('alarm');
+    void initialization.then(() => serializeMutation(async () => {
+      await log(current, 'alarm.fired', 'info', { alarm: 'special-days', scheduledAt: new Date(alarm.scheduledTime).toISOString() });
+      await notifySpecialDays(current);
+    })).catch(() => log(current, 'notification.specialDays', 'failed', { reason: 'unavailable' }));
+    return;
+  }
   if (alarm.name === DISCOVERY_ALARM) {
     const current = trace('alarm');
     void initialization.then(() => serializeMutation(async () => {
@@ -760,7 +862,8 @@ chrome.alarms.onAlarm.addListener((alarm) => {
       const connection = await readConnection();
       const scope = (await history.read(connection.requestUrl)).scope;
       if (scope?.localId) current.profileId = scope.localId;
-      if (await synchronizeProgress(connection.requestUrl, progressReporter(current, 'alarm'), current)) await invalidateTaskViews();
+      await synchronizeProgress(connection.requestUrl, progressReporter(current, 'alarm'), current);
+      await invalidateTaskViews();
       await refreshBrowserBadge(true, current).catch(() => {});
       await configureProgressSyncAlarm(progressReporter(current, 'alarm'));
     })).catch(() => log(current, 'progress.sync', 'failed', { trigger: 'alarm', reason: 'unavailable' }));
@@ -796,7 +899,7 @@ chrome.permissions.onAdded.addListener((permissions) => {
 function notificationCorrelation(id: string): string | null {
   if (!id.startsWith(NOTIFICATION_PREFIX)) return null;
   const suffix = id.slice(NOTIFICATION_PREFIX.length);
-  const correlation = suffix.startsWith('test-') ? suffix.slice(5) : suffix.startsWith('progress-') ? suffix.slice(9) : suffix;
+  const correlation = suffix.startsWith('test-') ? suffix.slice(5) : suffix.startsWith('progress-') ? suffix.slice(9) : suffix.startsWith('special-') ? suffix.slice(8) : suffix;
   return isAlertId(correlation) ? correlation : null;
 }
 
@@ -805,7 +908,8 @@ function registerNotificationListener(): void {
   chrome.notifications.onClicked.addListener((id) => {
     if (!id.startsWith(NOTIFICATION_PREFIX)) return;
     const suffix = id.slice(NOTIFICATION_PREFIX.length);
-    const progress = suffix.startsWith('progress-') && isAlertId(suffix.slice(9));
+    const progress = (suffix.startsWith('progress-') && isAlertId(suffix.slice(9))) || (suffix.startsWith('special-') && isAlertId(suffix.slice(8))) ||
+      (suffix.startsWith('help-') && isAlertId(suffix.slice(5)));
     const target = suffix === 'test' || (suffix.startsWith('test-') && isNotificationTarget(suffix.slice(5))) ? 'test' : suffix;
     if (!progress && !isNotificationTarget(target)) return;
     const current = trace('system', notificationCorrelation(id) ?? crypto.randomUUID());
@@ -858,4 +962,13 @@ chrome.runtime.onStartup.addListener(() => { void serializeMutation(async () => 
 chrome.runtime.onInstalled.addListener(() => {
   void serializeMutation(async () => { const current = trace('worker'); await log(current, 'worker.installed', 'info');
     await restoreMonitoring(current, 'installation'); }).catch(() => {});
+});
+
+chrome.runtime.onUpdateAvailable?.addListener((details) => {
+  if (!isAppVersion(details.version)) return;
+  void initialization.then(() => serializeMutation(async () => {
+    const state = await progressSync.read();
+    if (state) await progressSync.setStoreUpdate(state, { checkedAt: new Date().toISOString(), status: 'update_available', version: details.version });
+    await invalidateTaskViews();
+  })).catch(() => {});
 });

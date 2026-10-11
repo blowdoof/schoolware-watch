@@ -4,6 +4,8 @@ import { validateConnectionState } from '../shared/connection';
 import { hex } from '../domain/progress-sync';
 import { extensionInvitation, progressInvitation } from '../shared/progress-invitation';
 import { SYNC_PERMISSION, parsePairingCode, normalizeSyncLabel, validateSyncView, type SyncMessage, type SyncView } from '../shared/progress-sync';
+import { SyncVersionStatus, syncCompatibilityText } from './SyncVersionStatus';
+import { useSettingsChanges } from './SettingsChanges';
 
 export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { refreshToken: number; initialMode?: 'first' | 'join' }) {
   const available = typeof chrome !== 'undefined' && Boolean(chrome.runtime?.id);
@@ -18,6 +20,8 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
   const [message, setMessage] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [label, setLabel] = useState('');
+  const [nameUnsaved, setNameUnsaved] = useState(false);
+  useSettingsChanges('sharing', view?.enabled ? nameUnsaved : Boolean(label || secret) || mode !== initialMode);
   const labelEdited = useRef(false);
   const nameRevision = useRef(0);
   useEffect(() => {
@@ -52,6 +56,7 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
       const name = normalizeSyncLabel(label);
       if (label.trim() && !name) throw new Error('Invalid name');
       const next = await send(mode === 'first' ? { type: 'sync.create', code, ...(name ? { label: name } : {}) } : { type: 'sync.connect', code, seed: false, ...(name ? { label: name } : {}) });
+      if (next.enabled) setNameUnsaved(false);
       setSecret('');
       if (mode === 'first') setPairing(code);
       setMessage(next.blocked ? 'De instelling is lokaal bewaard, maar de server weigert de koppeling. Bewaar je koppelcode en controleer de toegang. Automatische pogingen zijn gestopt; Nu synchroniseren probeert opnieuw.' :
@@ -59,13 +64,13 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
     } catch { setMessage('Koppelen is niet gelukt. Voer eerst een geslaagde agendacontrole uit en controleer de koppelcode.'); }
     finally { setWorking(false); }
   }
-  async function act(type: 'sync.run' | 'sync.disconnect' | 'sync.delete') {
+  async function act(type: 'sync.run' | 'sync.disconnect' | 'sync.delete' | 'sync.update') {
     setWorking(true); setMessage('');
     try {
       const next = await send({ type });
-      if (type !== 'sync.run') { setPairing(''); setInvitation(''); setConfirmDelete(false); setLabel(''); labelEdited.current = false; }
-      setMessage(next.error ? 'Synchronisatie is niet gelukt. Je lokale voortgang blijft bewaard.' :
-        type === 'sync.run' ? 'Synchronisatie uitgevoerd.' : type === 'sync.delete' ? 'Gedeelde voortgang en deelnemermeldingen gewist; deze computer is ontkoppeld. Groepstoegang en revisieteller blijven op de server.' : 'Deze computer is ontkoppeld; lokale voortgang blijft bewaard.');
+      if (type === 'sync.disconnect' || type === 'sync.delete') { setPairing(''); setInvitation(''); setConfirmDelete(false); setLabel(''); setSecret(''); setMode(initialMode); setNameUnsaved(false); labelEdited.current = false; }
+      setMessage(type === 'sync.update' ? 'Updatecontrole verwerkt.' : syncCompatibilityText(next) ?? (next.error ? 'Synchronisatie is niet gelukt. Je lokale voortgang blijft bewaard.' :
+        type === 'sync.run' ? 'Synchronisatie uitgevoerd.' : type === 'sync.delete' ? 'Gedeelde voortgang en deelnemermeldingen gewist; deze computer is ontkoppeld. Groepstoegang en revisieteller blijven op de server.' : 'Deze computer is ontkoppeld; lokale voortgang blijft bewaard.'));
     } catch { setMessage('De actie is niet gelukt. Controleer de serververbinding.'); }
     finally { setWorking(false); }
   }
@@ -103,6 +108,7 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
   }
   async function saveName(value: string) {
     setLabel(value);
+    setNameUnsaved(value !== (view?.displayName ?? ''));
     labelEdited.current = true;
     const current = ++nameRevision.current;
     const name = normalizeSyncLabel(value);
@@ -110,6 +116,7 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
     setMessage('Naam wordt opgeslagen…');
     try {
       const next = await send({ type: 'sync.name', label: name });
+      if (nameRevision.current === current && next.enabled && next.displayName === name) setNameUnsaved(false);
       if (nameRevision.current === current) setMessage(next.enabled ?
         'Je naam is automatisch opgeslagen en wordt bij de volgende synchronisatie gedeeld.' : 'Deze computer is niet meer gekoppeld.');
     } catch { if (nameRevision.current === current) setMessage('Je naam kon niet worden opgeslagen. Probeer opnieuw.'); }
@@ -128,20 +135,24 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
         {!view?.enabled && <p className="mt-1 text-xs text-slate-600">Maak hieronder eerst een leerlinggroep aan of koppel een bestaande groep.</p>}
       </div>
     </div>
-    <p className="mt-2 text-sm leading-6 text-slate-600">Deel Open, Bezig en Klaar via schoolware.bumper.be. Titels, instructies en Schoolware-inloggegevens blijven lokaal.
+    <p className="mt-2 text-sm leading-6 text-slate-600">Deel Open, Bezig en Klaar, hulpvragen met ontvangers, speciale dagen met opmerkingen en checklists, en boekentaskeuzes versleuteld via schoolware.bumper.be. Schoolware-titels, instructies en inloggegevens blijven lokaal.
       Koppel alleen computers die de agenda van dezelfde leerling bekijken. Elke leerling heeft een eigen deelgroep en koppelcode; verschillende gezinnen blijven gescheiden.</p>
+    <p className="mt-2 text-xs text-amber-800">Werk de extensie op alle gekoppelde computers bij voor hulpvragen, speciale dagen en boekentaskeuzes. Oudere versies kunnen deze wijzigingen niet verwerken. De Schoolware-agenda wordt op elk toestel afzonderlijk ingelezen; een verlopen sessie of oudere controle kan tijdelijk verschillende lijsten geven.</p>
     {!compatible && <p role="status" className="mt-3 text-sm text-amber-800">Koppel eerst een ondersteunde Schoolware-agenda en voer een geslaagde controle uit om voortgang te delen.</p>}
     {view?.enabled ? <>
+      <SyncVersionStatus view={view} working={working} onCheck={() => { void act('sync.update'); }} />
       {view.blocked && <p role="status" className="mt-3 text-sm text-amber-800">Automatische synchronisatie is gestopt: de server weigert deze koppeling. Controleer de koppelcode of vraag de beheerder om hulp. Nu synchroniseren probeert opnieuw; lokale voortgang blijft bewaard.</p>}
       <p className="mt-3 text-sm">{view.registrationPending ? view.blocked ? 'Je nieuwe leerlinggroep is nog niet geregistreerd; automatische pogingen zijn gestopt.' : 'Je nieuwe leerlinggroep wacht nog op registratie; Chrome probeert het automatisch opnieuw.' : 'Ingeschakeld voor de agendaselectie waarmee je hebt gekoppeld.'} {view.pending} wijzigingen wachten op verzending.</p>
       <p className="mt-2 text-xs text-slate-500">{view.lastSuccessAt ? `Laatst gesynchroniseerd: ${new Date(view.lastSuccessAt).toLocaleString('nl-BE', { timeZone: 'Europe/Brussels' })}` : 'Nog geen geslaagde synchronisatie.'}</p>
       {view.error && <p role="status" className="mt-2 text-sm text-amber-800">{view.registrationPending ? 'De server is niet bereikbaar of laat tijdelijk geen nieuwe groepen toe. Je lokale voortgang blijft bewaard.' : 'De laatste poging is mislukt. Controleer je internetverbinding, koppelcode en Chrome-toestemming.'}</p>}
       <div className="mt-4 rounded-lg bg-teal-50 p-3 text-sm">
         <h3 className="font-semibold">Met wie deel je voortgang?</h3>
+        <p className="mt-1 text-xs text-slate-600">Deel op elke betrokken computer een naam om ontvangers voor hulpvragen te kunnen kiezen. Namen horen bij computers; gebruikt iemand meerdere computers, kies dan de gewenste ontvangers afzonderlijk.</p>
         {view.displayName && <p className="mt-1">Jouw naam op deze computer: <strong>{view.displayName}</strong></p>}
         {view.members?.some((member) => !member.self) ? <ul className="mt-2 space-y-2">
           {view.members.filter((member) => !member.self).map((member) => <li key={member.id}>
             <span className="font-medium">{member.label}</span>
+            {!view.devices?.some((device) => device.id === member.id) && <span className="block text-xs text-amber-800">Versie niet gemeld. Werk dit toestel bij.</span>}
             <span className="block text-xs text-slate-600">Laatst gemeld: {new Date(member.lastSeenAt).toLocaleString('nl-BE', { timeZone: 'Europe/Brussels' })}</span>
           </li>)}
         </ul> : <p className="mt-2">{view.displayName ? 'Nog geen andere deelnemers gemeld. Laat de andere computer een naam instellen en synchroniseren.' : 'Stel hieronder jouw naam of rol in om deelnemers herkenbaar te delen.'}</p>}

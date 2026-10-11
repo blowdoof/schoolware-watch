@@ -1,3 +1,4 @@
+import { withCompatiblePolicy } from './fixtures/sync-compatibility';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
@@ -16,6 +17,8 @@ import { validateActivityView } from '../src/shared/activity';
 import { validateTasksView } from '../src/shared/tasks';
 import { availablePackingChoices, packingChoiceId, materialsFor } from '../src/domain/schoolbag';
 import { validateSchoolbagView } from '../src/shared/schoolbag';
+import { validateSpecialDaysView } from '../src/shared/special-days';
+import { specialDay } from './fixtures/special-days';
 
 const scopeId = validateAgendaRequest(requestUrl)!;
 
@@ -43,6 +46,7 @@ let registeredScripts: chrome.scripting.RegisteredContentScript[];
 let session: Record<string, unknown>;
 let discovered: (details: chrome.webRequest.OnCompletedDetails) => void;
 let discoveryPermission: boolean;
+let updateAvailable: (details: { version: string }) => void;
 
 function dispatch(message: unknown): Promise<unknown> {
   return new Promise((resolve, reject) => {
@@ -68,6 +72,8 @@ beforeEach(async () => {
   vi.stubGlobal('chrome', {
     runtime: { id: sender.id, getURL: (path: string) => `chrome-extension://${sender.id}/${path}`,
       getContexts: vi.fn().mockResolvedValue([]),
+      requestUpdateCheck: vi.fn().mockResolvedValue({ status: 'no_update' }),
+      onUpdateAvailable: { addListener: (callback: typeof updateAvailable) => { updateAvailable = callback; } },
       onMessage: { addListener: (callback: Listener) => { listener = callback; } },
       onInstalled: { addListener: vi.fn() }, onStartup: { addListener: vi.fn() } },
     alarms: {
@@ -115,10 +121,121 @@ beforeEach(async () => {
       remove: removePermission, onAdded: { addListener: vi.fn() } },
     action: { setBadgeText: vi.fn().mockResolvedValue(undefined), setBadgeBackgroundColor: vi.fn().mockResolvedValue(undefined) },
   });
+  vi.spyOn((await import('../src/storage/progress-sync')).ProgressSyncRepository.prototype, 'announceVersion').mockResolvedValue(undefined);
   await import('../src/background/service-worker');
 });
 
+describe('special day worker boundaries and reminders', () => {
+  it('saves independent help alongside done, rejects website edits and opens help notifications in the dashboard', async () => {
+    const task = { ...parsed.points[0]!, TypePunt: 1001 };
+    vi.mocked(fetchAgenda).mockResolvedValue({ ...success, points: [task], count: 1,
+      typeCounts: { assignments: 1, tests: 0, review: 0, other: 0 } });
+    await dispatch({ type: 'agenda.check', requestUrl });
+    const id = validateTasksView(await dispatch({ type: 'tasks.read' }))!.entries[0]!.id;
+    await dispatch({ type: 'tasks.update', itemId: id, status: 'done' });
+    expect(await dispatch({ type: 'tasks.help', itemId: id, needed: true, recipients: [] })).toMatchObject({
+      entries: [{ status: 'done', help: { needed: true, recipients: [] } }],
+    });
+    const website = { ...sender, url: 'https://schoolware_siw.ksgwl.be/webouders/start.html', tab: { id: 1 }, frameId: 0 };
+    expect(listener({ type: 'tasks.help', itemId: id, needed: false, recipients: [] }, website, vi.fn())).toBe(false);
+    expect(listener({ type: 'tasks.review', itemId: id, kind: 'corrected', done: true }, website, vi.fn())).toBe(false);
+    expect(await dispatch({ type: 'tasks.review', itemId: id, kind: 'checked', done: true })).toMatchObject({ entries: [{ status: 'done', reviews: [{ kind: 'checked', done: true, self: true, previous: false }] }] });
+    clicked(`schoolware-watch-help-${crypto.randomUUID()}`);
+    await vi.waitFor(() => expect(chrome.tabs.create).toHaveBeenCalledWith({ url: 'chrome-extension://syntheticextension/dashboard.html' }));
+    vi.resetModules();
+    vi.spyOn((await import('../src/storage/progress-sync')).ProgressSyncRepository.prototype, 'announceVersion').mockResolvedValue(undefined);
+    await import('../src/background/service-worker');
+    expect(await dispatch({ type: 'tasks.read' })).toMatchObject({ entries: [{ status: 'done', help: { needed: true } }] });
+    expect(await dispatch({ type: 'tasks.help', itemId: id, needed: false, recipients: [] })).toMatchObject({ entries: [{ status: 'done', help: { needed: false } }] });
+  });
+  it('shows sharing only for the paired active profile and keeps another profile\'s planning out of that group', async () => {
+    await dispatch({ type: 'agenda.check', requestUrl });
+    stubFetch(vi.fn().mockResolvedValue(Response.json({ ok: true, acknowledged: [], cursor: 0, head: 0, operations: [] })));
+    await dispatch({ type: 'sync.connect', code: `sw1.${'a'.repeat(64)}.${'b'.repeat(64)}`, seed: false });
+    expect(await dispatch({ type: 'specialDays.read' })).toMatchObject({ sharing: { enabled: true, pending: 0, error: false } });
+    const otherUrl = requestUrl.replace('CompletedTaskForLL=30', 'CompletedTaskForLL=31');
+    await dispatch({ type: 'agenda.check', requestUrl: otherUrl });
+    const view = validateSpecialDaysView(await dispatch({ type: 'specialDays.read' }))!;
+    expect(view.sharing?.enabled).toBe(false);
+    const saved = await dispatch({ type: 'specialDays.save', profileId: view.profileId, entry: specialDay() });
+    expect(saved).toMatchObject({ ok: true, sharing: { enabled: false, pending: 0 } });
+    expect(await dispatch({ type: 'schoolbag.read' })).toMatchObject({ sharing: { enabled: false } });
+    expect(await dispatch({ type: 'sync.read' })).toMatchObject({ enabled: true, pending: 0 });
+  });
+  it('requires a successful profile, rejects website access and stale profile/revision edits without logging text', async () => {
+    const entry = specialDay();
+    const profileId = crypto.randomUUID();
+    expect(await dispatch({ type: 'specialDays.save', profileId, entry })).toMatchObject({ ok: false });
+    await dispatch({ type: 'agenda.check', requestUrl });
+    const view = validateSpecialDaysView(await dispatch({ type: 'specialDays.read' }))!;
+    expect(view.connected).toBe(true);
+    const website = { ...sender, url: 'https://schoolware_siw.ksgwl.be/webouders/start.html', tab: { id: 1 }, frameId: 0 };
+    expect(listener({ type: 'specialDays.read' }, website, vi.fn())).toBe(false);
+    expect(await dispatch({ type: 'specialDays.save', profileId, entry })).toMatchObject({ ok: false });
+    const saved = validateSpecialDaysView(await dispatch({ type: 'specialDays.save', profileId: view.profileId, entry }))!;
+    expect(saved.entries[0]?.revision).toBe(1);
+    expect(await dispatch({ type: 'specialDays.save', profileId: view.profileId, entry })).toMatchObject({ ok: false });
+    expect(validateSchoolbagView(await dispatch({ type: 'schoolbag.read' }))?.specialDays).toEqual(saved.entries);
+    expect(JSON.stringify(await dispatch({ type: 'activity.read' }))).not.toContain(entry.title);
+    expect(JSON.stringify(await dispatch({ type: 'activity.read' }))).not.toContain(entry.checklist[0]!.text);
+    await dispatch({ type: 'history.clear' });
+    expect(await dispatch({ type: 'specialDays.read' })).toMatchObject({ connected: false, entries: [] });
+  });
+  it('schedules independently of monitoring, survives worker restart and claims generic reminders once', async () => {
+    await dispatch({ type: 'agenda.check', requestUrl });
+    const view = validateSpecialDaysView(await dispatch({ type: 'specialDays.read' }))!;
+    const entry = specialDay({ day: '2026-10-05', preparationDay: '2026-10-02' });
+    await dispatch({ type: 'preferences.save', preferences: { ...DEFAULT_PREFERENCES, monitoringEnabled: false, notificationsEnabled: true } });
+    await dispatch({ type: 'specialDays.save', profileId: view.profileId, entry });
+    expect(chrome.alarms.create).toHaveBeenCalledWith('schoolware-special-days', { when: Date.parse('2026-10-02T14:00:00Z') });
+    expect(await chrome.alarms.get('schoolware-monitor')).toBeUndefined();
+    vi.resetModules();
+    vi.spyOn((await import('../src/storage/progress-sync')).ProgressSyncRepository.prototype, 'announceVersion').mockResolvedValue(undefined);
+    await import('../src/background/service-worker');
+    expect(await dispatch({ type: 'specialDays.read' })).toMatchObject({ entries: [{ ...entry, revision: 1 }] });
+    createNotification.mockClear();
+    vi.setSystemTime(new Date('2026-10-02T14:00:00Z'));
+    const alarm = { name: 'schoolware-special-days', scheduledTime: Date.now(), persistAcrossSessions: true };
+    alarmListener(alarm);
+    await vi.waitFor(() => expect(createNotification).toHaveBeenCalledTimes(1));
+    expect(JSON.stringify(createNotification.mock.calls)).not.toContain(entry.title);
+    expect(JSON.stringify(createNotification.mock.calls)).not.toContain(entry.checklist[0]!.text);
+    alarmListener(alarm);
+    await dispatch({ type: 'specialDays.read' });
+    expect(createNotification).toHaveBeenCalledTimes(1);
+    expect(await chrome.alarms.get('schoolware-special-days')).toBeUndefined();
+    await dispatch({ type: 'connection.clear' });
+    expect(await dispatch({ type: 'specialDays.read' })).toMatchObject({ connected: false, profileId: null, entries: [] });
+  });
+  it('does not schedule without notification permission and clears the alarm when reminders are disabled', async () => {
+    await dispatch({ type: 'agenda.check', requestUrl });
+    const view = validateSpecialDaysView(await dispatch({ type: 'specialDays.read' }))!;
+    const entry = specialDay();
+    notificationPermission = false;
+    await dispatch({ type: 'preferences.save', preferences: { ...DEFAULT_PREFERENCES, notificationsEnabled: true } });
+    await dispatch({ type: 'specialDays.save', profileId: view.profileId, entry });
+    expect(await chrome.alarms.get('schoolware-special-days')).toBeUndefined();
+    notificationPermission = true;
+    await dispatch({ type: 'preferences.save', preferences: { ...DEFAULT_PREFERENCES, notificationsEnabled: true } });
+    expect(await chrome.alarms.get('schoolware-special-days')).toBeDefined();
+    await dispatch({ type: 'preferences.save', preferences: { ...DEFAULT_PREFERENCES, notificationsEnabled: true, todoRemindersEnabled: false } });
+    expect(await chrome.alarms.get('schoolware-special-days')).toBeUndefined();
+  });
+});
+
 describe('schoolbag worker access', () => {
+  it('exposes an active check without persisting a permanent busy status', async () => {
+    let release!: (result: Awaited<ReturnType<typeof fetchAgenda>>) => void;
+    vi.mocked(fetchAgenda).mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+    const pending = dispatch({ type: 'agenda.check', requestUrl });
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+    expect(await dispatch({ type: 'connection.read' })).toMatchObject({ lastCheck: { status: 'busy' } });
+    release(success); await pending;
+    expect(await dispatch({ type: 'connection.read' })).toMatchObject({ lastCheck: { status: 'success' } });
+    const entries = (await new ActivityRepository().read()).entries;
+    await dispatch({ type: 'status.read' }); await dispatch({ type: 'status.read' });
+    expect((await new ActivityRepository().read()).entries).toEqual(entries);
+  });
   it('validates packing suggestions, keeps choices local to the active profile and retains last success after session expiry', async () => {
     const lesson = { ...parsed.points[0]!, Van: '2026-10-05 09:00:00', Tot: '2026-10-05 09:50:00', TypePunt: 2, Titel: 'Synthetic lesson', PublicComment: 'Atlas meebrengen', VakNaam: 'Aardrijkskunde' };
     vi.mocked(fetchAgenda).mockResolvedValue({ ...success, count: 1, typeCounts: { tests: 0, assignments: 0, review: 0, other: 1 }, points: [lesson] });
@@ -140,7 +257,7 @@ describe('schoolbag worker access', () => {
     expect(await packingChoiceId(agenda.points[0]!.day, 'school', material)).not.toBe(await packingChoiceId(agenda.points[0]!.day, 'home', material));
     await dispatch({ type: 'schoolbag.update', choiceId: id, state: 'hidden' });
     stored[CONNECTION_KEY] = { requestUrl: requestUrl.replace('CompletedTaskForLL=30', 'CompletedTaskForLL=40'), lastCheck: null };
-    expect(await dispatch({ type: 'schoolbag.read' })).toEqual({ ok: true, lastSuccessAt: null, points: [] });
+    expect(await dispatch({ type: 'schoolbag.read' })).toEqual({ ok: true, lastSuccessAt: null, points: [], sharing: { enabled: false, pending: 0, lastSuccessAt: null, error: false } });
     expect(await dispatch({ type: 'schoolbag.update', choiceId: id, state: 'packed' })).toMatchObject({ ok: false });
   });
   it('reads only the active profile, includes lessons, survives session errors and clears with history', async () => {
@@ -162,7 +279,7 @@ describe('schoolbag worker access', () => {
     expect(other).toMatchObject({ points: [{ instructions: 'Schrift meebrengen' }] });
     expect(JSON.stringify(other)).not.toContain('Atlas meebrengen');
     await dispatch({ type: 'history.clear' });
-    expect(await dispatch({ type: 'schoolbag.read' })).toEqual({ ok: true, lastSuccessAt: null, points: [] });
+    expect(await dispatch({ type: 'schoolbag.read' })).toEqual({ ok: true, lastSuccessAt: null, points: [], sharing: { enabled: false, pending: 0, lastSuccessAt: null, error: false } });
   });
 });
 
@@ -186,7 +303,7 @@ describe('main extension navigation', () => {
 describe('automatic progress activity', () => {
   it('records manual and minute-alarm synchronization with shared correlations, also after a worker restart', async () => {
     const code = `sw1.${'a'.repeat(64)}.${'b'.repeat(64)}`;
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => Response.json({ ok: true, acknowledged: [], operations: [], cursor: 0, head: 0 })));
+    stubFetch(vi.fn().mockImplementation(async () => Response.json({ ok: true, acknowledged: [], operations: [], cursor: 0, head: 0 })));
     await dispatch({ type: 'agenda.check', requestUrl });
     await dispatch({ type: 'sync.connect', code, seed: false });
     const { PROGRESS_SYNC_ALARM } = await import('../src/background/progress-sync');
@@ -194,7 +311,9 @@ describe('automatic progress activity', () => {
     const automatic = async () => (await new ActivityRepository().read()).entries.filter((entry) =>
       entry.action === 'progress.sync' && entry.phase === 'succeeded' && entry.data.trigger === 'alarm');
     await vi.waitFor(async () => expect(await automatic()).toHaveLength(1));
-    vi.resetModules(); await import('../src/background/service-worker');
+    vi.resetModules();
+    vi.spyOn((await import('../src/storage/progress-sync')).ProgressSyncRepository.prototype, 'announceVersion').mockResolvedValue(undefined);
+    await import('../src/background/service-worker');
     await dispatch({ type: 'connection.read' });
     alarmListener({ name: PROGRESS_SYNC_ALARM, scheduledTime: Date.now() + 120000, persistAcrossSessions: true });
     await vi.waitFor(async () => expect(await automatic()).toHaveLength(2));
@@ -212,11 +331,11 @@ describe('automatic progress activity', () => {
 
   it('records automatic server failures while preserving the minute retry alarm', async () => {
     const code = `sw1.${'a'.repeat(64)}.${'b'.repeat(64)}`;
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => Response.json({ ok: true, acknowledged: [], operations: [], cursor: 0, head: 0 })));
+    stubFetch(vi.fn().mockImplementation(async () => Response.json({ ok: true, acknowledged: [], operations: [], cursor: 0, head: 0 })));
     await dispatch({ type: 'agenda.check', requestUrl });
     await dispatch({ type: 'sync.connect', code, seed: false });
     const { PROGRESS_SYNC_ALARM, progressSync } = await import('../src/background/progress-sync');
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error(`Private network error ${code}`)));
+    stubFetch(vi.fn().mockRejectedValue(new Error(`Private network error ${code}`)));
     alarmListener({ name: PROGRESS_SYNC_ALARM, scheduledTime: Date.now() + 60000, persistAcrossSessions: true });
     await vi.waitFor(async () => {
       const entries = (await new ActivityRepository().read()).entries;
@@ -252,7 +371,9 @@ describe('Schoolware page banners', () => {
     expect(chrome.tabs.create).toHaveBeenCalledWith({ url: `chrome-extension://${sender.id}/dashboard.html?alert=${reminder.id}` });
     clicked(`schoolware-watch-${reminder.id}`);
     await vi.waitFor(() => expect(chrome.notifications.clear).toHaveBeenCalledWith(`schoolware-watch-${reminder.id}`));
-    vi.resetModules(); await import('../src/background/service-worker');
+    vi.resetModules();
+    vi.spyOn((await import('../src/storage/progress-sync')).ProgressSyncRepository.prototype, 'announceVersion').mockResolvedValue(undefined);
+    await import('../src/background/service-worker');
     await dispatch({ type: 'agenda.check', requestUrl });
     expect(createNotification).toHaveBeenCalledOnce();
     expect(validateBrowserAlertsView(await dispatch({ type: 'browser.alerts.read' }))!.entries).toHaveLength(1);
@@ -375,6 +496,7 @@ describe('Schoolware page banners', () => {
     expect(chrome.action.setBadgeText).toHaveBeenLastCalledWith({ text: '1' });
     expect(JSON.stringify(test)).not.toContain('scopeId');
     vi.resetModules();
+    vi.spyOn((await import('../src/storage/progress-sync')).ProgressSyncRepository.prototype, 'announceVersion').mockResolvedValue(undefined);
     await import('../src/background/service-worker');
     expect(await dispatch({ type: 'browser.alerts.read' })).toEqual(test);
     expect(await dispatch({ type: 'history.read' })).toMatchObject({ itemCount: 0, eventCount: 0 });
@@ -406,6 +528,7 @@ describe('Schoolware page banners', () => {
     const details = await dispatch({ type: 'notifications.details', target });
     expect(details).toMatchObject({ status: 'available', details: { lessons: [{ items: [{ kind: 'changed' }] }] } });
     vi.resetModules();
+    vi.spyOn((await import('../src/storage/progress-sync')).ProgressSyncRepository.prototype, 'announceVersion').mockResolvedValue(undefined);
     await import('../src/background/service-worker');
     expect(await dispatch({ type: 'notifications.details', target })).toEqual(details);
     // A notification from a previous profile cannot reveal its lesson details.
@@ -433,7 +556,7 @@ describe('Schoolware page banners', () => {
   it('restricts content-script senders to generic banner actions on the Schoolware top frame', async () => {
     const website = { ...sender, url: 'https://schoolware_siw.ksgwl.be/webouders/start.html', tab: { id: 1 }, frameId: 0 };
     const reply = vi.fn();
-    for (const type of ['connection.read', 'history.read', 'preferences.read', 'browser.alerts.test']) {
+    for (const type of ['status.read', 'connection.read', 'history.read', 'preferences.read', 'browser.alerts.test']) {
       expect(listener({ type }, website, reply)).toBe(false);
     }
     expect(listener({ type: 'notifications.details', target: 'test' }, website, reply)).toBe(false);
@@ -463,7 +586,9 @@ describe('activity correlation and local task status', () => {
   it('keeps diagnostics readable when startup restoration fails', async () => {
     await dispatch({ type: 'preferences.read' });
     vi.mocked(chrome.scripting.getRegisteredContentScripts).mockRejectedValue(new Error('Synthetic private startup error'));
-    vi.resetModules(); await import('../src/background/service-worker');
+    vi.resetModules();
+    vi.spyOn((await import('../src/storage/progress-sync')).ProgressSyncRepository.prototype, 'announceVersion').mockResolvedValue(undefined);
+    await import('../src/background/service-worker');
     const view = validateActivityView(await dispatch({ type: 'activity.read' }))!;
     expect(view.ok).toBe(true);
     expect(view.entries.some((entry) => entry.action === 'website.script' && entry.phase === 'failed')).toBe(true);
@@ -492,7 +617,9 @@ describe('activity correlation and local task status', () => {
     await dispatch({ type: 'notifications.test' });
     const id = createNotification.mock.calls[0]![0] as string;
     const correlationId = id.replace('schoolware-watch-test-', '');
-    vi.resetModules(); await import('../src/background/service-worker');
+    vi.resetModules();
+    vi.spyOn((await import('../src/storage/progress-sync')).ProgressSyncRepository.prototype, 'announceVersion').mockResolvedValue(undefined);
+    await import('../src/background/service-worker');
     vi.setSystemTime(new Date('2026-10-02T08:01:00Z'));
     clicked(id);
     await vi.waitFor(() => expect(chrome.tabs.create).toHaveBeenCalled());
@@ -529,7 +656,9 @@ describe('activity correlation and local task status', () => {
     expect(createNotification).not.toHaveBeenCalled();
     const website = { ...sender, url: 'https://schoolware_siw.ksgwl.be/webouders/start.html', tab: { id: 1 }, frameId: 0 };
     expect(listener(message, website, vi.fn())).toBe(false);
-    vi.resetModules(); await import('../src/background/service-worker');
+    vi.resetModules();
+    vi.spyOn((await import('../src/storage/progress-sync')).ProgressSyncRepository.prototype, 'announceVersion').mockResolvedValue(undefined);
+    await import('../src/background/service-worker');
     expect(validateTasksView(await dispatch({ type: 'tasks.read' }))!.entries).toEqual(result.entries);
     const failed = await dispatch({ type: 'tasks.updateMany', itemIds: [ids[0]!, crypto.randomUUID()], status: 'open' });
     expect(failed).toMatchObject({ ok: false });
@@ -550,7 +679,9 @@ describe('activity correlation and local task status', () => {
     expect(await dispatch({ type: 'history.read' })).toEqual(before);
     expect(fetchAgenda).toHaveBeenCalledOnce();
     expect(createNotification).not.toHaveBeenCalled();
-    vi.resetModules(); await import('../src/background/service-worker');
+    vi.resetModules();
+    vi.spyOn((await import('../src/storage/progress-sync')).ProgressSyncRepository.prototype, 'announceVersion').mockResolvedValue(undefined);
+    await import('../src/background/service-worker');
     vi.mocked(fetchAgenda).mockResolvedValue({ ...result, points: [{ ...task, Titel: 'Synthetic revised assignment' }] });
     await dispatch({ type: 'agenda.check', requestUrl });
     expect(await dispatch({ type: 'tasks.read' })).toMatchObject({ entries: [{ id: itemId, status: 'in-progress' }] });
@@ -648,6 +779,7 @@ describe('worker connection lifecycle', () => {
     const first = await dispatch({ type: 'history.read' });
     expect(first).toMatchObject({ ok: true, itemCount: 2, eventCount: 2 });
     vi.resetModules();
+    vi.spyOn((await import('../src/storage/progress-sync')).ProgressSyncRepository.prototype, 'announceVersion').mockResolvedValue(undefined);
     await import('../src/background/service-worker');
     await dispatch({ type: 'agenda.check', requestUrl });
     expect(await dispatch({ type: 'history.read' })).toMatchObject({ eventCount: 2,
@@ -689,6 +821,7 @@ describe('periodic monitoring and optional notifications', () => {
     notificationPermission = false;
     vi.stubGlobal('chrome', { ...chrome, notifications: undefined });
     vi.resetModules();
+    vi.spyOn((await import('../src/storage/progress-sync')).ProgressSyncRepository.prototype, 'announceVersion').mockResolvedValue(undefined);
     await import('../src/background/service-worker');
     await dispatch({ type: 'agenda.check', requestUrl });
     expect(await dispatch({ type: 'preferences.read' })).toMatchObject({ monitoringScheduled: true, notificationPermission: false });
@@ -724,6 +857,7 @@ describe('periodic monitoring and optional notifications', () => {
     expect((await new HistoryRepository().read(scopeId)).scope?.checks[0]?.coverage).toEqual({ minTot: '2026-09-25', maxVan: '2026-10-17' });
     alarm = undefined;
     vi.resetModules();
+    vi.spyOn((await import('../src/storage/progress-sync')).ProgressSyncRepository.prototype, 'announceVersion').mockResolvedValue(undefined);
     await import('../src/background/service-worker');
     expect(await dispatch({ type: 'preferences.read' })).toMatchObject({ monitoringScheduled: true });
     alarmListener(alarm!);
@@ -763,6 +897,7 @@ describe('periodic monitoring and optional notifications', () => {
     expect(stored[PREFERENCES_KEY]).toEqual(DEFAULT_PREFERENCES);
     expect(registeredScripts).toEqual([]);
     vi.resetModules();
+    vi.spyOn((await import('../src/storage/progress-sync')).ProgressSyncRepository.prototype, 'announceVersion').mockResolvedValue(undefined);
     await import('../src/background/service-worker');
     expect(await dispatch({ type: 'preferences.read' })).toMatchObject({ preferences: DEFAULT_PREFERENCES });
   });
@@ -798,6 +933,7 @@ describe('periodic monitoring and optional notifications', () => {
     await dispatch({ type: 'agenda.check', requestUrl });
     expect(stored.schoolwareMonitoringState).toMatchObject({ failures: 1, retryAt: '2026-10-02T08:30:00.000Z' });
     vi.resetModules();
+    vi.spyOn((await import('../src/storage/progress-sync')).ProgressSyncRepository.prototype, 'announceVersion').mockResolvedValue(undefined);
     await import('../src/background/service-worker');
     await dispatch({ type: 'connection.read' });
     alarmListener(alarm!);
@@ -899,6 +1035,7 @@ describe('periodic monitoring and optional notifications', () => {
     expect(JSON.stringify(createNotification.mock.calls)).not.toContain('Synthetic');
     expect(JSON.stringify(createNotification.mock.calls)).not.toContain('410000000');
     vi.resetModules();
+    vi.spyOn((await import('../src/storage/progress-sync')).ProgressSyncRepository.prototype, 'announceVersion').mockResolvedValue(undefined);
     await import('../src/background/service-worker');
     await dispatch({ type: 'agenda.check', requestUrl });
     vi.mocked(fetchAgenda).mockResolvedValue({ status: 'session-required', count: null });
@@ -1004,7 +1141,7 @@ describe('agenda discovery worker integration', () => {
       return Response.json({ ok: true, acknowledged: body.operations.map((op: { id: string }) => op.id),
         cursor: 0, head: 0, operations: [] });
     });
-    vi.stubGlobal('fetch', fetcher);
+    stubFetch(fetcher);
     expect(await dispatch({ type: 'sync.connect', code: `sw1.${'a'.repeat(64)}.${'b'.repeat(64)}`, seed: false }))
       .toMatchObject({ enabled: true, error: false });
     await dispatch({ type: 'tasks.update', itemId: tasks.entries[0]!.id, status: 'done' });
@@ -1083,15 +1220,31 @@ describe('agenda discovery worker integration', () => {
 });
 
 describe('optional progress sync worker integration', () => {
+  it('records native update availability durably and rejects website update checks', async () => {
+    await dispatch({ type: 'agenda.check', requestUrl });
+    stubFetch(vi.fn().mockResolvedValue(Response.json({ ok: true, acknowledged: [], cursor: 0, head: 0, operations: [] })));
+    await dispatch({ type: 'sync.connect', code: `sw1.${'a'.repeat(64)}.${'b'.repeat(64)}`, seed: false });
+    expect(await dispatch({ type: 'sync.update' })).toMatchObject({ storeUpdate: { status: 'no_update' } });
+    const website = { ...sender, url: 'https://schoolware_siw.ksgwl.be/webouders/start.html', tab: { id: 1 }, frameId: 0 };
+    expect(listener({ type: 'sync.update' }, website, vi.fn())).toBe(false);
+    updateAvailable({ version: '0.4.0' });
+    await vi.waitFor(async () => expect(await dispatch({ type: 'sync.read' })).toMatchObject({ storeUpdate: { status: 'update_available', version: '0.4.0' } }));
+    vi.resetModules();
+    vi.spyOn((await import('../src/storage/progress-sync')).ProgressSyncRepository.prototype, 'announceVersion').mockResolvedValue(undefined);
+    await import('../src/background/service-worker');
+    expect(await dispatch({ type: 'sync.read' })).toMatchObject({ storeUpdate: { status: 'update_available', version: '0.4.0' } });
+  });
   it('stores a self-chosen participant name without leaking it through diagnostics or website contexts', async () => {
     await dispatch({ type: 'agenda.check', requestUrl });
     const code = `sw1.${'a'.repeat(64)}.${'b'.repeat(64)}`;
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ ok: true, acknowledged: [], cursor: 0, head: 0, operations: [] })));
+    stubFetch(vi.fn().mockResolvedValue(Response.json({ ok: true, acknowledged: [], cursor: 0, head: 0, operations: [] })));
     await dispatch({ type: 'sync.connect', code, seed: false });
     const calls = vi.mocked(fetch).mock.calls.length;
     expect(await dispatch({ type: 'sync.name', label: 'Synthetic parent' })).toMatchObject({ displayName: 'Synthetic parent' });
     expect(vi.mocked(fetch).mock.calls).toHaveLength(calls);
-    vi.resetModules(); await import('../src/background/service-worker');
+    vi.resetModules();
+    vi.spyOn((await import('../src/storage/progress-sync')).ProgressSyncRepository.prototype, 'announceVersion').mockResolvedValue(undefined);
+    await import('../src/background/service-worker');
     expect(await dispatch({ type: 'sync.read' })).toMatchObject({ displayName: 'Synthetic parent' });
     expect(JSON.stringify(await dispatch({ type: 'activity.read' }))).not.toContain('Synthetic parent');
     const website = { ...sender, url: 'https://schoolware_siw.ksgwl.be/webouders/start.html', tab: { id: 1 }, frameId: 0 };
@@ -1106,7 +1259,7 @@ describe('optional progress sync worker integration', () => {
       return Response.json(body.action === 'register' ? { ok: true } :
         { ok: true, acknowledged: [], cursor: 0, head: 0, operations: [] });
     });
-    vi.stubGlobal('fetch', fetcher);
+    stubFetch(fetcher);
     expect(await dispatch({ type: 'sync.create', code })).toMatchObject({ ok: true, enabled: true, error: false });
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(await dispatch({ type: 'sync.read' })).not.toHaveProperty('pairingCode');
@@ -1124,7 +1277,7 @@ describe('optional progress sync worker integration', () => {
     expect(await dispatch({ type: 'sync.connect', code, seed: false })).toMatchObject({ ok: false });
     vi.mocked(fetchAgenda).mockResolvedValue(success);
     await dispatch({ type: 'agenda.check', requestUrl });
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ ok: true, acknowledged: [], cursor: 0, head: 0, operations: [] })));
+    stubFetch(vi.fn().mockResolvedValue(Response.json({ ok: true, acknowledged: [], cursor: 0, head: 0, operations: [] })));
     expect(await dispatch({ type: 'sync.connect', code, seed: false })).toMatchObject({ ok: true, enabled: true, error: false });
     expect(await chrome.alarms.get('schoolware-progress-sync')).toMatchObject({ periodInMinutes: 1 });
     expect(await dispatch({ type: 'preferences.read' })).toMatchObject({ monitoringScheduled: true });
@@ -1142,3 +1295,5 @@ describe('optional progress sync worker integration', () => {
     expect(await dispatch(message)).toMatchObject({ ok: false });
   });
 });
+
+function stubFetch(fetcher: unknown) { vi.stubGlobal('fetch', withCompatiblePolicy(fetcher)); }

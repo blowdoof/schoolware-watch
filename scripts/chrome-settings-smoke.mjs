@@ -63,6 +63,20 @@ try {
   async function openSettings(checkGuide = false) {
     const { targetId } = await command('Target.createTarget', { url: optionsUrl });
     const { sessionId } = await command('Target.attachToTarget', { targetId, flatten: true });
+    await poll(() => evaluate(sessionId, `document.querySelectorAll('.workspace-section').length === 5`));
+    assert.equal(await evaluate(sessionId, `document.querySelectorAll('.workspace-section[open]').length`), 0);
+    assert.equal(await evaluate(sessionId, `document.querySelectorAll('.workspace-navigation-status [role="img"]').length`), 2);
+    await evaluate(sessionId, `document.querySelector('.workspace-status-link[aria-controls="settings-sharing"]').click()`);
+    await poll(() => evaluate(sessionId, `document.getElementById('settings-sharing').open && document.activeElement === document.getElementById('settings-sharing').querySelector('summary')`));
+    await evaluate(sessionId, `document.getElementById('settings-sharing').querySelector('summary').click()`);
+    await poll(() => evaluate(sessionId, `!document.getElementById('settings-sharing').open`));
+    for (const chapter of ['connection', 'sharing', 'connection', 'sharing']) {
+      await evaluate(sessionId, `document.querySelector('.workspace-status-link[aria-controls="settings-${chapter}"]').click()`);
+      await poll(() => evaluate(sessionId, `document.getElementById('settings-${chapter}').open && document.activeElement === document.getElementById('settings-${chapter}').querySelector('summary')`));
+      assert.equal(await evaluate(sessionId, `document.querySelectorAll('.workspace-section[open]').length`), 1);
+    }
+    // Open the groups through their native summaries for the existing full-form checks.
+    await evaluate(sessionId, `(() => { for (const section of document.querySelectorAll('.workspace-section:not([open])')) section.querySelector('summary').click(); return true; })()`);
     if (checkGuide) {
       await poll(() => evaluate(sessionId, `document.querySelector('[aria-label="Installatiehulp"]')?.textContent.includes('Stap 1 van 3')`));
       await poll(() => evaluate(sessionId, `Boolean([...document.querySelectorAll('button')].find(button => button.textContent === 'Schoolware verbinden'))`));
@@ -118,6 +132,45 @@ try {
     return data.schoolwarePreferences?.intervalMinutes === 30;
   }).catch((error) => { console.log('Synthetic persisted preferences:', JSON.stringify(lastData)); throw error; });
   const restarted = await openSettings();
+  // Invalid and failed saves must remain visible even after their group collapses.
+  await evaluate(restarted.sessionId, `(() => {
+    const input = document.querySelector('[aria-label="Automatische controle en meldingen"] input[type="number"]');
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    setter.call(input, '0'); input.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await poll(() => evaluate(restarted.sessionId, `Boolean(document.querySelector('[aria-label="Niet-opgeslagen instellingen"]'))`));
+  await evaluate(restarted.sessionId, `(() => {
+    const input = document.querySelector('[aria-label="Schoolware-koppeling"] input[type="url"]');
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'https://schoolware.example.test/');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await poll(() => evaluate(restarted.sessionId, `document.querySelector('[aria-label="Niet-opgeslagen instellingen"]').textContent.includes('Schoolware-koppeling')`));
+  await evaluate(restarted.sessionId, `(() => {
+    const input = document.querySelector('[aria-label="Schoolware-koppeling"] input[type="url"]');
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await poll(() => evaluate(restarted.sessionId, `!document.querySelector('[aria-label="Niet-opgeslagen instellingen"]').textContent.includes('Schoolware-koppeling') && document.querySelector('[aria-label="Niet-opgeslagen instellingen"]').textContent.includes('Controles en meldingen')`));
+  await evaluate(restarted.sessionId, `document.querySelector('.workspace-navigation button[aria-controls="settings-privacy"]').click()`);
+  await poll(() => evaluate(restarted.sessionId, `document.getElementById('settings-privacy').open && !document.getElementById('settings-preferences').open`));
+  assert.ok(await evaluate(restarted.sessionId, `Boolean(document.querySelector('[aria-label="Niet-opgeslagen instellingen"]'))`));
+  await evaluate(restarted.sessionId, `document.querySelector('.workspace-navigation button[aria-controls="settings-preferences"]').click()`);
+  assert.equal(await evaluate(restarted.sessionId, `document.querySelector('[aria-label="Automatische controle en meldingen"] input[type="number"]').value`), '0');
+  await evaluate(restarted.sessionId, `(() => {
+    window.settingsOriginalSend = chrome.runtime.sendMessage.bind(chrome.runtime);
+    chrome.runtime.sendMessage = message => message.type === 'preferences.save' ? Promise.reject(new Error('Synthetic save failure')) : window.settingsOriginalSend(message);
+    const input = document.querySelector('[aria-label="Automatische controle en meldingen"] input[type="number"]');
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '4'); input.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await poll(() => evaluate(restarted.sessionId, `document.body.textContent.includes('Deze wijziging kon niet worden opgeslagen')`));
+  assert.ok(await evaluate(restarted.sessionId, `Boolean(document.querySelector('[aria-label="Niet-opgeslagen instellingen"]'))`));
+  await evaluate(restarted.sessionId, `(() => {
+    chrome.runtime.sendMessage = window.settingsOriginalSend; delete window.settingsOriginalSend;
+    const input = document.querySelector('[aria-label="Automatische controle en meldingen"] input[type="number"]');
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '3'); input.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await poll(() => evaluate(restarted.sessionId, `!document.querySelector('[aria-label="Niet-opgeslagen instellingen"]')`));
+  await evaluate(restarted.sessionId, `(() => { for (const section of document.querySelectorAll('.workspace-section:not([open])')) section.querySelector('summary').click(); })()`);
   await command('ServiceWorker.enable', {}, restarted.sessionId);
   await command('ServiceWorker.stopAllWorkers', {}, restarted.sessionId);
   const view = await evaluate(restarted.sessionId, "chrome.runtime.sendMessage({ type: 'preferences.read' })");
@@ -177,6 +230,106 @@ try {
   assert.ok(bag.text.includes('Aardrijkskunde') && bag.text.includes('Werkboek'));
   assert.ok(!bag.homeText.includes('Werkboek'), 'Same-day workbook must not appear in next-day home packing');
   console.log('Chrome schoolbag smoke passed: worker projection, both packing lists, laptop defaults and synthetic workbook page range.');
+  // Create and check a local special day through the real React form, then
+  // restart the worker and verify the optional v3 profile fields remain durable.
+  await poll(() => evaluate(bagSession, `Boolean(document.querySelector('[aria-label="Speciale dagen"] button:not(:disabled)'))`));
+  assert.equal(await evaluate(bagSession, `document.querySelectorAll('.workspace-section[open]').length`), 1);
+  await poll(() => evaluate(bagSession, `Boolean(document.getElementById('overview-status'))`));
+  assert.equal(await evaluate(bagSession, `document.getElementById('overview-status').open`), false);
+  assert.equal(await evaluate(bagSession, `document.querySelector('[aria-label="Snel naar onderdeel"]').querySelectorAll('button').length`), 8);
+  assert.equal(await evaluate(bagSession, `document.querySelectorAll('.workspace-navigation-status [role="img"]').length`), 2);
+  assert.ok(await evaluate(bagSession, `Boolean(document.querySelector('button[aria-controls="overview-status"]')) && document.getElementById('overview-status').compareDocumentPosition(document.getElementById('overview-history')) === Node.DOCUMENT_POSITION_PRECEDING`));
+  await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 800, deviceScaleFactor: 1, mobile: false }, bagSession);
+  assert.equal(await evaluate(bagSession, `getComputedStyle(document.querySelector('.workspace-navigation')).position`), 'fixed');
+  assert.ok(await evaluate(bagSession, `document.querySelector('.workspace-navigation').getBoundingClientRect().right < document.getElementById('overview-todo').getBoundingClientRect().left`), 'Chapter rail stays outside the content');
+  const checkStatusSwitching = async () => {
+    for (const target of ['connection', 'sharing', 'connection', 'sharing']) {
+      const point = await evaluate(bagSession, `(() => { const rect = document.querySelector('.workspace-status-link[aria-controls="overview-${target}-status"]').getBoundingClientRect(); return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }; })()`);
+      await command('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', clickCount: 1 }, bagSession);
+      await command('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point, button: 'left', clickCount: 1 }, bagSession);
+      await poll(() => evaluate(bagSession, `document.getElementById('overview-status').open && document.activeElement === document.getElementById('overview-${target}-status')`));
+      await poll(() => evaluate(bagSession, `(() => { const element = document.getElementById('overview-${target}-status'); return Math.abs(element.getBoundingClientRect().top - parseFloat(getComputedStyle(element).scrollMarginTop)) <= 2; })()`));
+      assert.ok(await evaluate(bagSession, `document.getElementById('overview-${target}-status').dataset.workspaceActive === 'detail' && document.getElementById('overview-status').dataset.workspaceActive === 'chapter' && document.querySelector('.workspace-status-link[aria-controls="overview-${target}-status"]').getAttribute('aria-current') === 'location'`), 'The actual destination and status shortcut remain visibly selected');
+    }
+  };
+  await checkStatusSwitching();
+  await command('Emulation.setDeviceMetricsOverride', { width: 600, height: 500, deviceScaleFactor: 1, mobile: false }, bagSession);
+  assert.equal(await evaluate(bagSession, `getComputedStyle(document.querySelector('.workspace-navigation')).position`), 'sticky');
+  await checkStatusSwitching();
+  await evaluate(bagSession, `document.getElementById('overview-status').querySelector('summary').click()`);
+  await poll(() => evaluate(bagSession, `!document.getElementById('overview-status').open`));
+  await evaluate(bagSession, `document.querySelector('button[aria-controls="overview-schoolbag"]').click()`);
+  await poll(() => evaluate(bagSession, `document.getElementById('overview-schoolbag').open && document.activeElement === document.getElementById('overview-schoolbag').querySelector('summary')`));
+  await poll(() => evaluate(bagSession, `(() => { const nav = document.querySelector('.workspace-navigation').getBoundingClientRect(); const heading = document.getElementById('overview-schoolbag').getBoundingClientRect(); return window.scrollY > 0 && nav.top >= 0 && nav.bottom <= heading.top; })()`));
+  await poll(() => evaluate(bagSession, `document.querySelector('button[aria-controls="overview-schoolbag"]').getAttribute('aria-current') === 'location'`));
+  assert.equal(await evaluate(bagSession, `document.getElementById('overview-schoolbag').dataset.workspaceActive`), 'chapter');
+  await evaluate(bagSession, `window.dispatchEvent(new WheelEvent('wheel')); document.getElementById('overview-todo').scrollIntoView({ block: 'start', behavior: 'instant' });`);
+  await poll(() => evaluate(bagSession, `document.querySelector('button[aria-controls="overview-todo"]').getAttribute('aria-current') === 'location' && document.getElementById('overview-todo').dataset.workspaceActive === 'chapter' && !document.getElementById('overview-schoolbag').hasAttribute('data-workspace-active')`));
+  await command('Emulation.setDeviceMetricsOverride', { width: 1000, height: 800, deviceScaleFactor: 1, mobile: false }, bagSession);
+  await evaluate(bagSession, `document.getElementById('overview-schoolbag').querySelector('summary').click()`);
+  await poll(() => evaluate(bagSession, `!document.getElementById('overview-schoolbag').open`));
+  await evaluate(bagSession, `document.querySelector('[aria-label="Speciale dagen"]').closest('.workspace-section').querySelector('summary').focus()`);
+  await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', text: '\r', unmodifiedText: '\r', windowsVirtualKeyCode: 13 }, bagSession);
+  await command('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 }, bagSession);
+  await poll(() => evaluate(bagSession, `document.querySelector('[aria-label="Speciale dagen"]').closest('.workspace-section').open`));
+  await evaluate(bagSession, `(() => {
+    [...document.querySelector('[aria-label="Speciale dagen"]').querySelectorAll('button')].find(button => button.textContent === 'Speciale dag toevoegen').click();
+    return true;
+  })()`);
+  await poll(() => evaluate(bagSession, `Boolean(document.querySelector('[aria-label="Speciale dagen"] form'))`));
+  await evaluate(bagSession, `(() => {
+    [...document.querySelector('[aria-label="Speciale dagen"] form').querySelectorAll('button')].find(button => button.textContent === 'Checklistpunt toevoegen').click();
+    return true;
+  })()`);
+  await poll(() => evaluate(bagSession, `Boolean([...document.querySelector('[aria-label="Speciale dagen"] form').querySelectorAll('label')].find(label => label.textContent.startsWith('Checklistpunt 1'))?.querySelector('input'))`));
+  await evaluate(bagSession, `(() => {
+    [...document.querySelector('[aria-label="Speciale dagen"] form').querySelectorAll('label')].find(label => label.textContent.startsWith('Checklistpunt 1')).querySelector('input').focus();
+    return true;
+  })()`);
+  await command('Input.insertText', { text: 'Synthetic folders and charger' }, bagSession);
+  await evaluate(bagSession, `document.querySelector('[aria-label="Speciale dagen"]').closest('.workspace-section').querySelector('summary').click()`);
+  await poll(() => evaluate(bagSession, `!document.querySelector('[aria-label="Speciale dagen"]').closest('.workspace-section').open`));
+  await evaluate(bagSession, `document.querySelector('[aria-label="Speciale dagen"]').closest('.workspace-section').querySelector('summary').click()`);
+  await poll(() => evaluate(bagSession, `document.querySelector('[aria-label="Speciale dagen"]').closest('.workspace-section').open`));
+  assert.equal(await evaluate(bagSession, `[...document.querySelector('[aria-label="Speciale dagen"] form').querySelectorAll('label')].find(label => label.textContent.startsWith('Checklistpunt 1')).querySelector('input').value`), 'Synthetic folders and charger');
+  console.log('Chrome compact navigation smoke passed: collapsed settings, to-do open by default, native disclosure and preserved special-day draft.');
+  await evaluate(bagSession, `(() => {
+    [...document.querySelector('[aria-label="Speciale dagen"] form').querySelectorAll('label')].find(label => label.textContent.includes('Ook tonen in boekentas')).querySelector('input').click();
+    document.querySelector('[aria-label="Speciale dagen"] form button[type="submit"]').click(); return true;
+  })()`);
+  await poll(() => evaluate(bagSession, `!document.querySelector('[aria-label="Speciale dagen"] form') && document.querySelector('[aria-label="Speciale dagen"]').textContent.includes('Synthetic folders and charger')`));
+  await evaluate(bagSession, `(() => {
+    [...document.querySelector('[aria-label="Speciale dagen"]').querySelectorAll('label')].find(label => label.textContent.includes('Synthetic folders and charger')).querySelector('input').click(); return true;
+  })()`);
+  await poll(() => evaluate(bagSession, `(async () => (await chrome.runtime.sendMessage({ type: 'specialDays.read' })).entries[0]?.checklist[0]?.done)()`));
+  await command('ServiceWorker.stopAllWorkers', {}, restarted.sessionId);
+  const special = await evaluate(bagSession, `chrome.runtime.sendMessage({ type: 'specialDays.read' })`);
+  assert.equal(special.ok, true);
+  assert.equal(special.entries[0].checklist[0].text, 'Synthetic folders and charger');
+  assert.equal(special.entries[0].checklist[0].done, true);
+  assert.equal(special.entries[0].revision, 2);
+  const specialBag = await evaluate(bagSession, `chrome.runtime.sendMessage({ type: 'schoolbag.read' })`);
+  assert.equal(specialBag.specialDays[0].checklist[0].pack, true);
+  // Download the CSV to this disposable profile only and inspect the actual file.
+  const downloadPath = join(profile, 'downloads');
+  await mkdir(downloadPath);
+  await command('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath });
+  await evaluate(bagSession, `(() => {
+    [...document.querySelectorAll('summary')].find(summary => summary.textContent === 'Taken exporteren (CSV)').click();
+    [...document.querySelectorAll('button')].find(button => button.textContent.startsWith('CSV downloaden')).click(); return true;
+  })()`);
+  const csv = await poll(async () => readFile(join(downloadPath, 'schoolware-watch-taken.csv'), 'utf8'));
+  assert.ok(csv.startsWith('\uFEFF"Datum";'));
+  assert.ok(csv.includes('Synthetic workbook task'));
+  assert.ok(csv.includes('Synthetic later planning 6'), 'Export must include tasks beyond the initial five-day planning window');
+  assert.ok(!csv.includes(special.profileId));
+  assert.ok(!csv.includes('Synthetic folders and charger'), 'Task CSV must not silently include free-form special-day notes');
+  await evaluate(bagSession, `(async () => {
+    const view = await chrome.runtime.sendMessage({ type: 'specialDays.read' });
+    return chrome.runtime.sendMessage({ type: 'specialDays.delete', profileId: view.profileId, id: view.entries[0].id, revision: view.entries[0].revision });
+  })()`);
+  await poll(() => evaluate(bagSession, `!document.querySelector('[aria-label="Speciale dagen"]').textContent.includes('Synthetic folders and charger')`));
+  console.log('Chrome CSV/special-day smoke passed: real form, checklist, local book bag projection, worker restart, deletion and full-selection CSV file download.');
   const { targetId: livePopupTarget } = await command('Target.createTarget', { url: `chrome-extension://${id}/popup.html` });
   const { sessionId: livePopupSession } = await command('Target.attachToTarget', { targetId: livePopupTarget, flatten: true });
   await poll(() => evaluate(livePopupSession, `document.body.textContent.includes('Synthetic workbook task')`));
@@ -285,6 +438,8 @@ try {
   await poll(() => evaluate(restarted.sessionId, `Boolean([...document.querySelectorAll('label')].find(label => label.textContent.includes('Boekentas tonen onder de to-do'))?.querySelector('input').checked)`));
   await toggleSchoolbag();
   await poll(() => evaluate(bagSession, `!document.querySelector('[aria-label="Boekentas"]')`));
+  assert.equal(await evaluate(bagSession, `getComputedStyle([...document.querySelectorAll('.workspace-section')].find(section => section.querySelector('summary').textContent.trim().startsWith('Boekentas'))).display`), 'none');
+  assert.equal(await evaluate(bagSession, `getComputedStyle(document.querySelector('button[aria-controls="overview-schoolbag"]')).display`), 'none');
   assert.equal(await evaluate(bagSession, `(async () => (await chrome.runtime.sendMessage({ type: 'preferences.read' })).preferences.schoolbagEnabled)()`), false);
   await toggleSchoolbag();
   await poll(() => evaluate(bagSession, `document.querySelector('[aria-label="Boekentas"]')?.textContent.includes('pagina 24-34')`));
@@ -377,6 +532,8 @@ try {
     })()`));
     const capture = async (fileName, selector) => {
       await evaluate(bagSession, `(() => {
+        const group = document.querySelector(${JSON.stringify(selector)}).closest('.workspace-section');
+        if (group && !group.open) group.querySelector('summary').click();
         document.querySelector(${JSON.stringify(selector)}).scrollIntoView({ block: 'start' });
         window.scrollBy(0, -80);
         let label = document.getElementById('synthetic-store-label');

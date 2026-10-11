@@ -1,5 +1,31 @@
 # Security, privacy and notification review
 
+## Attribution update (2026-10-10, 0.4.0)
+
+Protocol 3 gates new encrypted change attribution and independent task reviews.
+Author metadata is paired opt-in data and contains no raw Schoolware identities.
+Local controls can edit only the local participant review, but group-secret
+holders can forge attribution and modify all group data; the interface is not
+per-person authorization. API authentication is a 256-bit bearer capability,
+separate from the client-side AES-GCM key. Possession of the bearer alone grants
+ciphertext access and destructive API rights. Registration can be public when
+operator-enabled; quotas do not establish identity. See
+[authentication and limitations](participation-and-reviews.md#api-authentication).
+
+## Candidate update (2026-10-10, 0.3.0)
+
+Fresh compatibility preflight and server-side version enforcement prevent accidental
+exchange by incompatible clients. Self-reported version headers are not an
+authorization boundary. Device versions use the existing encrypted channel only
+after opt-in; agenda/history/session content stays local. No new analytics,
+remote executable code, permissions or SQL tables are introduced.
+
+This source review does not certify the deployed service. Group secrets still
+grant full read/write/delete access, with no individual revocation or verified
+parent/teacher roles. Hosting access logs, TLS/WAF settings, backups, scheduled
+retention cleanup and deletion require operator verification. Matthias's external
+review remains a release gate. See [version compatibility](version-compatibility.md).
+
 Review date: 2026-10-04. This report describes the current local working tree,
 including the fixes below. It is a source review with synthetic tests, not a
 penetration test or a certification of the deployed host.

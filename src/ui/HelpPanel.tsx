@@ -1,5 +1,9 @@
 const questions = [
   {
+    question: 'Hoe vraag ik hulp aan één of meerdere personen?',
+    answer: 'Vink Hulp nodig aan bij een taak. Dit kan samen met Bezig of Klaar. Als gekoppelde deelnemers met een gedeelde naam bekend zijn, kies je één of meerdere ontvangers en sla je de hulpvraag op. Zonder ontvanger kun je de aanduiding ook bewaren. Deel op de betrokken computers een naam bij Instellingen > Voortgang delen om elkaar te kunnen kiezen. Ontvangers zien Hulp aan jou gevraagd in het to-do-overzicht; een systeemmelding volgt hun meldingsinstellingen zodra Chrome synchroniseert. Ook hulpvragen bij afgeronde, eerdere en latere taken blijven apart zichtbaar. Gebruik op alle computers de nieuwe versie.',
+  },
+  {
     question: 'Wanneer krijg ik een to-do herinnering?',
     answer: 'Vanaf 16 uur, na een geslaagde agendacontrole, krijg je maximaal één herinnering per dag via elk ingeschakeld meldingskanaal. Ze telt Open en Bezig voor de volgende bekende schooldag en volgt je geselecteerde categorieën. De melding toont alleen een aantal en een datum; een klik opent het actuele to-do overzicht. De Schoolware-banner werkt het aantal bij en verdwijnt zodra de taken klaar zijn. Je kunt de herinnering uitschakelen bij Instellingen. Chrome moet draaien en je Schoolware-sessie moet geldig zijn.',
   },
@@ -37,7 +41,7 @@ const questions = [
   },
   {
     question: 'Waar worden mijn gegevens bewaard en hoe wis ik ze?',
-    answer: 'Je agendageschiedenis blijft lokaal in deze browser. Schoolware Watch bewaart geen Schoolware-inloggegevens. Optioneel kun je Open, Bezig en Klaar en zelfgekozen deelnemersnamen versleuteld delen via schoolware.bumper.be; titels en instructies worden niet verstuurd. Bij Instellingen kun je de bewaartermijn aanpassen, lokale profielgegevens wissen en de voortgangskoppeling beheren.',
+    answer: 'Je Schoolware-agenda en wijzigingsgeschiedenis blijven lokaal. Optioneel deel je taakstatussen, speciale dagen met opmerkingen en checklists, boekentaskeuzes en deelnemersnamen versleuteld via schoolware.bumper.be. Schoolware-titels, instructies en inloggegevens worden niet verstuurd. Werk alle gekoppelde computers bij. Bij Instellingen kun je de bewaartermijn aanpassen, lokale profielgegevens wissen en gedeelde gegevens verwijderen.',
   },
 ];
 

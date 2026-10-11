@@ -1,5 +1,47 @@
 # Release readiness and distribution
 
+Current candidate (2026-10-11): 0.4.0 adds fail-closed synchronization compatibility
+checks, encrypted device-version announcements, change attribution and independent
+per-participant checked/corrected reviews. See [participation and reviews](participation-and-reviews.md) and
+[version compatibility](version-compatibility.md) for deployment and limitations.
+The PHP endpoint and private helper must be upgraded together; there is no SQL
+migration. No production deployment or Store publication is performed here.
+On 2026-10-11 the owner authorized merging and local Store package preparation,
+explicitly deferring Matthias's external review until later in the week. His
+review and resolution of blocking findings remain required before publication.
+Validate deployed TLS/WAF controls, scheduled
+retention cleanup, backups and deletion, and real paired-device upgrade/restart
+behavior. Shared-code holders have full group rights; individual revocation and
+verified teacher/parent permissions are not implemented. Suitable for controlled
+family testing after server upgrade, not yet an unrestricted public release.
+
+The older dated observations below are historical evidence, not acceptance of
+the current candidate.
+
+The 2026-10-11 review remediation restores offline confirmation of returning
+task content, retires edited checklist point identities, and bounds historical
+review projection without blocking synchronization. The owner uploaded the public
+privacy page; anonymous HTTPS verification confirms it matches the repository.
+Overview/settings now use [compact sections](compact-navigation.md).
+See [submission checks](store/update-0.4.0.md).
+
+See the [final technical review](reviews/2026-10-11-final-0.4.0.md) for fresh
+validation and the outstanding merge/publication gates.
+
+Candidate validation: strict TypeScript, ESLint, 404 Vitest tests and production
+build pass. The isolated PHP 8.2/MySQL integration verifies compatibility gating,
+policy changes before exchange, unchanged cursors on rejected writes, and legacy
+deletion/leave. Old cryptographic fixtures remain readable through a current
+transport. Dependency audit reports zero known vulnerabilities (including dev
+dependencies); this is not proof that the code or deployed host has no flaws.
+Chrome synthetic two-device tests pass for encrypted version announcements,
+planning, packing and help, and for blocked exchange retaining a local edit when
+the minimum version changes. Settings tests pass for permissions, worker restart,
+CSV export and special days. These do not contact Schoolware or production sync.
+The 0.4.0 two-device test additionally checks the real review checkbox, two visible
+reviewers, propagated status/help attribution and withdrawal retaining the other
+reviewer. Existing local databases read without invented historical attribution.
+
 Current status (2026-10-06): 0.1.0 is published. The owner authorized merging the
 complete 0.2.0 feature branch into main and pushing it, deferring Matthias's review
 until later. Review completion is not claimed. The 2026-10-04 notes below are

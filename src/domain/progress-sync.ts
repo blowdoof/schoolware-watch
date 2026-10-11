@@ -27,9 +27,11 @@ export async function encryptProgress(key: string, id: string, value: unknown): 
   const cryptoKey = await crypto.subtle.importKey('raw', unhex(key), 'AES-GCM', false, ['encrypt']);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const plaintext = encode(JSON.stringify(value));
-  if (plaintext.length > 512) throw new Error('Progress payload too large');
+  if (plaintext.length > 768) throw new Error('Progress payload too large');
   // JSON whitespace padding remains readable by existing sw1 clients.
-  const padded = new Uint8Array(512).fill(32);
+  // A second bounded bucket fits attributed statuses with Unicode labels while
+  // staying below the existing PHP 1024-byte ciphertext ceiling.
+  const padded = new Uint8Array(plaintext.length > 512 ? 768 : 512).fill(32);
   padded.set(plaintext);
   const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: encode(`sw1:${id}`) }, cryptoKey, padded);
   return { iv: hex(iv), ciphertext: hex(ciphertext) };

@@ -1,6 +1,7 @@
 import { brusselsWallTime } from './notification-window';
 import { hasAgendaMarker, type TaskStatus } from './tasks';
 import type { Category } from './observations';
+import type { SpecialDay } from './special-days';
 
 export interface BagPoint {
   id: string; day: string; subject: string; title: string; instructions: string;
@@ -10,7 +11,7 @@ export interface BagSource { id: string; title: string; text: string; day: strin
 export interface BagMaterial {
   key: string; label: string; subject: string; uncertain: boolean; pages: string[]; sources: BagSource[];
 }
-export interface BagAgenda { points: BagPoint[]; lastSuccessAt: string | null }
+export interface BagAgenda { points: BagPoint[]; lastSuccessAt: string | null; specialDays?: SpecialDay[] }
 
 /** Evidence changes invalidate packing choices without persisting duplicate agenda text. */
 export async function packingChoiceId(day: string, direction: 'school' | 'home', material: BagMaterial | null): Promise<string> {
@@ -93,16 +94,29 @@ export function materialsFor(points: BagPoint[]): BagMaterial[] {
 export function schoolbagOverview(agenda: BagAgenda, now: Date, selectedDay: string | null = null) {
   const wall = brusselsWallTime(now);
   const today = wall.slice(0, 10);
-  const days = [...new Set(agenda.points.map((point) => point.day))].filter((day) => {
+  const specialDays = agenda.specialDays ?? [];
+  const days = [...new Set([...agenda.points.map((point) => point.day), ...specialDays.flatMap((entry) => [entry.day, ...(entry.preparationDay ? [entry.preparationDay] : [])])])].filter((day) => {
     const weekday = new Date(`${day}T00:00:00Z`).getUTCDay();
-    return day >= today && weekday !== 0 && weekday !== 6;
+    return day >= today && ((weekday !== 0 && weekday !== 6) || specialDays.some((entry) => entry.day === day || entry.preparationDay === day));
   }).sort();
   const nextDay = days.find((day) => day > today) ?? null;
   const defaultDay = wall.slice(11, 16) < '16:00' && days.includes(today) ? today : nextDay;
   const targetDay = selectedDay && days.includes(selectedDay) ? selectedDay : defaultDay;
-  const schoolPoints = agenda.points.filter((point) => point.day === targetDay);
-  const homeDay = targetDay ? days.find((day) => day > targetDay) ?? null : null;
-  const homework = agenda.points.filter((point) => point.day === homeDay && point.status !== 'done' && point.category !== 'other' && hasAgendaMarker(point.typePunt));
-  return { today, nextDay, days, targetDay, homeDay, school: materialsFor(schoolPoints), homework: materialsFor(homework),
+  // A bring-home reminder must not hold the next lesson's school list on today.
+  const homePackingDay = !(selectedDay && days.includes(selectedDay)) && specialDays.some((entry) => entry.preparationDay === today) ? today : targetDay;
+  const special = specialDays.find((entry) => entry.day === targetDay);
+  const schoolPoints = agenda.points.filter((point) => point.day === targetDay && special?.useTimetable !== false);
+  // A preparation-only date is a packing choice, not evidence of a lesson/deadline day.
+  const homeDay = homePackingDay ? days.find((day) => day > homePackingDay &&
+    (agenda.points.some((point) => point.day === day) || specialDays.some((entry) => entry.day === day))) ?? null : null;
+  const preparations = specialDays.filter((entry) => entry.preparationDay === homePackingDay);
+  const homework = agenda.points.filter((point) => (point.day === homeDay && point.status !== 'done' && point.category !== 'other' && hasAgendaMarker(point.typePunt)) ||
+    preparations.some((entry) => entry.day === point.day && entry.kind === 'home-study' && entry.useTimetable));
+  const manual = (entries: SpecialDay[]): BagMaterial[] => entries.flatMap((entry) => entry.checklist.filter((item) => item.pack).map((item) => ({
+    key: `special:${entry.id}:${item.id}`, label: item.text, subject: entry.title, uncertain: false, pages: [],
+    sources: [{ id: item.id, day: entry.day, title: entry.title, text: item.text }],
+  })));
+  return { today, nextDay, days, targetDay, homePackingDay, homeDay, special, preparations,
+    school: [...materialsFor(schoolPoints), ...manual(special ? [special] : [])], homework: [...materialsFor(homework), ...manual(preparations)],
     schoolPoints, homeworkPoints: homework };
 }
