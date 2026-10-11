@@ -67,6 +67,13 @@ Native summaries support pointer and keyboard operation without a custom tab
 keyboard implementation. Notification destinations and the setup wizard remain
 directly accessible outside the collapsible groups.
 
+Sharing feedback and public/private invitation previews appear immediately below
+the share buttons, before version and participant details. A private invitation
+is generated only after an explicit click and remains manually selectable if
+clipboard access fails. Preparing it clears an already displayed pairing-code
+preview. This follow-up fix is on the feature branch; the already submitted
+0.4.0 Store archive has not been replaced.
+
 Chrome smoke coverage verifies compact defaults, keyboard summary activation, preserving
 an unsaved special-day checklist draft, existing settings saves/worker restarts,
 CSV download, the book-bag visibility preference and two-device encrypted
