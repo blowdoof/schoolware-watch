@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSettingsChanges } from './SettingsChanges';
 import type { Category, EventKind, Snapshot } from '../domain/observations';
 import { validateHistoryView, type HistoryView } from '../shared/history';
 import type { ConnectionMessage } from '../shared/connection';
@@ -33,6 +34,8 @@ export function HistoryPanel({ settings, refreshToken }: { settings: boolean; re
   const [category, setCategory] = useState<Category | 'all'>('all');
   const [error, setError] = useState('');
   const [working, setWorking] = useState(false);
+  const [retentionDraft, setRetentionDraft] = useState<number | null>(null);
+  useSettingsChanges('privacy', settings && retentionDraft !== null && retentionDraft !== view?.retentionDays);
   const [colors, setColors] = useState({ newColor: DEFAULT_PREFERENCES.newColor, changedColor: DEFAULT_PREFERENCES.changedColor });
 
   useEffect(() => {
@@ -50,7 +53,11 @@ export function HistoryPanel({ settings, refreshToken }: { settings: boolean; re
 
   async function act(message: ConnectionMessage) {
     setWorking(true);
-    try { await send(message); setView(await send({ type: 'history.read', category })); setError(''); }
+    try {
+      const saved = await send(message);
+      if (message.type === 'history.retention') { setView(saved); setRetentionDraft(null); }
+      setView(await send({ type: 'history.read', category })); setError('');
+    }
     catch { setError('De geschiedenis kon niet worden bijgewerkt. Probeer opnieuw.'); }
     finally { setWorking(false); }
   }
@@ -64,7 +71,7 @@ export function HistoryPanel({ settings, refreshToken }: { settings: boolean; re
       {!view ? <p className="mt-4 text-sm">Geschiedenis laden…</p> : settings ? (
         <div className="mt-4 space-y-4 text-sm">
           <label className="block">Bewaartermijn voor oude waarnemingen
-            <select value={view.retentionDays} disabled={working} onChange={(event) => { void act({ type: 'history.retention', days: Number(event.target.value) }); }}
+            <select value={retentionDraft ?? view.retentionDays} disabled={working} onChange={(event) => { const days = Number(event.target.value); setRetentionDraft(days); void act({ type: 'history.retention', days }); }}
               className="ml-3 rounded-lg border border-slate-300 p-2">
               {[30, 90, 180, 365].map((days) => <option key={days} value={days}>{days} dagen</option>)}
             </select>

@@ -46,6 +46,16 @@ crosses the reading boundary. Heading scroll offsets leave room for navigation.
 
 Settings uses the same responsive persistent chapter navigation and starts with all five groups collapsed: Schoolware connection,
 checks/notifications, paired sharing, privacy/retention/deletion and activity log.
+Selecting a settings chapter or status shortcut collapses the other chapter
+groups. Native summary clicks still allow users to open groups independently.
+All form components remain mounted when a group closes.
+An amber fixed notice lists groups with unsaved settings drafts or writes awaiting
+confirmation. Its group links return to the relevant form. Preference validation
+and save failures, connection/address drafts, sharing/name drafts and retention
+changes report their own state; read-only values, filters and destructive-action
+confirmation checkboxes do not count as settings drafts. Only boolean flags enter
+the page-local notice context; no field values or secrets are copied or persisted.
+Confirmed saves clear the corresponding flag without hiding other pending groups.
 Section summaries describe the actions inside. Full-page navigation buttons show
 text labels; popup navigation keeps compact icons.
 

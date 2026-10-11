@@ -5,6 +5,7 @@ import { hex } from '../domain/progress-sync';
 import { extensionInvitation, progressInvitation } from '../shared/progress-invitation';
 import { SYNC_PERMISSION, parsePairingCode, normalizeSyncLabel, validateSyncView, type SyncMessage, type SyncView } from '../shared/progress-sync';
 import { SyncVersionStatus, syncCompatibilityText } from './SyncVersionStatus';
+import { useSettingsChanges } from './SettingsChanges';
 
 export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { refreshToken: number; initialMode?: 'first' | 'join' }) {
   const available = typeof chrome !== 'undefined' && Boolean(chrome.runtime?.id);
@@ -19,6 +20,8 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
   const [message, setMessage] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [label, setLabel] = useState('');
+  const [nameUnsaved, setNameUnsaved] = useState(false);
+  useSettingsChanges('sharing', view?.enabled ? nameUnsaved : Boolean(label || secret) || mode !== initialMode);
   const labelEdited = useRef(false);
   const nameRevision = useRef(0);
   useEffect(() => {
@@ -53,6 +56,7 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
       const name = normalizeSyncLabel(label);
       if (label.trim() && !name) throw new Error('Invalid name');
       const next = await send(mode === 'first' ? { type: 'sync.create', code, ...(name ? { label: name } : {}) } : { type: 'sync.connect', code, seed: false, ...(name ? { label: name } : {}) });
+      if (next.enabled) setNameUnsaved(false);
       setSecret('');
       if (mode === 'first') setPairing(code);
       setMessage(next.blocked ? 'De instelling is lokaal bewaard, maar de server weigert de koppeling. Bewaar je koppelcode en controleer de toegang. Automatische pogingen zijn gestopt; Nu synchroniseren probeert opnieuw.' :
@@ -64,7 +68,7 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
     setWorking(true); setMessage('');
     try {
       const next = await send({ type });
-      if (type === 'sync.disconnect' || type === 'sync.delete') { setPairing(''); setInvitation(''); setConfirmDelete(false); setLabel(''); labelEdited.current = false; }
+      if (type === 'sync.disconnect' || type === 'sync.delete') { setPairing(''); setInvitation(''); setConfirmDelete(false); setLabel(''); setSecret(''); setMode(initialMode); setNameUnsaved(false); labelEdited.current = false; }
       setMessage(type === 'sync.update' ? 'Updatecontrole verwerkt.' : syncCompatibilityText(next) ?? (next.error ? 'Synchronisatie is niet gelukt. Je lokale voortgang blijft bewaard.' :
         type === 'sync.run' ? 'Synchronisatie uitgevoerd.' : type === 'sync.delete' ? 'Gedeelde voortgang en deelnemermeldingen gewist; deze computer is ontkoppeld. Groepstoegang en revisieteller blijven op de server.' : 'Deze computer is ontkoppeld; lokale voortgang blijft bewaard.'));
     } catch { setMessage('De actie is niet gelukt. Controleer de serververbinding.'); }
@@ -104,6 +108,7 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
   }
   async function saveName(value: string) {
     setLabel(value);
+    setNameUnsaved(value !== (view?.displayName ?? ''));
     labelEdited.current = true;
     const current = ++nameRevision.current;
     const name = normalizeSyncLabel(value);
@@ -111,6 +116,7 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
     setMessage('Naam wordt opgeslagen…');
     try {
       const next = await send({ type: 'sync.name', label: name });
+      if (nameRevision.current === current && next.enabled && next.displayName === name) setNameUnsaved(false);
       if (nameRevision.current === current) setMessage(next.enabled ?
         'Je naam is automatisch opgeslagen en wordt bij de volgende synchronisatie gedeeld.' : 'Deze computer is niet meer gekoppeld.');
     } catch { if (nameRevision.current === current) setMessage('Je naam kon niet worden opgeslagen. Probeer opnieuw.'); }

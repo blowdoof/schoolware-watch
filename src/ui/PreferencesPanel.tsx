@@ -9,6 +9,7 @@ import { validateConnectionState } from '../shared/connection';
 import { recordPermissionResult } from './permission-log';
 import { NotificationDiagnostics } from './NotificationDiagnostics';
 import { savePreferences } from './autosave';
+import { useSettingsChanges } from './SettingsChanges';
 
 const categories: Record<Category, string> = { tests: 'Toetsen (rood vlagje)', assignments: 'Taken (oranje vlagje)', review: 'Punten met een sterretje', other: 'Lesinformatie zonder vlagje of sterretje' };
 const localTime = (value: string) => new Date(value).toLocaleString('nl-BE', { timeZone: 'Europe/Brussels' });
@@ -28,6 +29,7 @@ export function PreferencesPanel({ settings, refreshToken, onSaved }: {
   const [view, setView] = useState<PreferencesView | null>(null);
   const [draft, setDraft] = useState({ ...DEFAULT_PREFERENCES });
   const dirty = useRef(false);
+  const [unsaved, setUnsaved] = useState(false);
   const draftRef = useRef(draft);
   const revision = useRef(0);
   const pendingSaves = useRef(0);
@@ -35,6 +37,7 @@ export function PreferencesPanel({ settings, refreshToken, onSaved }: {
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState('');
   const extensionAvailable = typeof chrome !== 'undefined' && Boolean(chrome.runtime?.id);
+  useSettingsChanges('preferences', settings && unsaved);
 
   useEffect(() => {
     if (!extensionAvailable) return;
@@ -54,6 +57,7 @@ export function PreferencesPanel({ settings, refreshToken, onSaved }: {
     const next = { ...draftRef.current, ...patch };
     draftRef.current = next;
     dirty.current = true;
+    setUnsaved(true);
     setDraft(next);
     const current = ++revision.current;
     if (!validatePreferences(next)) {
@@ -83,6 +87,7 @@ export function PreferencesPanel({ settings, refreshToken, onSaved }: {
     void save.then((saved) => {
       if (revision.current === current) {
         dirty.current = false;
+        setUnsaved(false);
         setView(saved);
         const missing = (saved.preferences.notificationsEnabled && !saved.notificationPermission) ||
           (saved.preferences.browserNotificationsEnabled && !saved.browserPermission);

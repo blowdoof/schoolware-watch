@@ -73,6 +73,7 @@ try {
     for (const chapter of ['connection', 'sharing', 'connection', 'sharing']) {
       await evaluate(sessionId, `document.querySelector('.workspace-status-link[aria-controls="settings-${chapter}"]').click()`);
       await poll(() => evaluate(sessionId, `document.getElementById('settings-${chapter}').open && document.activeElement === document.getElementById('settings-${chapter}').querySelector('summary')`));
+      assert.equal(await evaluate(sessionId, `document.querySelectorAll('.workspace-section[open]').length`), 1);
     }
     // Open the groups through their native summaries for the existing full-form checks.
     await evaluate(sessionId, `(() => { for (const section of document.querySelectorAll('.workspace-section:not([open])')) section.querySelector('summary').click(); return true; })()`);
@@ -131,6 +132,45 @@ try {
     return data.schoolwarePreferences?.intervalMinutes === 30;
   }).catch((error) => { console.log('Synthetic persisted preferences:', JSON.stringify(lastData)); throw error; });
   const restarted = await openSettings();
+  // Invalid and failed saves must remain visible even after their group collapses.
+  await evaluate(restarted.sessionId, `(() => {
+    const input = document.querySelector('[aria-label="Automatische controle en meldingen"] input[type="number"]');
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    setter.call(input, '0'); input.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await poll(() => evaluate(restarted.sessionId, `Boolean(document.querySelector('[aria-label="Niet-opgeslagen instellingen"]'))`));
+  await evaluate(restarted.sessionId, `(() => {
+    const input = document.querySelector('[aria-label="Schoolware-koppeling"] input[type="url"]');
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'https://schoolware.example.test/');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await poll(() => evaluate(restarted.sessionId, `document.querySelector('[aria-label="Niet-opgeslagen instellingen"]').textContent.includes('Schoolware-koppeling')`));
+  await evaluate(restarted.sessionId, `(() => {
+    const input = document.querySelector('[aria-label="Schoolware-koppeling"] input[type="url"]');
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await poll(() => evaluate(restarted.sessionId, `!document.querySelector('[aria-label="Niet-opgeslagen instellingen"]').textContent.includes('Schoolware-koppeling') && document.querySelector('[aria-label="Niet-opgeslagen instellingen"]').textContent.includes('Controles en meldingen')`));
+  await evaluate(restarted.sessionId, `document.querySelector('.workspace-navigation button[aria-controls="settings-privacy"]').click()`);
+  await poll(() => evaluate(restarted.sessionId, `document.getElementById('settings-privacy').open && !document.getElementById('settings-preferences').open`));
+  assert.ok(await evaluate(restarted.sessionId, `Boolean(document.querySelector('[aria-label="Niet-opgeslagen instellingen"]'))`));
+  await evaluate(restarted.sessionId, `document.querySelector('.workspace-navigation button[aria-controls="settings-preferences"]').click()`);
+  assert.equal(await evaluate(restarted.sessionId, `document.querySelector('[aria-label="Automatische controle en meldingen"] input[type="number"]').value`), '0');
+  await evaluate(restarted.sessionId, `(() => {
+    window.settingsOriginalSend = chrome.runtime.sendMessage.bind(chrome.runtime);
+    chrome.runtime.sendMessage = message => message.type === 'preferences.save' ? Promise.reject(new Error('Synthetic save failure')) : window.settingsOriginalSend(message);
+    const input = document.querySelector('[aria-label="Automatische controle en meldingen"] input[type="number"]');
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '4'); input.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await poll(() => evaluate(restarted.sessionId, `document.body.textContent.includes('Deze wijziging kon niet worden opgeslagen')`));
+  assert.ok(await evaluate(restarted.sessionId, `Boolean(document.querySelector('[aria-label="Niet-opgeslagen instellingen"]'))`));
+  await evaluate(restarted.sessionId, `(() => {
+    chrome.runtime.sendMessage = window.settingsOriginalSend; delete window.settingsOriginalSend;
+    const input = document.querySelector('[aria-label="Automatische controle en meldingen"] input[type="number"]');
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '3'); input.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await poll(() => evaluate(restarted.sessionId, `!document.querySelector('[aria-label="Niet-opgeslagen instellingen"]')`));
+  await evaluate(restarted.sessionId, `(() => { for (const section of document.querySelectorAll('.workspace-section:not([open])')) section.querySelector('summary').click(); })()`);
   await command('ServiceWorker.enable', {}, restarted.sessionId);
   await command('ServiceWorker.stopAllWorkers', {}, restarted.sessionId);
   const view = await evaluate(restarted.sessionId, "chrome.runtime.sendMessage({ type: 'preferences.read' })");

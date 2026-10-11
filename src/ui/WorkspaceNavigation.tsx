@@ -73,6 +73,11 @@ export function WorkspaceNavigation({ full, settings = false, snapshot }: { full
   function open(id: string, targetId?: string) {
     const section = document.getElementById(`${prefix}-${id}`) as HTMLDetailsElement | null;
     if (!section) return;
+    if (settings) {
+      navigation.current?.parentElement?.querySelectorAll<HTMLDetailsElement>('.workspace-section').forEach(other => {
+        if (other !== section) other.open = false;
+      });
+    }
     navigating.current = true;
     setActive(id);
     setActiveTarget(targetId ?? null);

@@ -14,6 +14,26 @@
 
 .workspace-section > summary::-webkit-details-marker { display: none; }
 
+.settings-unsaved-notice {
+  position: fixed;
+  top: 3.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  width: min(45rem, calc(100% - 3rem));
+  max-height: 30dvh;
+  overflow-y: auto;
+  padding: 0.75rem 1rem;
+  border: 1px solid #d97706;
+  border-radius: 0.75rem;
+  background: #fffbeb;
+  color: #92400e;
+  box-shadow: 0 4px 12px rgb(15 23 42 / 12%);
+  font-size: 0.875rem;
+}
+main:has(.settings-unsaved-notice) .workspace-navigation { top: 11rem; }
+main:has(.settings-unsaved-notice) .workspace-section { scroll-margin-top: 23rem; }
+
 /* Leave enough scroll room to identify and align the final chapter/detail. */
 .workspace-chapters { padding-bottom: max(0px, calc(100dvh - 16rem)); }
 .workspace-section[data-workspace-active="chapter"] {
@@ -68,6 +88,8 @@
 .workspace-section, .workspace-status-target { scroll-margin-top: 15rem; }
 
 @media (min-width: 1280px) {
+  main:has(.settings-unsaved-notice) .workspace-navigation--full { top: 8.5rem; }
+  main:has(.settings-unsaved-notice) .workspace-section { scroll-margin-top: 12rem; }
   .workspace-navigation--full {
     position: fixed;
     top: 8.5rem;
