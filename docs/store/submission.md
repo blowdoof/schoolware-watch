@@ -2,8 +2,10 @@
 
 Candidate package: version 0.4.0, updated on 2026-10-11. The owner reports
 that 0.2.0 is the latest published release; 0.3.0 was never published.
-Matthias's external review and resolution of blocking findings are required
-before merging or publishing. Review completion does not authorize either action.
+The owner authorized merging and local package preparation on 2026-10-11,
+deferring Matthias's external review until later in the week. External review and
+resolution of blocking findings remain required before publication. Store upload
+and publication have not been authorized.
 See [0.4.0 release checks](update-0.4.0.md) and the
 [candidate review](../review-0.4.0-2026-10-11.md). No Store upload or publication
 is performed by preparing this package.
@@ -111,8 +113,9 @@ unconfirmed. Synthetic screenshots do not prove real Schoolware authorization.
 ## Publication handoff
 
 Use the existing published item `phngkgibiapcabhnfjafkfibjobgkkaf`; do not create
-a new item. Complete Matthias's external review and resolve blocking findings
-before the separately authorized merge. Store upload and publication require
+a new item. The owner authorized merging and local package preparation while
+deferring Matthias's review. Complete that review and resolve blocking findings
+before publication. Store upload and publication require
 separate owner authorization. Then use Package → Upload New Package with the
 complete ZIP whose manifest is at the root. Candidate 0.4.0 is greater than the
 owner-confirmed published 0.2.0; 0.3.0 was never published.

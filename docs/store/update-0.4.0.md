@@ -6,8 +6,10 @@ was an intermediate development version, not a published release. Candidate
 
 ## Required before submission
 
-1. Complete Matthias's external review and resolve blocking findings. Obtain
-   separate owner authorization before merge, Store upload or publication.
+1. Complete Matthias's external review and resolve blocking findings before
+   publication. The owner authorized merging and local package preparation on
+   2026-10-11, deferring the review until later in the week. Store upload and
+   publication still require separate owner authorization.
 2. Replace the hosted `https://schoolware.bumper.be/privacy.html` with
    `server/public/privacy.html`. Verify anonymous access and the actual text:
    version 0.4.0, shared packing/checklists, special-day free text, help,

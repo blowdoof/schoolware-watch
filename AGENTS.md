@@ -61,6 +61,7 @@ Use TypeScript, React, Vite, Tailwind CSS, IndexedDB, Chrome Alarms, and Vitest.
 - Always commit and push on the single active feature branch for the current work; include all current project changes on that branch and never push directly to `main`.
 - Keep `main` and branches created by other contributors. Remove obsolete project-owned feature branches only after verifying their work is included in the active branch.
 - Require Matthias's external review and resolution of blocking findings before merging to `main` or publishing the next release. Review completion does not itself authorize merging or publication.
+- Owner exception (2026-10-11): merge candidate 0.4.0 and prepare the local Store release package before Matthias's review, which is deferred until later in the week. This exception does not authorize Store upload or publication; external review remains required before publication.
 - Keep changes focused on the approved task.
 - Do not publish, push, deploy, or upload artifacts unless authorized.
 - Inspect staged changes for private data before committing.

@@ -6,8 +6,10 @@ per-participant checked/corrected reviews. See [participation and reviews](parti
 [version compatibility](version-compatibility.md) for deployment and limitations.
 The PHP endpoint and private helper must be upgraded together; there is no SQL
 migration. No production deployment or Store publication is performed here.
-Matthias's external review and resolution of blocking findings remain mandatory
-before merging or publishing. Validate deployed TLS/WAF controls, scheduled
+On 2026-10-11 the owner authorized merging and local Store package preparation,
+explicitly deferring Matthias's external review until later in the week. His
+review and resolution of blocking findings remain required before publication.
+Validate deployed TLS/WAF controls, scheduled
 retention cleanup, backups and deletion, and real paired-device upgrade/restart
 behavior. Shared-code holders have full group rights; individual revocation and
 verified teacher/parent permissions are not implemented. Suitable for controlled
