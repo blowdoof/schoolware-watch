@@ -12,8 +12,9 @@ was an intermediate development version, not a published release. Candidate
    `server/public/privacy.html`. Verify anonymous access and the actual text:
    version 0.4.0, shared packing/checklists, special-day free text, help,
    attribution/reviews, paired versions, deletion and shared-secret limitations.
-   On 2026-10-11 the deployed page still described 0.2.0. Local preparation
-   does not prove the hosted file was updated.
+   The owner subsequently replaced it on 2026-10-11; anonymous HTTPS verification
+   confirms it matches the current repository policy after normalizing line
+   endings. Recheck the hosted copy after any further policy changes.
 3. Use the updated `listing-nl.txt`, privacy policy and data-use declarations in
    `submission.md`. Keep the supported Schoolware-format limitation explicit.
 4. Run the required project checks and both Chrome smoke scripts. The isolated

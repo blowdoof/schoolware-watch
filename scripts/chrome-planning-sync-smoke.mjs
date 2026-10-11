@@ -97,6 +97,8 @@ try {
     const { targetId } = await command('Target.createTarget', { url: `chrome-extension://${id}/dashboard.html` });
     const { sessionId } = await command('Target.attachToTarget', { targetId, flatten: true });
     await poll(() => evaluate(sessionId, `Boolean(document.querySelector('[aria-label="Speciale dagen"]'))`));
+    assert.equal(await evaluate(sessionId, `document.querySelectorAll('.workspace-section[open]').length`), 1);
+    await evaluate(sessionId, `(() => { for (const section of document.querySelectorAll('.workspace-section:not([open])')) section.querySelector('summary').click(); return true; })()`);
     const worker = await poll(async () => (await command('Target.getTargets')).targetInfos.find((target) =>
       target.type === 'service_worker' && target.url.startsWith(`chrome-extension://${id}/`)));
     const { sessionId: workerSession } = await command('Target.attachToTarget', { targetId: worker.targetId, flatten: true });

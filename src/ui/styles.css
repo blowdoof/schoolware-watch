@@ -4,3 +4,15 @@
   body { @apply m-0 bg-slate-50 text-slate-900 antialiased; }
   a { @apply rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-teal-700; }
 }
+
+.workspace-content > section {
+  margin-top: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.workspace-section > summary::-webkit-details-marker { display: none; }
+
+/* Preserve preferences such as hiding the book bag when its panel returns null. */
+.workspace-section:has(> .workspace-content:empty) { display: none; }

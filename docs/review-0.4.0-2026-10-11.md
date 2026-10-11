@@ -16,9 +16,11 @@ tests cover both review kinds, history overflow/repeated application and stale
 offline checklist completion across two devices.
 
 The Store listing, privacy sources and current submission instructions are updated
-for 0.4.0. R4 remains operationally open until the hosted policy is replaced and
-verified. The owner will upload `server/public/privacy.html`; no deployment access
-is available in this workspace. No API/SQL change is needed for these fixes.
+for 0.4.0. The owner uploaded `server/public/privacy.html`; anonymous HTTPS fetch
+on 2026-10-11 confirms that the hosted policy matches the repository (normalizing
+line endings). R4's public-policy deployment requirement is resolved; applying
+the prepared listing/declarations in the Store dashboard remains a submission
+step. Hosting uploads remain manual. No API/SQL change is needed for these fixes.
 
 Fresh remediation validation: TypeScript, ESLint, 400 tests and production build
 passed. Both Chrome 155 smoke scripts passed; the two-device script passed on

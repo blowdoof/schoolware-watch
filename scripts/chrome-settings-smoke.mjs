@@ -63,6 +63,10 @@ try {
   async function openSettings(checkGuide = false) {
     const { targetId } = await command('Target.createTarget', { url: optionsUrl });
     const { sessionId } = await command('Target.attachToTarget', { targetId, flatten: true });
+    await poll(() => evaluate(sessionId, `document.querySelectorAll('.workspace-section').length === 5`));
+    assert.equal(await evaluate(sessionId, `document.querySelectorAll('.workspace-section[open]').length`), 0);
+    // Open the groups through their native summaries for the existing full-form checks.
+    await evaluate(sessionId, `(() => { for (const section of document.querySelectorAll('.workspace-section:not([open])')) section.querySelector('summary').click(); return true; })()`);
     if (checkGuide) {
       await poll(() => evaluate(sessionId, `document.querySelector('[aria-label="Installatiehulp"]')?.textContent.includes('Stap 1 van 3')`));
       await poll(() => evaluate(sessionId, `Boolean([...document.querySelectorAll('button')].find(button => button.textContent === 'Schoolware verbinden'))`));
@@ -180,6 +184,11 @@ try {
   // Create and check a local special day through the real React form, then
   // restart the worker and verify the optional v3 profile fields remain durable.
   await poll(() => evaluate(bagSession, `Boolean(document.querySelector('[aria-label="Speciale dagen"] button:not(:disabled)'))`));
+  assert.equal(await evaluate(bagSession, `document.querySelectorAll('.workspace-section[open]').length`), 1);
+  await evaluate(bagSession, `document.querySelector('[aria-label="Speciale dagen"]').closest('.workspace-section').querySelector('summary').focus()`);
+  await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', text: '\r', unmodifiedText: '\r', windowsVirtualKeyCode: 13 }, bagSession);
+  await command('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 }, bagSession);
+  await poll(() => evaluate(bagSession, `document.querySelector('[aria-label="Speciale dagen"]').closest('.workspace-section').open`));
   await evaluate(bagSession, `(() => {
     [...document.querySelector('[aria-label="Speciale dagen"]').querySelectorAll('button')].find(button => button.textContent === 'Speciale dag toevoegen').click();
     return true;
@@ -195,6 +204,12 @@ try {
     return true;
   })()`);
   await command('Input.insertText', { text: 'Synthetic folders and charger' }, bagSession);
+  await evaluate(bagSession, `document.querySelector('[aria-label="Speciale dagen"]').closest('.workspace-section').querySelector('summary').click()`);
+  await poll(() => evaluate(bagSession, `!document.querySelector('[aria-label="Speciale dagen"]').closest('.workspace-section').open`));
+  await evaluate(bagSession, `document.querySelector('[aria-label="Speciale dagen"]').closest('.workspace-section').querySelector('summary').click()`);
+  await poll(() => evaluate(bagSession, `document.querySelector('[aria-label="Speciale dagen"]').closest('.workspace-section').open`));
+  assert.equal(await evaluate(bagSession, `[...document.querySelector('[aria-label="Speciale dagen"] form').querySelectorAll('label')].find(label => label.textContent.startsWith('Checklistpunt 1')).querySelector('input').value`), 'Synthetic folders and charger');
+  console.log('Chrome compact navigation smoke passed: collapsed settings, to-do open by default, native disclosure and preserved special-day draft.');
   await evaluate(bagSession, `(() => {
     [...document.querySelector('[aria-label="Speciale dagen"] form').querySelectorAll('label')].find(label => label.textContent.includes('Ook tonen in boekentas')).querySelector('input').click();
     document.querySelector('[aria-label="Speciale dagen"] form button[type="submit"]').click(); return true;
@@ -340,6 +355,7 @@ try {
   await poll(() => evaluate(restarted.sessionId, `Boolean([...document.querySelectorAll('label')].find(label => label.textContent.includes('Boekentas tonen onder de to-do'))?.querySelector('input').checked)`));
   await toggleSchoolbag();
   await poll(() => evaluate(bagSession, `!document.querySelector('[aria-label="Boekentas"]')`));
+  assert.equal(await evaluate(bagSession, `getComputedStyle([...document.querySelectorAll('.workspace-section')].find(section => section.querySelector('summary').textContent.trim().startsWith('Boekentas'))).display`), 'none');
   assert.equal(await evaluate(bagSession, `(async () => (await chrome.runtime.sendMessage({ type: 'preferences.read' })).preferences.schoolbagEnabled)()`), false);
   await toggleSchoolbag();
   await poll(() => evaluate(bagSession, `document.querySelector('[aria-label="Boekentas"]')?.textContent.includes('pagina 24-34')`));
@@ -432,6 +448,8 @@ try {
     })()`));
     const capture = async (fileName, selector) => {
       await evaluate(bagSession, `(() => {
+        const group = document.querySelector(${JSON.stringify(selector)}).closest('.workspace-section');
+        if (group && !group.open) group.querySelector('summary').click();
         document.querySelector(${JSON.stringify(selector)}).scrollIntoView({ block: 'start' });
         window.scrollBy(0, -80);
         let label = document.getElementById('synthetic-store-label');

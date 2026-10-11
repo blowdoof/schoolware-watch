@@ -18,8 +18,10 @@ the current candidate.
 
 The 2026-10-11 review remediation restores offline confirmation of returning
 task content, retires edited checklist point identities, and bounds historical
-review projection without blocking synchronization. Public privacy-page upload
-and verification remain pending. See [submission checks](store/update-0.4.0.md).
+review projection without blocking synchronization. The owner uploaded the public
+privacy page; anonymous HTTPS verification confirms it matches the repository.
+Overview/settings now use [compact sections](compact-navigation.md).
+See [submission checks](store/update-0.4.0.md).
 
 Candidate validation: strict TypeScript, ESLint, 400 Vitest tests and production
 build pass. The isolated PHP 8.2/MySQL integration verifies compatibility gating,

@@ -15,6 +15,7 @@ import { SpecialDaysPanel } from './SpecialDaysPanel';
 import { SchoolbagPanel } from './SchoolbagPanel';
 import { InfoPanel, infoSections, type InfoSection } from './InfoPanel';
 import type { OpenPageMessage } from '../shared/navigation';
+import { WorkspaceSection } from './WorkspaceSection';
 
 type Page = 'popup' | 'dashboard' | 'options' | 'info';
 
@@ -68,22 +69,24 @@ export function App({ page: initialPage }: { page: Page }) {
     <main className={initialPage === 'popup' ? 'w-96 p-6' : 'mx-auto max-w-3xl px-6 pb-12 pt-6'}>
       <nav aria-label="Navigatie" className="sticky top-0 z-10 -mx-6 -mt-6 mb-4 flex justify-end gap-1 bg-slate-50 px-4 py-2 text-teal-700">
         {(page !== 'dashboard' || target) && (
-          <button type="button" disabled={navigationPending} aria-label="Overzicht openen" title="Overzicht openen" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg hover:bg-teal-50" onClick={() => navigate('dashboard')}>
+          <button type="button" disabled={navigationPending} aria-label="Overzicht openen" title="Overzicht openen" className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg px-2 text-sm hover:bg-teal-50" onClick={() => navigate('dashboard')}>
             <svg aria-hidden="true" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="3" width="7" height="7" rx="1" />
               <rect x="14" y="3" width="7" height="7" rx="1" />
               <rect x="3" y="14" width="7" height="7" rx="1" />
               <rect x="14" y="14" width="7" height="7" rx="1" />
             </svg>
+            {initialPage !== 'popup' && <span>Overzicht</span>}
           </button>
         )}
         {page !== 'options' && (
-          <button type="button" disabled={navigationPending} aria-label="Instellingen" title="Instellingen" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg hover:bg-teal-50" onClick={() => navigate('options')}>
+          <button type="button" disabled={navigationPending} aria-label="Instellingen" title="Instellingen" className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg px-2 text-sm hover:bg-teal-50" onClick={() => navigate('options')}>
             <svg aria-hidden="true" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M4 7h16M4 17h16" />
               <circle cx="9" cy="7" r="3" fill="currentColor" stroke="none" />
               <circle cx="15" cy="17" r="3" fill="currentColor" stroke="none" />
             </svg>
+            {initialPage !== 'popup' && <span>Instellingen</span>}
           </button>
         )}
         <button type="button" aria-expanded={helpOpen} aria-controls="help-panel"
@@ -105,22 +108,44 @@ export function App({ page: initialPage }: { page: Page }) {
       {target ? <NotificationDetailsPanel target={target} refreshToken={historyRevision} /> : page === 'info' ?
         <InfoPanel section={infoSection} onSectionChange={setInfoSection} onSettings={() => navigate('options')} /> : <>
       <ConnectionNotice refreshToken={historyRevision} onSettings={() => navigate('options')} navigationPending={navigationPending} />
-      {page === 'options' && <ConnectionPanel showSetup refreshToken={historyRevision} onHistoryChanged={() => setHistoryRevision((revision) => revision + 1)} />}
-      <PreferencesPanel settings={page === 'options'} refreshToken={historyRevision} onSaved={() => setHistoryRevision((revision) => revision + 1)} />
-      {(page === 'popup' || page === 'dashboard') && <TodoPanel refreshToken={historyRevision} />}
-      {(page === 'popup' || page === 'dashboard') && <SpecialDaysPanel refreshToken={historyRevision} />}
-      {(page === 'popup' || page === 'dashboard') && <SchoolbagPanel refreshToken={historyRevision} />}
-      {page === 'dashboard' && <TasksPanel refreshToken={historyRevision} />}
-      {page !== 'popup' && <HistoryPanel settings={page === 'options'} refreshToken={historyRevision} />}
-      {page === 'options' && (
-        <p className="mt-6 text-sm leading-6 text-slate-600">
-          Je agendageschiedenis blijft lokaal in deze browser. Schoolware Watch bewaart geen
-          Schoolware-inloggegevens. Je kunt hierboven de bewaartermijn instellen en lokale gegevens wissen.
-        </p>
-      )}
+      {page === 'options' ? <div key="settings-sections" aria-label="Onderdelen van instellingen">
+        <p className="mt-4 text-sm text-slate-600">Open het onderdeel dat je wilt aanpassen. Je andere instellingen en invoer blijven behouden.</p>
+        <WorkspaceSection title="Schoolware-koppeling" description="Agenda verbinden, sessie herstellen en nu controleren">
+          <ConnectionPanel showSetup refreshToken={historyRevision} onHistoryChanged={() => setHistoryRevision((revision) => revision + 1)} />
+        </WorkspaceSection>
+        <WorkspaceSection title="Controles en meldingen" description="Automatische controles, meldingen, kleuren en boekentas">
+          <PreferencesPanel settings refreshToken={historyRevision} onSaved={() => setHistoryRevision((revision) => revision + 1)} />
+        </WorkspaceSection>
+        <WorkspaceSection title="Delen tussen toestellen" description="Koppelen, deelnemers, synchronisatie en versiecontrole">
+          <ProgressSyncPanel refreshToken={historyRevision} />
+        </WorkspaceSection>
+        <WorkspaceSection title="Privacy, bewaren en wissen" description="Bewaartermijn en lokale gegevens verwijderen">
+          <HistoryPanel settings refreshToken={historyRevision} />
+          <p className="px-5 pb-5 text-sm leading-6 text-slate-600">Je Schoolware-agendageschiedenis blijft lokaal in deze browser. Schoolware Watch bewaart geen Schoolware-inloggegevens. Gedeelde gegevens beheer je bij Delen tussen toestellen.</p>
+        </WorkspaceSection>
+        <WorkspaceSection title="Activiteitenlog" description="Technische gebeurtenissen bekijken en exporteren">
+          <ActivityPanel refreshToken={historyRevision} />
+        </WorkspaceSection>
+      </div> : <div key="overview-sections" aria-label="Onderdelen van overzicht">
+        <PreferencesPanel settings={false} refreshToken={historyRevision} onSaved={() => setHistoryRevision((revision) => revision + 1)} />
+        <p className="mt-4 text-sm text-slate-600">Je to-do staat open. Open hieronder wat je verder nodig hebt.</p>
+        <WorkspaceSection title="To-do" description="Wat moet klaar zijn voor de volgende schooldag?" defaultOpen>
+          <TodoPanel refreshToken={historyRevision} />
+        </WorkspaceSection>
+        <WorkspaceSection title="Boekentas" description="Mee naar school, mee naar huis en wie heeft ingepakt">
+          <SchoolbagPanel refreshToken={historyRevision} />
+        </WorkspaceSection>
+        {page === 'dashboard' && <WorkspaceSection title="Agenda en voortgang" description="Alle taken en toetsen, controles en CSV-export">
+          <TasksPanel refreshToken={historyRevision} />
+        </WorkspaceSection>}
+        <WorkspaceSection title="Speciale dagen" description="Thuisstudie, sportdagen en voorbereiding met checklists">
+          <SpecialDaysPanel refreshToken={historyRevision} />
+        </WorkspaceSection>
+        {page === 'dashboard' && <WorkspaceSection title="Wijzigingsgeschiedenis" description="Wat is er veranderd sinds de vorige waarnemingen?">
+          <HistoryPanel settings={false} refreshToken={historyRevision} />
+        </WorkspaceSection>}
+      </div>}
       </>}
-      {page === 'options' && <ProgressSyncPanel refreshToken={historyRevision} />}
-      {page === 'options' && <ActivityPanel refreshToken={historyRevision} />}
       <footer className="mt-8 border-t border-slate-200 pt-4 text-xs text-slate-500">
         <p>Een onafhankelijk project van Bumper.be</p>
         <nav aria-label="Projectinformatie" className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
