@@ -82,7 +82,7 @@ export function ConnectionNotice({ snapshot, onSettings, navigationPending, comp
   const needsLogin = ['session-required', 'redirected'].includes(connection?.lastCheck?.status ?? '');
   const lastSuccessAt = connection?.lastSuccessAt ?? (connection?.lastCheck?.status === 'success' ? connection.lastCheck.checkedAt : null);
   if (!available || (connection === null && !error)) return null;
-  const notice = <section aria-label="Koppelingsstatus" className="mt-6 rounded-2xl border border-teal-200 bg-teal-50 p-5 text-sm leading-6 text-teal-900">
+  const notice = <section id="overview-connection-status" tabIndex={-1} aria-label="Koppelingsstatus" className="workspace-status-target mt-6 rounded-2xl border border-teal-200 bg-teal-50 p-5 text-sm leading-6 text-teal-900">
     {error && connection && <p role="alert" className="text-red-700">De actuele status kon niet worden geladen. Dit zijn de laatst bekende gegevens.</p>}
     <h2 className="font-semibold">{connection ? connectionHealth(connection) : 'De koppelingsstatus kon niet worden geladen.'}</h2>
     {connected && <p className="mt-1 text-xs">Laatste geslaagde controle: {lastSuccessAt ? new Date(lastSuccessAt).toLocaleString('nl-BE', { timeZone: 'Europe/Brussels' }) : 'nog geen'}. Je ziet de laatst opgehaalde agenda.</p>}
@@ -102,7 +102,7 @@ export function ConnectionNotice({ snapshot, onSettings, navigationPending, comp
   const labels = { busy: 'Controle of synchronisatie bezig', ok: sync?.enabled ? 'Laatste controle en synchronisatie geslaagd' : 'Laatste agendacontrole geslaagd; delen staat uit', issue: 'Probleem bij controle of synchronisatie', unknown: 'Nog niet volledig bevestigd' };
   return <WorkspaceSection id="overview-status" title="Controle en synchronisatie" status={<StatusIcon status={status} label={labels[status]} />}>
     {notice}{children}
-    <p className="px-5 py-3 text-xs text-slate-600" role="status">{sync?.enabled ?
+    <p id="overview-sharing-status" tabIndex={-1} className="workspace-status-target px-5 py-3 text-xs text-slate-600" role="status">{sync?.enabled ?
       `Delen tussen toestellen: ${sync.checking ? 'synchronisatie bezig' : sync.error || sync.blocked || sync.membersError || sync.compatibility?.issue ? 'probleem — kijk bij Instellingen' : sync.receiving ? 'gedeelde wijzigingen worden nog opgehaald' : sync.pending ? `${sync.pending} wijzigingen wachten op synchronisatie` : sync.lastSuccessAt ? 'laatste synchronisatie geslaagd' : 'nog geen geslaagde synchronisatie'}.` : 'Delen tussen toestellen staat uit; wijzigingen blijven lokaal.'}</p>
   </WorkspaceSection>;
 }

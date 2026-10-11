@@ -22,6 +22,9 @@ snapshot and a single polling subscription per page. Disabled sharing is explici
 labeled, and failed sharing does not turn a successful agenda check red (or vice
 versa). Clicking a status opens the overview's details or the matching settings
 group. The overview also has a dedicated control/sync chapter shortcut.
+Overview status buttons target separate agenda and sharing details within the
+expanded control chapter. Navigation waits for disclosure layout before focusing
+and scrolling, so switching either direction and repeated clicks remain usable.
 Running indicators are transient worker
 presentation state; durable results and retries remain repository-backed.
 

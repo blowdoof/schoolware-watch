@@ -70,6 +70,10 @@ try {
     await poll(() => evaluate(sessionId, `document.getElementById('settings-sharing').open && document.activeElement === document.getElementById('settings-sharing').querySelector('summary')`));
     await evaluate(sessionId, `document.getElementById('settings-sharing').querySelector('summary').click()`);
     await poll(() => evaluate(sessionId, `!document.getElementById('settings-sharing').open`));
+    for (const chapter of ['connection', 'sharing', 'connection', 'sharing']) {
+      await evaluate(sessionId, `document.querySelector('.workspace-status-link[aria-controls="settings-${chapter}"]').click()`);
+      await poll(() => evaluate(sessionId, `document.getElementById('settings-${chapter}').open && document.activeElement === document.getElementById('settings-${chapter}').querySelector('summary')`));
+    }
     // Open the groups through their native summaries for the existing full-form checks.
     await evaluate(sessionId, `(() => { for (const section of document.querySelectorAll('.workspace-section:not([open])')) section.querySelector('summary').click(); return true; })()`);
     if (checkGuide) {
@@ -198,8 +202,19 @@ try {
   await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 800, deviceScaleFactor: 1, mobile: false }, bagSession);
   assert.equal(await evaluate(bagSession, `getComputedStyle(document.querySelector('.workspace-navigation')).position`), 'fixed');
   assert.ok(await evaluate(bagSession, `document.querySelector('.workspace-navigation').getBoundingClientRect().right < document.getElementById('overview-todo').getBoundingClientRect().left`), 'Chapter rail stays outside the content');
+  const checkStatusSwitching = async () => {
+    for (const target of ['connection', 'sharing', 'connection', 'sharing']) {
+      await evaluate(bagSession, `document.querySelector('.workspace-status-link[aria-controls="overview-${target}-status"]').click()`);
+      await poll(() => evaluate(bagSession, `document.getElementById('overview-status').open && document.activeElement === document.getElementById('overview-${target}-status')`));
+      await poll(() => evaluate(bagSession, `(() => { const rect = document.getElementById('overview-${target}-status').getBoundingClientRect(); return rect.top >= 50 && rect.top < window.innerHeight; })()`));
+    }
+  };
+  await checkStatusSwitching();
   await command('Emulation.setDeviceMetricsOverride', { width: 600, height: 500, deviceScaleFactor: 1, mobile: false }, bagSession);
   assert.equal(await evaluate(bagSession, `getComputedStyle(document.querySelector('.workspace-navigation')).position`), 'sticky');
+  await checkStatusSwitching();
+  await evaluate(bagSession, `document.getElementById('overview-status').querySelector('summary').click()`);
+  await poll(() => evaluate(bagSession, `!document.getElementById('overview-status').open`));
   await evaluate(bagSession, `document.querySelector('button[aria-controls="overview-schoolbag"]').click()`);
   await poll(() => evaluate(bagSession, `document.getElementById('overview-schoolbag').open && document.activeElement === document.getElementById('overview-schoolbag').querySelector('summary')`));
   await poll(() => evaluate(bagSession, `(() => { const nav = document.querySelector('.workspace-navigation').getBoundingClientRect(); const heading = document.getElementById('overview-schoolbag').getBoundingClientRect(); return window.scrollY > 0 && nav.top >= 0 && nav.bottom <= heading.top; })()`));

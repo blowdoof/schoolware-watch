@@ -52,7 +52,7 @@
 .workspace-status-link:hover { background: #f0fdfa; }
 .workspace-status-link:focus-visible { outline: 2px solid #0f766e; outline-offset: 2px; }
 .workspace-status-link > span:first-of-type { flex: 1; text-align: left; }
-.workspace-section { scroll-margin-top: 15rem; }
+.workspace-section, .workspace-status-target { scroll-margin-top: 15rem; }
 
 @media (min-width: 1280px) {
   .workspace-navigation--full {
@@ -76,7 +76,7 @@
     border-left-width: 3px;
   }
   .workspace-navigation--full .workspace-navigation-status { flex-direction: column; gap: 0.125rem; }
-  .workspace-section { scroll-margin-top: 5rem; }
+  .workspace-section, .workspace-status-target { scroll-margin-top: 5rem; }
 }
 
 /* Preserve preferences such as hiding the book bag when its panel returns null. */

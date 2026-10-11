@@ -40,23 +40,28 @@ export function WorkspaceNavigation({ full, settings = false, snapshot }: { full
       window.removeEventListener('resize', update);
     };
   }, [full, settings, prefix]);
-  function open(id: string) {
+  function open(id: string, targetId?: string) {
     const section = document.getElementById(`${prefix}-${id}`) as HTMLDetailsElement | null;
     if (!section) return;
     setActive(id);
     section.open = true;
-    section.querySelector('summary')?.focus({ preventScroll: true });
-    section.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+    // Wait for disclosure/layout before scrolling, including repeated status clicks.
+    requestAnimationFrame(() => {
+      const target = targetId ? document.getElementById(targetId) : section;
+      if (!target?.isConnected) return;
+      (targetId ? target : section.querySelector('summary'))?.focus({ preventScroll: true });
+      target.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+    });
   }
   return <nav ref={navigation} aria-label="Snel naar onderdeel" className={`workspace-navigation${full ? ' workspace-navigation--full' : ''}`}>
     <div className="workspace-navigation-status" aria-label="Actuele controles en synchronisatie">
-      <button type="button" className="workspace-status-link" aria-controls={settings ? 'settings-connection' : 'overview-status'}
-        onClick={() => open(settings ? 'connection' : 'status')} title={snapshot.error ? 'Status kon niet worden geladen' : snapshot.connection ? connectionHealth(snapshot.connection) : 'Schoolware-status nog niet bekend'}>
+      <button type="button" className="workspace-status-link" aria-controls={settings ? 'settings-connection' : 'overview-connection-status'}
+        onClick={() => open(settings ? 'connection' : 'status', settings ? undefined : 'overview-connection-status')} title={snapshot.error ? 'Status kon niet worden geladen' : snapshot.connection ? connectionHealth(snapshot.connection) : 'Schoolware-status nog niet bekend'}>
         <svg aria-hidden="true" className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M7 3v4m10-4v4M3 11h18m-12 5 2 2 4-4" /></svg>
         <span>Schoolware</span><StatusIcon status={agendaStatus(snapshot.connection, snapshot.error)} label={snapshot.error ? 'Schoolware-status niet beschikbaar' : snapshot.connection ? connectionHealth(snapshot.connection) : 'Schoolware-status nog niet bekend'} />
       </button>
-      <button type="button" className="workspace-status-link" aria-controls={settings ? 'settings-sharing' : 'overview-status'}
-        onClick={() => open(settings ? 'sharing' : 'status')}>
+      <button type="button" className="workspace-status-link" aria-controls={settings ? 'settings-sharing' : 'overview-sharing-status'}
+        onClick={() => open(settings ? 'sharing' : 'status', settings ? undefined : 'overview-sharing-status')}>
         <svg aria-hidden="true" className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 7a8 8 0 0 0-14-2L3 8m0-5v5h5m-4 9a8 8 0 0 0 14 2l3-3m0 5v-5h-5" /></svg>
         <span>Delen{snapshot.sync && !snapshot.sync.enabled ? ' uit' : ''}</span><StatusIcon status={sharingStatus(snapshot.sync, snapshot.error)} label={snapshot.error ? 'Deelstatus niet beschikbaar' : !snapshot.sync ? 'Deelstatus nog niet bekend' : !snapshot.sync.enabled ? 'Delen tussen toestellen staat uit' : ({ busy: 'Synchronisatie bezig', ok: 'Laatste synchronisatie geslaagd', issue: 'Probleem bij synchronisatie; open de details', unknown: 'Synchronisatie nog niet volledig bevestigd' })[sharingStatus(snapshot.sync, false)]} />
       </button>
