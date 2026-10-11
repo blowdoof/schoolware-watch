@@ -25,6 +25,13 @@ group. The overview also has a dedicated control/sync chapter shortcut.
 Overview status buttons target separate agenda and sharing details within the
 expanded control chapter. Navigation waits for disclosure layout before focusing
 and scrolling, so switching either direction and repeated clicks remain usable.
+The sharing destination is a labeled detail card. Trailing chapter scroll space
+allows even the final details to align below navigation. Active chapters have a
+visible border and summary tint, and a selected status detail has its own outline.
+Programmatic smooth scrolling retains the clicked selection until scrolling
+finishes; manual scrolling then updates both chapter and detail markers. Browser
+coverage uses actual pointer events and checks destination alignment and outlines,
+including manual scrolling and switching status buttons without intermediate clicks.
 Running indicators are transient worker
 presentation state; durable results and retries remain repository-backed.
 

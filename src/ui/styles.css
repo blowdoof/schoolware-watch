@@ -14,6 +14,19 @@
 
 .workspace-section > summary::-webkit-details-marker { display: none; }
 
+/* Leave enough scroll room to identify and align the final chapter/detail. */
+.workspace-chapters { padding-bottom: max(0px, calc(100dvh - 16rem)); }
+.workspace-section[data-workspace-active="chapter"] {
+  border-color: #0d9488;
+  box-shadow: 0 0 0 2px rgb(13 148 136 / 25%);
+}
+.workspace-section[data-workspace-active="chapter"] > summary { background: #f0fdfa; }
+.workspace-status-target[data-workspace-active="detail"] {
+  outline: 2px solid #0d9488;
+  outline-offset: -2px;
+  border-radius: 0.75rem;
+}
+
 /* Keep chapter shortcuts available without covering the selected heading. */
 .workspace-navigation {
   position: sticky;

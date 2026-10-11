@@ -204,9 +204,12 @@ try {
   assert.ok(await evaluate(bagSession, `document.querySelector('.workspace-navigation').getBoundingClientRect().right < document.getElementById('overview-todo').getBoundingClientRect().left`), 'Chapter rail stays outside the content');
   const checkStatusSwitching = async () => {
     for (const target of ['connection', 'sharing', 'connection', 'sharing']) {
-      await evaluate(bagSession, `document.querySelector('.workspace-status-link[aria-controls="overview-${target}-status"]').click()`);
+      const point = await evaluate(bagSession, `(() => { const rect = document.querySelector('.workspace-status-link[aria-controls="overview-${target}-status"]').getBoundingClientRect(); return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }; })()`);
+      await command('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', clickCount: 1 }, bagSession);
+      await command('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point, button: 'left', clickCount: 1 }, bagSession);
       await poll(() => evaluate(bagSession, `document.getElementById('overview-status').open && document.activeElement === document.getElementById('overview-${target}-status')`));
-      await poll(() => evaluate(bagSession, `(() => { const rect = document.getElementById('overview-${target}-status').getBoundingClientRect(); return rect.top >= 50 && rect.top < window.innerHeight; })()`));
+      await poll(() => evaluate(bagSession, `(() => { const element = document.getElementById('overview-${target}-status'); return Math.abs(element.getBoundingClientRect().top - parseFloat(getComputedStyle(element).scrollMarginTop)) <= 2; })()`));
+      assert.ok(await evaluate(bagSession, `document.getElementById('overview-${target}-status').dataset.workspaceActive === 'detail' && document.getElementById('overview-status').dataset.workspaceActive === 'chapter' && document.querySelector('.workspace-status-link[aria-controls="overview-${target}-status"]').getAttribute('aria-current') === 'location'`), 'The actual destination and status shortcut remain visibly selected');
     }
   };
   await checkStatusSwitching();
@@ -219,6 +222,9 @@ try {
   await poll(() => evaluate(bagSession, `document.getElementById('overview-schoolbag').open && document.activeElement === document.getElementById('overview-schoolbag').querySelector('summary')`));
   await poll(() => evaluate(bagSession, `(() => { const nav = document.querySelector('.workspace-navigation').getBoundingClientRect(); const heading = document.getElementById('overview-schoolbag').getBoundingClientRect(); return window.scrollY > 0 && nav.top >= 0 && nav.bottom <= heading.top; })()`));
   await poll(() => evaluate(bagSession, `document.querySelector('button[aria-controls="overview-schoolbag"]').getAttribute('aria-current') === 'location'`));
+  assert.equal(await evaluate(bagSession, `document.getElementById('overview-schoolbag').dataset.workspaceActive`), 'chapter');
+  await evaluate(bagSession, `window.dispatchEvent(new WheelEvent('wheel')); document.getElementById('overview-todo').scrollIntoView({ block: 'start', behavior: 'instant' });`);
+  await poll(() => evaluate(bagSession, `document.querySelector('button[aria-controls="overview-todo"]').getAttribute('aria-current') === 'location' && document.getElementById('overview-todo').dataset.workspaceActive === 'chapter' && !document.getElementById('overview-schoolbag').hasAttribute('data-workspace-active')`));
   await command('Emulation.setDeviceMetricsOverride', { width: 1000, height: 800, deviceScaleFactor: 1, mobile: false }, bagSession);
   await evaluate(bagSession, `document.getElementById('overview-schoolbag').querySelector('summary').click()`);
   await poll(() => evaluate(bagSession, `!document.getElementById('overview-schoolbag').open`));

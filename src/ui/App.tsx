@@ -109,7 +109,7 @@ export function App({ page: initialPage }: { page: Page }) {
       {!target && page !== 'info' && <SetupWizard inlineConnection={page === 'popup'} onSettings={() => navigate('options')} refreshToken={historyRevision} onChanged={() => setHistoryRevision((revision) => revision + 1)} />}
       {target ? <NotificationDetailsPanel target={target} refreshToken={historyRevision} /> : page === 'info' ?
         <InfoPanel section={infoSection} onSectionChange={setInfoSection} onSettings={() => navigate('options')} /> : <>
-      {page === 'options' ? <div key="settings-sections" aria-label="Onderdelen van instellingen">
+      {page === 'options' ? <div key="settings-sections" className="workspace-chapters" aria-label="Onderdelen van instellingen">
         <WorkspaceNavigation full settings snapshot={status} />
         <WorkspaceSection id="settings-connection" title="Schoolware-koppeling" description="Agenda verbinden, sessie herstellen en nu controleren">
           <ConnectionPanel showSetup refreshToken={historyRevision} onHistoryChanged={() => setHistoryRevision((revision) => revision + 1)} />
@@ -127,7 +127,7 @@ export function App({ page: initialPage }: { page: Page }) {
         <WorkspaceSection id="settings-activity" title="Activiteitenlog" description="Technische gebeurtenissen bekijken en exporteren">
           <ActivityPanel refreshToken={historyRevision} />
         </WorkspaceSection>
-      </div> : <div key="overview-sections" aria-label="Onderdelen van overzicht">
+      </div> : <div key="overview-sections" className="workspace-chapters" aria-label="Onderdelen van overzicht">
         <WorkspaceNavigation full={page === 'dashboard'} snapshot={status} />
         <WorkspaceSection id="overview-todo" title="To-do" description="Wat moet klaar zijn voor de volgende schooldag?" defaultOpen>
           <TodoPanel refreshToken={historyRevision} />

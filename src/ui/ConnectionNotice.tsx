@@ -84,7 +84,8 @@ export function ConnectionNotice({ snapshot, onSettings, navigationPending, comp
   if (!available || (connection === null && !error)) return null;
   const notice = <section id="overview-connection-status" tabIndex={-1} aria-label="Koppelingsstatus" className="workspace-status-target mt-6 rounded-2xl border border-teal-200 bg-teal-50 p-5 text-sm leading-6 text-teal-900">
     {error && connection && <p role="alert" className="text-red-700">De actuele status kon niet worden geladen. Dit zijn de laatst bekende gegevens.</p>}
-    <h2 className="font-semibold">{connection ? connectionHealth(connection) : 'De koppelingsstatus kon niet worden geladen.'}</h2>
+    <h2 className="font-semibold">Schoolware</h2>
+    <p>{connection ? connectionHealth(connection) : 'De koppelingsstatus kon niet worden geladen.'}</p>
     {connected && <p className="mt-1 text-xs">Laatste geslaagde controle: {lastSuccessAt ? new Date(lastSuccessAt).toLocaleString('nl-BE', { timeZone: 'Europe/Brussels' }) : 'nog geen'}. Je ziet de laatst opgehaalde agenda.</p>}
     {needsLogin && <p className="mt-1">Open je Schoolware-website, meld je opnieuw aan en voer daarna via Instellingen een nieuwe controle uit. Je lokale geschiedenis blijft bewaard.</p>}
     {!connected && <p className="mt-1">{connected === false ? 'Koppel je Schoolware-agenda om hier je taken, toetsen en voortgang te zien.' :
@@ -102,7 +103,12 @@ export function ConnectionNotice({ snapshot, onSettings, navigationPending, comp
   const labels = { busy: 'Controle of synchronisatie bezig', ok: sync?.enabled ? 'Laatste controle en synchronisatie geslaagd' : 'Laatste agendacontrole geslaagd; delen staat uit', issue: 'Probleem bij controle of synchronisatie', unknown: 'Nog niet volledig bevestigd' };
   return <WorkspaceSection id="overview-status" title="Controle en synchronisatie" status={<StatusIcon status={status} label={labels[status]} />}>
     {notice}{children}
-    <p id="overview-sharing-status" tabIndex={-1} className="workspace-status-target px-5 py-3 text-xs text-slate-600" role="status">{sync?.enabled ?
+    <section id="overview-sharing-status" tabIndex={-1} aria-label="Deelstatus" className="workspace-status-target m-5 rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-700">
+      <h2 className="font-semibold text-teal-900">Delen tussen toestellen</h2>
+      <p className="mt-2" role="status">{sync?.enabled ?
       `Delen tussen toestellen: ${sync.checking ? 'synchronisatie bezig' : sync.error || sync.blocked || sync.membersError || sync.compatibility?.issue ? 'probleem — kijk bij Instellingen' : sync.receiving ? 'gedeelde wijzigingen worden nog opgehaald' : sync.pending ? `${sync.pending} wijzigingen wachten op synchronisatie` : sync.lastSuccessAt ? 'laatste synchronisatie geslaagd' : 'nog geen geslaagde synchronisatie'}.` : 'Delen tussen toestellen staat uit; wijzigingen blijven lokaal.'}</p>
+      {sync?.enabled && sync.lastSuccessAt && <p className="mt-2 text-xs">Laatste geslaagde synchronisatie: {new Date(sync.lastSuccessAt).toLocaleString('nl-BE', { timeZone: 'Europe/Brussels' })}.</p>}
+      <button type="button" disabled={navigationPending} onClick={onSettings} className="mt-3 text-teal-700 underline underline-offset-2">Delen beheren bij Instellingen</button>
+    </section>
   </WorkspaceSection>;
 }
