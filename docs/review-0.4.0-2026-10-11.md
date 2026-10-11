@@ -5,6 +5,31 @@ Reviewed source: `e72d0f89c916ed52188cbc81aa06a34152fe5feb`, branch
 release is 0.2.0 according to the owner; 0.3.0 was an unpublished intermediate.
 This document records findings, not remediation or release authorization.
 
+## Remediation update — 2026-10-11
+
+The findings below describe the originally reviewed commit. Subsequent source
+remediation on the same branch fixes R1–R3: returning content can be confirmed
+offline; materially edited checklist points receive new identities and unfinished
+state; deterministic bounded review projection preserves current controls and
+withdrawals without aborting synchronization. Five permanent synthetic regression
+tests cover both review kinds, history overflow/repeated application and stale
+offline checklist completion across two devices.
+
+The Store listing, privacy sources and current submission instructions are updated
+for 0.4.0. R4 remains operationally open until the hosted policy is replaced and
+verified. The owner will upload `server/public/privacy.html`; no deployment access
+is available in this workspace. No API/SQL change is needed for these fixes.
+
+Fresh remediation validation: TypeScript, ESLint, 400 tests and production build
+passed. Both Chrome 155 smoke scripts passed; the two-device script passed on
+an isolated retry after its initial concurrent run timed out during setup.
+The missing disposable PHP 8.2.34 runtime was restored from the official PHP
+download with its published SHA-256 verified. Isolated PHP/MySQL integration,
+including the legacy compatibility checks, now passes; the earlier failed rerun
+below is historical. The temporary local MySQL test process was stopped.
+Matthias review, real Store/deployed-device upgrade acceptance and hosting
+operational checks remain required. No merge, Store upload or publication occurred.
+
 ## Recommendation
 
 Send this report with the candidate for Matthias's review, but fix R1–R4 and

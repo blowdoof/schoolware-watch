@@ -23,6 +23,13 @@ export function actionStamp(participantId: string, state?: SyncState): ActionSta
 export function reviewIdentity(review: TaskReview): string {
   return `${review.version}:${review.kind}:${review.actor.participantId}`;
 }
+/** Keep current controls (including withdrawals), then the most recent history. */
+export function boundedReviews(reviews: TaskReview[], currentVersion: string): TaskReview[] {
+  return [...new Map(reviews.map((review) => [reviewIdentity(review), review])).values()]
+    .sort((a, b) => Number(b.version === currentVersion) - Number(a.version === currentVersion) ||
+      Date.parse(b.actor.at) - Date.parse(a.actor.at) || reviewIdentity(a).localeCompare(reviewIdentity(b)))
+    .slice(0, 200);
+}
 export function isActorMap(raw: unknown): raw is Record<string, ActionStamp> {
   return Boolean(raw && typeof raw === 'object' && !Array.isArray(raw) && Object.keys(raw).length <= 13000 &&
     Object.entries(raw).every(([key, actor]) => /^(?:packing:[a-f0-9]{64}|checklist:[a-f0-9-]{36}:[a-f0-9-]{36})$/.test(key) && isActionStamp(actor)));

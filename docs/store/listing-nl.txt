@@ -11,6 +11,9 @@ Ondersteunt Schoolware-websites met het ondersteunde ouderagendaformaat, ook bui
 Wat kun je ermee?
 - Veranderingen volgen tegenover eerdere lokale waarnemingen.
 - Openstaande taken en toetsen bekijken en zelf Open, Bezig of Klaar markeren.
+- Onafhankelijk hulp vragen aan gekoppelde toestellen en zien wie een status heeft gewijzigd of werk heeft nagekeken of verbeterd.
+- Speciale dagen met opmerkingen, voorbereiding en checklists toevoegen, bijvoorbeeld thuisstudie of een sportdag.
+- Agenda en taakvoortgang als CSV downloaden naar je eigen computer.
 - Een boekentasoverzicht bekijken: Mee naar school en Mee naar huis, met laptop, materiaal en paginaverwijzingen uit de agenda.
 - Optioneel algemene systeemmeldingen en een banner op Schoolware ontvangen.
 - Je bewaartermijn instellen en lokale gegevens verwijderen.
@@ -18,7 +21,7 @@ Wat kun je ermee?
 - Extensie delen: kopieer alleen de installatielink zodat iemand de extensie zelfstandig kan gebruiken of testen.
 - Leerlingvoortgang delen: kopieer een privé-uitnodiging met koppelcode voor een andere ouder die dezelfde leerling volgt.
 
-Agenda-inhoud, instructies en geschiedenis blijven lokaal. Schoolware-wachtwoorden, sessiecookies en authenticatietokens worden niet door de extensie opgeslagen. Er zijn geen advertenties, analytics of telemetrie. Bij optionele voortgangsdeling worden versleutelde statussen en eventueel zelfgekozen deelnemerlabels verstuurd; geen agendatitels of instructies. De server verwerkt ook verbindingsmetadata. Deel een koppelcode uitsluitend met iemand die je vertrouwt.
+Schoolware-agenda-inhoud, instructies en geschiedenis blijven lokaal. Schoolware-wachtwoorden, sessiecookies en authenticatietokens worden niet door de extensie opgeslagen. Er zijn geen advertenties, analytics of telemetrie. Bij optionele voortgangsdeling worden statussen, hulpvragen met ontvangerverwijzingen, zelf ingevoerde speciale dagen met tekst en checklists, checklistvinkjes, boekentaskeuzes, auteursgegevens, onafhankelijke controles en versies van gekoppelde toestellen versleuteld gedeeld. Deelnemerlabels zijn optioneel en niet geverifieerd. Schoolware-agendatitels, instructies en geschiedenis worden niet verstuurd. De server verwerkt ook verbindingsmetadata. Iedereen met de volledige koppelcode kan gedeelde gegevens lezen, wijzigen en wissen. Deel die code uitsluitend met iemand die je vertrouwt en zet alleen informatie in speciale dagen die je met die personen wilt delen. CSV-bestanden kunnen persoonlijke agendatekst bevatten; bewaar en verwijder ze zelf.
 
 Aan de slag
 Open Schoolware Watch, kies Schoolware verbinden, log in bij Schoolware, open de juiste agenda en bevestig de koppeling. Meldingen en voortgangsdeling zijn optioneel.

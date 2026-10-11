@@ -15,7 +15,7 @@ import { validateSpecialDay, MAX_SPECIAL_DAYS, isDay, type SpecialDay } from '..
 import { planningOperations, planningResource, sharedSpecialDay, type PlanningValue } from '../shared/planning-sync';
 import type { SyncState } from '../shared/progress-sync';
 import { packingIdentityMigration } from '../shared/schoolbag';
-import { actionStamp, reviewIdentity, type TaskReview } from '../shared/participation';
+import { actionStamp, reviewIdentity, boundedReviews, type TaskReview } from '../shared/participation';
 
 function queuePlanning(state: SyncState | undefined, scopeId: string, value: PlanningValue): void {
   if (state?.scopeId !== scopeId) return;
@@ -198,6 +198,13 @@ export class HistoryRepository {
       const previous = entries.find((item) => item.id === validated.id);
       if ((previous?.revision ?? 0) !== validated.revision || (!previous && validated.revision !== 0) ||
           entries.some((item) => item.day === validated.day && item.id !== validated.id)) throw new Error('Special day changed');
+      // A changed instruction is new work. Old/offline completion operations
+      // refer to the retired UUID and cannot complete its replacement.
+      validated.checklist = validated.checklist.map((point) => {
+        const old = previous?.checklist.find((item) => item.id === point.id);
+        return old && old.text.trim().replace(/\s+/g, ' ') !== point.text.trim().replace(/\s+/g, ' ')
+          ? { ...point, id: crypto.randomUUID(), done: false } : point;
+      });
       const next = entries.filter((item) => item.id !== validated.id);
       if (previous && previous.day !== validated.day) queuePlanning(state, scopeId, { type: 'special-day-move', previousDay: previous.day, entry: sharedSpecialDay(validated) });
       else if (!previous || JSON.stringify(sharedSpecialDay(previous)) !== JSON.stringify(sharedSpecialDay(validated)))
@@ -372,9 +379,9 @@ export class HistoryRepository {
         if (!entry || !scope?.localId || entry.sourceKey !== item.sourceKey || progressVersionText(entry.snapshot) !== text) throw new Error('Task changed');
         const review: TaskReview = { version, kind, done, actor: actionStamp(scope.localId, active) };
         const identity = reviewIdentity(review);
-        if (entry.reviews?.find((old) => reviewIdentity(old) === identity)?.done !== done) {
-          entry.reviews = [...(entry.reviews ?? []).filter((old) => reviewIdentity(old) !== identity), review];
-          if (entry.reviews.length > 200) throw new Error('Review limit');
+        if (entry.reviews?.find((old) => reviewIdentity(old) === identity)?.done !== done ||
+            entry.reviewContent !== text || entry.reviewVersion !== version) {
+          entry.reviews = boundedReviews([...(entry.reviews ?? []).filter((old) => reviewIdentity(old) !== identity), review], version);
           entry.reviewContent = text;
           entry.reviewVersion = version;
           if (active && key) { queuePlanning(active, scopeId, { type: 'task-review', item: key, review }); await tx.objectStore('sync').put(active, SYNC_STATE_KEY); }

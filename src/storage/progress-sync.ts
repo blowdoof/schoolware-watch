@@ -9,7 +9,7 @@ import { planningOperations, sharedSpecialDay, planningResource, assemblePlannin
 import { applySharedPlanning } from '../domain/shared-planning';
 import { brusselsWallTime } from '../domain/notification-window';
 import { APP_VERSION, SYNC_PROTOCOL, type SyncCompatibility, type StoreUpdate } from '../shared/sync-compatibility';
-import { reviewIdentity, type ActionStamp } from '../shared/participation';
+import { reviewIdentity, boundedReviews, type ActionStamp } from '../shared/participation';
 
 export class ProgressSyncRepository {
   constructor(private readonly name = HISTORY_DB) {}
@@ -278,12 +278,13 @@ export class ProgressSyncRepository {
             }
             if (item && progressVersionText(item.snapshot) === match.text) {
               const previousReviews = JSON.stringify([item.reviews, item.reviewContent, item.reviewVersion]);
+              const reviews = new Map((item.reviews ?? []).map((review) => [reviewIdentity(review), review]));
               for (const [resource, record] of Object.entries(current.planningRemote ?? {})) {
                 const value = record.value;
                 if (value.type !== 'task-review' || value.item !== match.key || current.planningOutbox?.some((op) => op.resource === resource)) continue;
-                item.reviews = [...(item.reviews ?? []).filter((old) => reviewIdentity(old) !== reviewIdentity(value.review)), structuredClone(value.review)];
-                if (item.reviews.length > 200) throw new Error('Review limit');
+                reviews.set(reviewIdentity(value.review), structuredClone(value.review));
               }
+              if (reviews.size) item.reviews = boundedReviews([...reviews.values()], match.version);
               if (item.reviews?.length) { item.reviewContent = match.text; item.reviewVersion = match.version; }
               if (previousReviews !== JSON.stringify([item.reviews, item.reviewContent, item.reviewVersion])) changed = true;
             }

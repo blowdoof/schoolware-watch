@@ -1,6 +1,6 @@
 # Release readiness and distribution
 
-Current candidate (2026-10-10): 0.4.0 adds fail-closed synchronization compatibility
+Current candidate (2026-10-11): 0.4.0 adds fail-closed synchronization compatibility
 checks, encrypted device-version announcements, change attribution and independent
 per-participant checked/corrected reviews. See [participation and reviews](participation-and-reviews.md) and
 [version compatibility](version-compatibility.md) for deployment and limitations.
@@ -16,7 +16,12 @@ family testing after server upgrade, not yet an unrestricted public release.
 The older dated observations below are historical evidence, not acceptance of
 the current candidate.
 
-Candidate validation: strict TypeScript, ESLint, 395 Vitest tests and production
+The 2026-10-11 review remediation restores offline confirmation of returning
+task content, retires edited checklist point identities, and bounds historical
+review projection without blocking synchronization. Public privacy-page upload
+and verification remain pending. See [submission checks](store/update-0.4.0.md).
+
+Candidate validation: strict TypeScript, ESLint, 400 Vitest tests and production
 build pass. The isolated PHP 8.2/MySQL integration verifies compatibility gating,
 policy changes before exchange, unchanged cursors on rejected writes, and legacy
 deletion/leave. Old cryptographic fixtures remain readable through a current

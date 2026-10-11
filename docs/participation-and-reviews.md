@@ -22,8 +22,9 @@ overwrite each other's control. Unsent local changes retain precedence until
 acknowledged. Unchecking emits a tombstone for that participant's current-content
 review, leaving other participants' reviews intact. Reviews on older task
 content remain visible with a previous-content warning and do not check the
-current-content controls. At most 200 review resources are retained per task;
-exceeding the bound fails the transaction rather than silently discarding records.
+current-content controls. The local projection retains at most 200 reviews per
+task, prioritizing current controls and withdrawals over older history; exceeding
+the historical bound does not abort unrelated synchronization.
 
 The interface edits only the local participant's controls. This is not a security
 boundary: all group-secret holders have full group rights and can fabricate names,
@@ -52,6 +53,22 @@ exchange. Do not downgrade a client and resume synchronization: older clients
 cannot safely preserve these new fields and are blocked by the new server policy.
 This does not fix pre-existing last-accepted-write conflicts for ordinary status
 changes; participant reviews specifically use independent resources.
+
+## Bounded review history
+
+The local task projection retains at most 200 review identities. Reviews of the
+current content, including withdrawn controls, have priority; remaining places
+retain the most recent historical actions with a deterministic identity tie-break.
+The existing group supports 50 announced devices, normally at most 100 current
+checked/corrected controls. Beyond the projection limit, older reviews are omitted
+from the display rather than blocking unrelated synchronization. Cached encrypted
+review resources retain withdrawal state under the existing cache/remote retention
+rules, so projection trimming does not turn a withdrawal into completion. This
+is a bounded current overview, not a permanent complete audit trail.
+
+When previously reviewed content returns, the old review remains marked previous
+until a local confirmation or synchronization reconciles the content projection.
+Local confirmation works even if its previous boolean was already true.
 
 ## API authentication
 

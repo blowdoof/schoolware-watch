@@ -1,6 +1,6 @@
 # Privacyverklaring Schoolware Watch
 
-Laatst bijgewerkt: 10 oktober 2026. Versie: 0.4.0 (bron voor de volgende update).
+Laatst bijgewerkt: 11 oktober 2026. Versie: 0.4.0 (bron voor de volgende update).
 
 Bij wijzigingen aan taakstatus, hulpvragen, checklistvinkjes en boekentaskeuzes
 bewaren we wie de wijziging deed: een willekeurige deelnemer- en eventueel
@@ -11,6 +11,12 @@ Namen bevestigen geen identiteit; alle houders van de koppelcode hebben dezelfde
 groepsrechten. Een gedeelde computer herkent niet automatisch welke persoon
 hem gebruikt. Deze gegevens volgen de lokale profielbewaring en de bestaande
 gedeelde bewaartermijnen en verwijderfuncties.
+
+Het lokale overzicht toont maximaal 200 controles per taak, met voorrang voor
+de huidige taakinhoud en ingetrokken controles. Oudere controles kunnen uit het
+overzicht verdwijnen; het is geen permanent volledig auditarchief. Bij inhoudelijk
+gewijzigde checklisttekst vervalt het oude vinkje en moet het nieuwe punt opnieuw
+worden bevestigd.
 
 Bij ingeschakelde deling worden ook de zelfgemelde extensieversie en protocolversie
 per toestel versleuteld gedeeld, met een meldtijd en eventueel de bestaande

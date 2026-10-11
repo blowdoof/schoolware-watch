@@ -7,7 +7,9 @@ import { ProgressSyncRepository } from '../src/storage/progress-sync';
 import { openHistoryDatabase } from '../src/storage/database';
 import { progressSync, synchronizeProgress } from '../src/background/progress-sync';
 import { createTasksView, validateTasksView } from '../src/shared/tasks';
-import { isActionStamp, isTaskReview } from '../src/shared/participation';
+import { isActionStamp, isTaskReview, boundedReviews, type TaskReview } from '../src/shared/participation';
+import { progressItemKey, progressVersion } from '../src/domain/progress-sync';
+import { planningResource } from '../src/shared/planning-sync';
 import { validatePlanningValue, planningOperations, assemblePlanning } from '../src/shared/planning-sync';
 import { validateConnectionMessage } from '../src/shared/connection';
 import { decryptProgress, encryptProgress } from '../src/domain/progress-sync';
@@ -49,6 +51,55 @@ function syntheticTransport() {
   return operations;
 }
 describe('attribution and independent reviews', () => {
+  it.each(['checked', 'corrected'] as const)('allows confirming returning content offline for %s', async (kind) => {
+    const scope = await history.record(check()); const id = scope.items[0]!.localId!;
+    await history.setTaskReview(scope.scopeId, id, kind, true);
+    await history.record(check({ checkId: 'synthetic-B', observedAt: '2026-10-02T09:00:00Z',
+      points: [{ ...point, snapshot: { ...point.snapshot, instructions: 'Synthetic B' } }] }));
+    await history.setTaskReview(scope.scopeId, id, kind, true);
+    await history.record(check({ checkId: 'synthetic-A-again', observedAt: '2026-10-02T10:00:00Z' }));
+    expect((await taskView(scope.scopeId)).reviews?.every((review) => review.previous)).toBe(true);
+    await history.setTaskReview(scope.scopeId, id, kind, true);
+    expect((await taskView(scope.scopeId)).reviews?.filter((review) => review.self && !review.previous && review.done)).toHaveLength(1);
+    await history.setTaskReview(scope.scopeId, id, kind, false);
+    expect((await taskView(scope.scopeId)).reviews?.some((review) => !review.previous && review.done)).toBe(false);
+  });
+
+  it('bounds old reviews deterministically without dropping current withdrawals', () => {
+    const current = 'f'.repeat(64);
+    const actor = { participantId: crypto.randomUUID(), deviceId: null, label: null, at: '2026-10-02T08:00:00Z' };
+    const reviews: TaskReview[] = Array.from({ length: 220 }, (_, i) => ({ version: i.toString(16).padStart(64, '0'), kind: 'checked', done: true, actor }));
+    const withdrawal: TaskReview = { version: current, kind: 'checked', done: false, actor };
+    expect(boundedReviews([...reviews, withdrawal], current)).toEqual(boundedReviews([withdrawal, ...reviews.reverse()], current));
+    expect(boundedReviews(reviews.concat(withdrawal), current)).toHaveLength(200);
+    expect(boundedReviews(reviews.concat(withdrawal), current)[0]).toEqual(withdrawal);
+  });
+
+  it('recovers from an oversized remote review history and applies unrelated progress on repeated sync', async () => {
+    const scope = await history.record(check()); await progressSync.connect(scope.scopeId, code, false);
+    const state = (await progressSync.read())!;
+    const key = await progressItemKey(state.key, point.sourceKey, new URL(scope.scopeId).origin);
+    const version = await progressVersion(point.snapshot);
+    state.planningOutbox = []; state.outbox = []; state.planningRemote = {};
+    const actor = { participantId: scope.localId!, deviceId: null, label: null, at: '2026-10-02T08:00:00Z' };
+    for (let i = 0; i < 220; i++) {
+      const value = { type: 'task-review' as const, item: key, review: { version: i.toString(16).padStart(64, '0'), kind: 'checked' as const, done: true, actor } };
+      state.planningRemote[planningResource(value)] = { value, revision: i + 1, seed: false };
+    }
+    const withdrawal = { type: 'task-review' as const, item: key, review: { version, kind: 'checked' as const, done: false, actor } };
+    state.planningRemote[planningResource(withdrawal)] = { value: withdrawal, revision: 221, seed: false };
+    state.cursor = state.head = 221;
+    state.remote[`${key}.${version}`] = { version, status: 'done', kind: 'manual', revision: 221 };
+    const db = await openHistoryDatabase(); await db.put('sync', state, 'progressSync'); db.close();
+    await expect(progressSync.apply(scope.scopeId)).resolves.toBe(true);
+    const task = await taskView(scope.scopeId);
+    expect(task.status).toBe('done'); expect(task.reviews).toHaveLength(200);
+    expect(task.reviews?.find((review) => !review.previous)).toMatchObject({ done: false, self: true });
+    await expect(progressSync.apply(scope.scopeId)).resolves.toBe(false);
+    expect((await taskView(scope.scopeId)).reviews).toEqual(task.reviews);
+    await history.setTaskReview(scope.scopeId, scope.items[0]!.localId!, 'checked', true);
+    expect((await taskView(scope.scopeId)).reviews?.find((review) => !review.previous)).toMatchObject({ done: true });
+  });
   it('keeps local controls independent from completion, durable across reopen, and bound to meaningful task content', async () => {
     const scope = await history.record(check()); const id = scope.items[0]!.localId!;
     await history.setTaskStatus(scope.scopeId, id, 'done', audit);

@@ -1,10 +1,12 @@
 # Chrome Web Store submission pack
 
-Update package: version 0.2.0, updated on 2026-10-06. The owner reports
-that 0.1.0 is approved and published. The owner authorized merging the complete
-feature branch into main and deferred Matthias's external review until later.
-No review completion or agent Store publication is claimed.
-See [0.2.0 release checks](../release-0.2.0.md) for outstanding live checks.
+Candidate package: version 0.4.0, updated on 2026-10-11. The owner reports
+that 0.2.0 is the latest published release; 0.3.0 was never published.
+Matthias's external review and resolution of blocking findings are required
+before merging or publishing. Review completion does not authorize either action.
+See [0.4.0 release checks](update-0.4.0.md) and the
+[candidate review](../review-0.4.0-2026-10-11.md). No Store upload or publication
+is performed by preparing this package.
 
 ## Upload assets
 
@@ -60,7 +62,7 @@ the application cannot guarantee that those systems delete data immediately.
 | scripting (optional) | Inject the locally bundled generic notification banner only into the connected Schoolware origin after user permission. |
 | webRequest (optional) | During explicit connection setup, recognize an allowlisted agenda GET request from the explicitly selected or dedicated tab, without reading headers, cookies or bodies. Permission is revoked when discovery ends. |
 | https://*/* (optional host declaration) | Schools use different custom HTTPS domains. Request only the exact user-selected origin for agenda transport, discovery and an optional banner. No all-sites grant is requested. The endpoint and query parameters remain constrained. |
-| schoolware.bumper.be (runtime optional host grant, covered by https://*/*) | Exchange encrypted progress and optional encrypted participant announcements only after explicit group pairing. No agenda text or Schoolware credentials are uploaded. |
+| schoolware.bumper.be (runtime optional host grant, covered by https://*/*) | Exchange encrypted statuses, independent help requests, user-entered special days/text/checklists, completion/packing choices, author/review metadata and device version announcements only after explicit group pairing. No Schoolware agenda text, history or credentials are uploaded. |
 
 ## Data-use declaration
 
@@ -68,7 +70,10 @@ Do not select "no user data" just because agenda content stays local. Google's
 policy includes locally handled data. Disclose website content (agenda text),
 personally identifiable information (local pupil references and optional user
 labels), narrowly scoped Schoolware request URLs/activity and optional independent
-sync authentication material. No unrelated browsing history, payment details,
+sync authentication material. Optional sharing additionally processes user-entered
+planning text, checklists, help recipients, packing choices, unverified authors,
+task reviews and paired device application/protocol versions, all encrypted.
+No unrelated browsing history, payment details,
 Schoolware passwords/cookies, analytics or advertising data are collected.
 Match the actual dashboard categories and explain these distinctions accurately.
 The account holder must personally certify the declarations; encryption does not

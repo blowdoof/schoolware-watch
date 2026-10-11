@@ -53,6 +53,35 @@ async function drain(scopeId: string) {
 }
 
 describe('encrypted shared planning transport', () => {
+  it('retires edited checklist identities across devices and ignores late old completion', async () => {
+    syntheticServer(); const deviceA = globalThis.indexedDB; const deviceB = new IDBFactory();
+    const a = await history.record(check()); await progressSync.connect(a.scopeId, code, false);
+    const day = specialDay(); await history.saveSpecialDay(a.scopeId, day);
+    let saved = (await history.read(a.scopeId)).scope!.specialDays![0]!;
+    await history.saveSpecialDay(a.scopeId, { ...saved, checklist: saved.checklist.map((p) => ({ ...p, done: true })) });
+    await drain(a.scopeId);
+    vi.stubGlobal('indexedDB', deviceB);
+    const b = await history.record(check()); await progressSync.connect(b.scopeId, code, false); await drain(b.scopeId);
+    const oldB = (await history.read(b.scopeId)).scope!.specialDays![0]!;
+    expect(oldB.checklist[0]!.done).toBe(true);
+    vi.stubGlobal('indexedDB', deviceA);
+    saved = (await history.read(a.scopeId)).scope!.specialDays![0]!;
+    await history.saveSpecialDay(a.scopeId, { ...saved, checklist: saved.checklist.map((p) => ({ ...p, text: 'Synthetic different book' })) });
+    const replacement = (await history.read(a.scopeId)).scope!.specialDays![0]!.checklist[0]!;
+    expect(replacement).toMatchObject({ done: false, text: 'Synthetic different book' });
+    expect(replacement.id).not.toBe(day.checklist[0]!.id);
+    expect((await history.read(a.scopeId)).scope!.planningActors?.[`checklist:${day.id}:${day.checklist[0]!.id}`]).toBeUndefined();
+    await drain(a.scopeId);
+    // B still has old metadata offline and uploads a later completion for its retired point.
+    vi.stubGlobal('indexedDB', deviceB);
+    await history.saveSpecialDay(b.scopeId, { ...oldB, checklist: oldB.checklist.map((p) => ({ ...p, done: false })) });
+    const unchecked = (await history.read(b.scopeId)).scope!.specialDays![0]!;
+    await history.saveSpecialDay(b.scopeId, { ...unchecked, checklist: unchecked.checklist.map((p) => ({ ...p, done: true })) });
+    await drain(b.scopeId);
+    expect((await history.read(b.scopeId)).scope!.specialDays![0]!.checklist[0]).toEqual(replacement);
+    vi.stubGlobal('indexedDB', deviceA); await drain(a.scopeId);
+    expect((await history.read(a.scopeId)).scope!.specialDays![0]!.checklist[0]).toEqual(replacement);
+  });
   it('splits maximal Unicode notes/checklists into legacy-sized encrypted operations and validates every reconstructed field', async () => {
     const entry = specialDay({ notes: '📚'.repeat(2000), title: 'é'.repeat(120), checklist: Array.from({ length: 40 }, () => ({
       id: crypto.randomUUID(), text: 'é'.repeat(200), done: true, pack: true })) });
