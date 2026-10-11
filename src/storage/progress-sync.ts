@@ -21,6 +21,7 @@ export class ProgressSyncRepository {
     const state = await this.read();
     return { ok: true, enabled: Boolean(state), pending: (state?.outbox.length ?? 0) + (state?.planningOutbox?.length ?? 0),
       lastSuccessAt: state?.lastSuccessAt ?? null, error: state?.error ?? false,
+      ...(state && state.cursor < state.head ? { receiving: true } : {}),
       ...(state?.compatibility ? { compatibility: state.compatibility } : {}), ...(state?.storeUpdate ? { storeUpdate: state.storeUpdate } : {}),
       ...(state?.planningRemote ? { devices: Object.values(state.planningRemote).flatMap(({ value }) => value.type === 'device-version' ? [{
         id: value.deviceId, version: value.version, protocol: value.protocol, reportedAt: value.reportedAt, self: value.deviceId === state.connectionId,

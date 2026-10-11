@@ -23,7 +23,7 @@ privacy page; anonymous HTTPS verification confirms it matches the repository.
 Overview/settings now use [compact sections](compact-navigation.md).
 See [submission checks](store/update-0.4.0.md).
 
-Candidate validation: strict TypeScript, ESLint, 400 Vitest tests and production
+Candidate validation: strict TypeScript, ESLint, 403 Vitest tests and production
 build pass. The isolated PHP 8.2/MySQL integration verifies compatibility gating,
 policy changes before exchange, unchanged cursors on rejected writes, and legacy
 deletion/leave. Old cryptographic fixtures remain readable through a current

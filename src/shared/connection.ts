@@ -25,6 +25,7 @@ const statuses: CheckStatus[] = ['success', 'session-required', 'redirected', 'a
   'invalid-request', 'permission-required', 'busy', 'storage-error'];
 
 export type ConnectionMessage = SyncMessage | DiscoveryMessage | OpenPageMessage | SpecialDaysMessage
+  | { type: 'status.read' }
   | { type: 'setup.complete' }
   | { type: 'connection.read' }
   | { type: 'connection.clear' }
@@ -109,7 +110,7 @@ export function validateConnectionMessage(value: unknown): ConnectionMessage | n
   if (message.type === 'notifications.details' && Object.keys(message).length === 2 && isNotificationTarget(message.target)) {
     return { type: 'notifications.details', target: message.target };
   }
-  if (['setup.complete', 'connection.read', 'connection.clear', 'history.clear', 'preferences.read', 'notifications.test',
+  if (['setup.complete', 'status.read', 'connection.read', 'connection.clear', 'history.clear', 'preferences.read', 'notifications.test',
     'browser.alerts.read', 'browser.alerts.dismiss', 'browser.alerts.test', 'browser.alerts.open', 'tasks.read', 'schoolbag.read', 'activity.clear'].includes(message.type as string) && Object.keys(message).length === 1) {
     return { type: message.type } as ConnectionMessage;
   }

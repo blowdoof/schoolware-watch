@@ -224,6 +224,18 @@ describe('special day worker boundaries and reminders', () => {
 });
 
 describe('schoolbag worker access', () => {
+  it('exposes an active check without persisting a permanent busy status', async () => {
+    let release!: (result: Awaited<ReturnType<typeof fetchAgenda>>) => void;
+    vi.mocked(fetchAgenda).mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+    const pending = dispatch({ type: 'agenda.check', requestUrl });
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+    expect(await dispatch({ type: 'connection.read' })).toMatchObject({ lastCheck: { status: 'busy' } });
+    release(success); await pending;
+    expect(await dispatch({ type: 'connection.read' })).toMatchObject({ lastCheck: { status: 'success' } });
+    const entries = (await new ActivityRepository().read()).entries;
+    await dispatch({ type: 'status.read' }); await dispatch({ type: 'status.read' });
+    expect((await new ActivityRepository().read()).entries).toEqual(entries);
+  });
   it('validates packing suggestions, keeps choices local to the active profile and retains last success after session expiry', async () => {
     const lesson = { ...parsed.points[0]!, Van: '2026-10-05 09:00:00', Tot: '2026-10-05 09:50:00', TypePunt: 2, Titel: 'Synthetic lesson', PublicComment: 'Atlas meebrengen', VakNaam: 'Aardrijkskunde' };
     vi.mocked(fetchAgenda).mockResolvedValue({ ...success, count: 1, typeCounts: { tests: 0, assignments: 0, review: 0, other: 1 }, points: [lesson] });
@@ -544,7 +556,7 @@ describe('Schoolware page banners', () => {
   it('restricts content-script senders to generic banner actions on the Schoolware top frame', async () => {
     const website = { ...sender, url: 'https://schoolware_siw.ksgwl.be/webouders/start.html', tab: { id: 1 }, frameId: 0 };
     const reply = vi.fn();
-    for (const type of ['connection.read', 'history.read', 'preferences.read', 'browser.alerts.test']) {
+    for (const type of ['status.read', 'connection.read', 'history.read', 'preferences.read', 'browser.alerts.test']) {
       expect(listener({ type }, website, reply)).toBe(false);
     }
     expect(listener({ type: 'notifications.details', target: 'test' }, website, reply)).toBe(false);

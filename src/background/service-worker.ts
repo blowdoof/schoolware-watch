@@ -1,4 +1,4 @@
-import { progressSync, synchronizeProgress, leaveSyncMembers, configureProgressSyncAlarm, deleteRemoteProgress, checkStoreUpdate, PROGRESS_SYNC_ALARM } from './progress-sync';
+import { progressSync, synchronizeProgress, isProgressSyncRunning, leaveSyncMembers, configureProgressSyncAlarm, deleteRemoteProgress, checkStoreUpdate, PROGRESS_SYNC_ALARM } from './progress-sync';
 import { SYNC_PERMISSION, type SyncView } from '../shared/progress-sync';
 import { type DiscoveryView } from '../shared/agenda-discovery';
 import { openMainPage } from './navigation';
@@ -453,7 +453,7 @@ function startCheck(requestUrl: string, current = trace('worker')): Promise<Conn
   return task.finally(() => { activeTask = null; activeCheck = null; });
 }
 
-type Reply = OpenPageResult | DiscoveryView | SyncView | ConnectionState | HistoryView | PreferencesView | NotificationTestResult | BrowserAlertsView | NotificationDetailsView | TasksView | SchoolbagView | ActivityView | SpecialDaysView;
+type Reply = OpenPageResult | DiscoveryView | SyncView | ConnectionState | { connection: ConnectionState; sync: SyncView } | HistoryView | PreferencesView | NotificationTestResult | BrowserAlertsView | NotificationDetailsView | TasksView | SchoolbagView | ActivityView | SpecialDaysView;
 async function readActivity(message: { limit?: number; correlationId?: string; itemId?: string } = {}): Promise<ActivityView> {
   const view = await activity.read(message.limit, message);
   const health = await chrome.storage.local.get(LOG_HEALTH_KEY);
@@ -508,7 +508,7 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
     await chrome.storage.local.remove(LOG_HEALTH_KEY);
     return readActivity();
   });
-  if (message.type === 'sync.read') return progressSync.view();
+  if (message.type === 'sync.read') return { ...await progressSync.view(), checking: isProgressSyncRunning((await readConnection()).requestUrl) };
   if (message.type === 'sync.update') {
     await checkStoreUpdate();
     return progressSync.view();
@@ -622,7 +622,14 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
   }
   if (message.type === 'connection.read') {
     const connection = await readConnection();
-    return { ...connection, lastSuccessAt: (await history.read(connection.requestUrl)).scope?.lastSuccessAt ?? null };
+    return { ...connection, ...(activeTask ? { lastCheck: summary('busy').lastCheck } : {}),
+      lastSuccessAt: (await history.read(connection.requestUrl)).scope?.lastSuccessAt ?? null };
+  }
+  if (message.type === 'status.read') {
+    const connection = await readConnection();
+    return { connection: { ...connection, ...(activeTask ? { lastCheck: summary('busy').lastCheck } : {}),
+      lastSuccessAt: (await history.read(connection.requestUrl)).scope?.lastSuccessAt ?? null },
+      sync: { ...await progressSync.view(), checking: isProgressSyncRunning(connection.requestUrl) } };
   }
   if (message.type === 'history.read') return readHistory(message.category);
   if (message.type === 'preferences.read') return preferencesView();
@@ -750,8 +757,8 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
 }
 
 async function loggedHandle(message: ConnectionMessage, current: Trace): Promise<Reply> {
-  // Polling discovery status must not fill the activity store or expose candidates.
-  if (message.type === 'connection.discovery.read') return handle(message, current);
+  // Read-only status polling must not fill the activity store or expose candidates.
+  if (message.type === 'connection.discovery.read' || message.type === 'status.read') return handle(message, current);
   if (message.type === 'activity.read') {
     await initialization.catch(() => {});
     await log(current, 'request', 'started', { request: message.type });

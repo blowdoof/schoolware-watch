@@ -16,6 +16,7 @@ import { SchoolbagPanel } from './SchoolbagPanel';
 import { InfoPanel, infoSections, type InfoSection } from './InfoPanel';
 import type { OpenPageMessage } from '../shared/navigation';
 import { WorkspaceSection } from './WorkspaceSection';
+import { WorkspaceNavigation } from './WorkspaceNavigation';
 
 type Page = 'popup' | 'dashboard' | 'options' | 'info';
 
@@ -107,7 +108,9 @@ export function App({ page: initialPage }: { page: Page }) {
       {!target && page !== 'info' && <SetupWizard inlineConnection={page === 'popup'} onSettings={() => navigate('options')} refreshToken={historyRevision} onChanged={() => setHistoryRevision((revision) => revision + 1)} />}
       {target ? <NotificationDetailsPanel target={target} refreshToken={historyRevision} /> : page === 'info' ?
         <InfoPanel section={infoSection} onSectionChange={setInfoSection} onSettings={() => navigate('options')} /> : <>
-      <ConnectionNotice refreshToken={historyRevision} onSettings={() => navigate('options')} navigationPending={navigationPending} />
+      <ConnectionNotice refreshToken={historyRevision} onSettings={() => navigate('options')} navigationPending={navigationPending} compact={page !== 'options'}>
+        {page !== 'options' && <PreferencesPanel settings={false} refreshToken={historyRevision} onSaved={() => setHistoryRevision((revision) => revision + 1)} />}
+      </ConnectionNotice>
       {page === 'options' ? <div key="settings-sections" aria-label="Onderdelen van instellingen">
         <p className="mt-4 text-sm text-slate-600">Open het onderdeel dat je wilt aanpassen. Je andere instellingen en invoer blijven behouden.</p>
         <WorkspaceSection title="Schoolware-koppeling" description="Agenda verbinden, sessie herstellen en nu controleren">
@@ -127,21 +130,20 @@ export function App({ page: initialPage }: { page: Page }) {
           <ActivityPanel refreshToken={historyRevision} />
         </WorkspaceSection>
       </div> : <div key="overview-sections" aria-label="Onderdelen van overzicht">
-        <PreferencesPanel settings={false} refreshToken={historyRevision} onSaved={() => setHistoryRevision((revision) => revision + 1)} />
-        <p className="mt-4 text-sm text-slate-600">Je to-do staat open. Open hieronder wat je verder nodig hebt.</p>
-        <WorkspaceSection title="To-do" description="Wat moet klaar zijn voor de volgende schooldag?" defaultOpen>
+        <WorkspaceNavigation full={page === 'dashboard'} />
+        <WorkspaceSection id="overview-todo" title="To-do" description="Wat moet klaar zijn voor de volgende schooldag?" defaultOpen>
           <TodoPanel refreshToken={historyRevision} />
         </WorkspaceSection>
-        <WorkspaceSection title="Boekentas" description="Mee naar school, mee naar huis en wie heeft ingepakt">
+        <WorkspaceSection id="overview-schoolbag" title="Boekentas" description="Mee naar school, mee naar huis en wie heeft ingepakt">
           <SchoolbagPanel refreshToken={historyRevision} />
         </WorkspaceSection>
-        {page === 'dashboard' && <WorkspaceSection title="Agenda en voortgang" description="Alle taken en toetsen, controles en CSV-export">
+        {page === 'dashboard' && <WorkspaceSection id="overview-agenda" title="Agenda en voortgang" description="Alle taken en toetsen, controles en CSV-export">
           <TasksPanel refreshToken={historyRevision} />
         </WorkspaceSection>}
-        <WorkspaceSection title="Speciale dagen" description="Thuisstudie, sportdagen en voorbereiding met checklists">
+        <WorkspaceSection id="overview-special-days" title="Speciale dagen" description="Thuisstudie, sportdagen en voorbereiding met checklists">
           <SpecialDaysPanel refreshToken={historyRevision} />
         </WorkspaceSection>
-        {page === 'dashboard' && <WorkspaceSection title="Wijzigingsgeschiedenis" description="Wat is er veranderd sinds de vorige waarnemingen?">
+        {page === 'dashboard' && <WorkspaceSection id="overview-history" title="Wijzigingsgeschiedenis" description="Wat is er veranderd sinds de vorige waarnemingen?">
           <HistoryPanel settings={false} refreshToken={historyRevision} />
         </WorkspaceSection>}
       </div>}

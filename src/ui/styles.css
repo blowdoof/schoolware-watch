@@ -16,3 +16,4 @@
 
 /* Preserve preferences such as hiding the book bag when its panel returns null. */
 .workspace-section:has(> .workspace-content:empty) { display: none; }
+main:has(#overview-schoolbag > .workspace-content:empty) button[aria-controls="overview-schoolbag"] { display: none; }

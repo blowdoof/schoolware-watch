@@ -188,11 +188,15 @@ export async function leaveSyncMembers(reporter?: ActivityReporter): Promise<voi
   }
 }
 
+// Presentation only; durable progress and retry state remain in repositories.
+const runningScopes = new Map<string, number>();
+export function isProgressSyncRunning(scopeId: string | null): boolean { return Boolean(scopeId && runningScopes.has(scopeId)); }
 export async function synchronizeProgress(scopeId: string | null, reporter?: ActivityReporter, audit?: AuditContext): Promise<boolean> {
   const record = safeReporter(reporter);
   const started = Date.now();
   await record('progress.sync', 'started');
   let state: SyncState | undefined;
+  if (scopeId) runningScopes.set(scopeId, (runningScopes.get(scopeId) ?? 0) + 1);
   try {
     state = await progressSync.read();
     if (!state || state.scopeId !== scopeId) {
@@ -277,5 +281,10 @@ export async function synchronizeProgress(scopeId: string | null, reporter?: Act
     await record('progress.sync', 'failed', { ...failureData(error, 'storage-error'), durationMs: Math.max(0, Date.now() - started) });
     if (state) await progressSync.failed(state, error instanceof SyncFailure ? error.httpStatus : undefined);
     return false;
+  } finally {
+    if (scopeId) {
+      const remaining = (runningScopes.get(scopeId) ?? 1) - 1;
+      if (remaining) runningScopes.set(scopeId, remaining); else runningScopes.delete(scopeId);
+    }
   }
 }

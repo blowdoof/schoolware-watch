@@ -1,9 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { connectionHealth } from '../src/ui/ConnectionNotice';
+import { connectionHealth, summaryStatus } from '../src/ui/ConnectionNotice';
 import { validateConnectionState, type ConnectionState } from '../src/shared/connection';
 import { requestUrl } from './fixtures/agenda-request';
 
 describe('connection health', () => {
+  it('never confirms pending, partially received or failed shared changes as synchronized', () => {
+    const connection: ConnectionState = { requestUrl, lastCheck: { status: 'success', checkedAt: '2026-10-11T08:00:00Z', count: 1 } };
+    const sync = { ok: true, enabled: true, pending: 0, error: false, lastSuccessAt: '2026-10-11T08:00:00Z' };
+    expect(summaryStatus(connection, sync, false)).toBe('ok');
+    for (const change of [{ pending: 1 }, { receiving: true }, { registrationPending: true }, { lastSuccessAt: null }])
+      expect(summaryStatus(connection, { ...sync, ...change }, false)).toBe('unknown');
+    for (const change of [{ error: true }, { blocked: true }, { membersError: true }])
+      expect(summaryStatus(connection, { ...sync, ...change }, false)).toBe('issue');
+    expect(summaryStatus(connection, { ...sync, checking: true }, false)).toBe('busy');
+    expect(summaryStatus({ ...connection, lastCheck: { ...connection.lastCheck!, status: 'busy' } }, sync, false)).toBe('busy');
+    expect(summaryStatus({ ...connection, lastCheck: { ...connection.lastCheck!, status: 'network-error' } }, sync, false)).toBe('issue');
+    expect(summaryStatus(connection, sync, true)).toBe('issue');
+    expect(summaryStatus({ requestUrl: null, lastCheck: null }, null, false)).toBe('unknown');
+  });
   it('distinguishes missing connection, login, permission and transient failure', () => {
     const state: ConnectionState = { requestUrl, lastCheck: null };
     expect(connectionHealth({ ...state, requestUrl: null })).toContain('niet gekoppeld');

@@ -3,7 +3,7 @@ import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HistoryRepository } from '../src/storage/history';
-import { progressSync, synchronizeProgress, synchronizeMembers, leaveSyncMembers } from '../src/background/progress-sync';
+import { progressSync, synchronizeProgress, isProgressSyncRunning, synchronizeMembers, leaveSyncMembers } from '../src/background/progress-sync';
 import { decryptProgress, encryptProgress } from '../src/domain/progress-sync';
 import { SYNC_URL } from '../src/shared/progress-sync';
 import { check } from './fixtures/observations';
@@ -19,6 +19,19 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('bounded progress transport', () => {
+  it('reports running requests and clears the transient indicator after a failed synchronization', async () => {
+    const scope = await history.record(check());
+    await progressSync.connect(scope.scopeId, `sw1.${token}.${key}`, false);
+    let release!: (response: Response) => void;
+    const fetcher = vi.fn(() => new Promise<Response>((resolve) => { release = resolve; }));
+    stubFetch(fetcher);
+    const pending = synchronizeProgress(scope.scopeId);
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalled());
+    expect(isProgressSyncRunning(scope.scopeId)).toBe(true);
+    expect(isProgressSyncRunning('synthetic-other-profile')).toBe(false);
+    release(new Response('', { status: 503 })); await pending;
+    expect(isProgressSyncRunning(scope.scopeId)).toBe(false);
+  });
   it.each([401, 403, 409])('stops durable automatic retries after HTTP %s until explicitly resumed', async (status) => {
     const scope = await history.record(check());
     await progressSync.connect(scope.scopeId, `sw1.${token}.${key}`, false, status === 403);

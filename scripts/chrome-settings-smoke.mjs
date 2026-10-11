@@ -185,6 +185,13 @@ try {
   // restart the worker and verify the optional v3 profile fields remain durable.
   await poll(() => evaluate(bagSession, `Boolean(document.querySelector('[aria-label="Speciale dagen"] button:not(:disabled)'))`));
   assert.equal(await evaluate(bagSession, `document.querySelectorAll('.workspace-section[open]').length`), 1);
+  await poll(() => evaluate(bagSession, `Boolean(document.getElementById('overview-status'))`));
+  assert.equal(await evaluate(bagSession, `document.getElementById('overview-status').open`), false);
+  assert.equal(await evaluate(bagSession, `document.querySelector('[aria-label="Snel naar onderdeel"]').querySelectorAll('button').length`), 5);
+  await evaluate(bagSession, `document.querySelector('button[aria-controls="overview-schoolbag"]').click()`);
+  await poll(() => evaluate(bagSession, `document.getElementById('overview-schoolbag').open && document.activeElement === document.getElementById('overview-schoolbag').querySelector('summary')`));
+  await evaluate(bagSession, `document.getElementById('overview-schoolbag').querySelector('summary').click()`);
+  await poll(() => evaluate(bagSession, `!document.getElementById('overview-schoolbag').open`));
   await evaluate(bagSession, `document.querySelector('[aria-label="Speciale dagen"]').closest('.workspace-section').querySelector('summary').focus()`);
   await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', text: '\r', unmodifiedText: '\r', windowsVirtualKeyCode: 13 }, bagSession);
   await command('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 }, bagSession);
@@ -356,6 +363,7 @@ try {
   await toggleSchoolbag();
   await poll(() => evaluate(bagSession, `!document.querySelector('[aria-label="Boekentas"]')`));
   assert.equal(await evaluate(bagSession, `getComputedStyle([...document.querySelectorAll('.workspace-section')].find(section => section.querySelector('summary').textContent.trim().startsWith('Boekentas'))).display`), 'none');
+  assert.equal(await evaluate(bagSession, `getComputedStyle(document.querySelector('button[aria-controls="overview-schoolbag"]')).display`), 'none');
   assert.equal(await evaluate(bagSession, `(async () => (await chrome.runtime.sendMessage({ type: 'preferences.read' })).preferences.schoolbagEnabled)()`), false);
   await toggleSchoolbag();
   await poll(() => evaluate(bagSession, `document.querySelector('[aria-label="Boekentas"]')?.textContent.includes('pagina 24-34')`));

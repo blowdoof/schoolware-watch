@@ -8,6 +8,21 @@ Overview starts with To-do expanded. Book bag, agenda/progress (including CSV),
 special days and change history are collapsed. The popup offers To-do, book bag
 and special days; the full overview includes agenda and history as well.
 
+Connection health and automatic-check details are grouped in a collapsed
+"Controle en synchronisatie" header. Its accessible icon shows active work,
+confirmed success, an issue or an unconfirmed state. Success requires the latest
+agenda check and any enabled sharing to have succeeded, without pending uploads,
+partial downloads, registration, member errors or compatibility blocks. Sharing
+disabled is explained explicitly. Expanded content separates agenda and sharing.
+The UI refreshes local status every two seconds while visible; this starts no
+network check or synchronization and does not append polling activity records.
+Running indicators are transient worker
+presentation state; durable results and retries remain repository-backed.
+
+Quick-navigation buttons replace the overview's instruction paragraph. They open
+the selected section, focus its summary and scroll it into view, respecting reduced
+motion. The hidden-book-bag preference also hides its quick-navigation button.
+
 Settings starts with all five groups collapsed: Schoolware connection,
 checks/notifications, paired sharing, privacy/retention/deletion and activity log.
 Section summaries describe the actions inside. Full-page navigation buttons show
