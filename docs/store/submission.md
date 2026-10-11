@@ -111,11 +111,14 @@ unconfirmed. Synthetic screenshots do not prove real Schoolware authorization.
 ## Publication handoff
 
 Use the existing published item `phngkgibiapcabhnfjafkfibjobgkkaf`; do not create
-a new item. Following the owner's authorized merge and deferred external review,
-use Package → Upload New Package with the complete ZIP whose
-manifest is at the root. Version 0.2.0 is greater than the published 0.1.0.
+a new item. Complete Matthias's external review and resolve blocking findings
+before the separately authorized merge. Store upload and publication require
+separate owner authorization. Then use Package → Upload New Package with the
+complete ZIP whose manifest is at the root. Candidate 0.4.0 is greater than the
+owner-confirmed published 0.2.0; 0.3.0 was never published.
 Update Store Listing, Privacy practices and Test Instructions to match the
-multi-school implementation and optional progress invitation. Keep distribution
+current implementation, encrypted planning/progress, attribution/reviews and
+compatibility enforcement described in [the rollout checks](update-0.4.0.md). Keep distribution
 public. Deferred publication is an optional final release checkpoint. Automatic
 publication may be enabled when the owner is ready for release before submission.
 Submission does not guarantee approval.
