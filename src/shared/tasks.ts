@@ -17,6 +17,7 @@ export interface TaskEntry {
   help?: TaskHelp; helpForYou?: boolean;
   statusActor?: ActionStamp; helpActor?: ActionStamp;
   reviews?: (TaskReview & { self: boolean; previous: boolean })[];
+  missingFromLatestCheck?: boolean;
 }
 export interface TaskAgenda { days: string[]; lastSuccessAt: string }
 export interface TasksView { ok: boolean; entries: TaskEntry[]; agenda?: TaskAgenda; helpRecipients?: { id: string; label: string }[]; helpMembersError?: boolean; syncIssue?: CompatibilityIssue }
@@ -33,6 +34,10 @@ export function createTasksView(scope: HistoryScope | null, sync?: SyncState): T
     .map((item) => ({ id: item.localId!, category: item.category as TaskEntry['category'], snapshot: item.snapshot,
       subject: item.lesson?.subject ?? '', room: item.lesson?.room ?? '', status: item.taskStatus ?? 'open',
       updatedAt: item.taskUpdatedAt ?? null, firstSeenAt: item.firstSeenAt, lastSeenAt: item.lastSeenAt,
+      ...(item.lastSeenAt !== scope!.lastSuccessAt && scope!.checks.some((check) => check.coverage &&
+        check.observedAt > item.lastSeenAt && check.observedAt <= scope!.lastSuccessAt &&
+        item.snapshot.startsAt.slice(0, 10) > check.coverage.minTot &&
+        item.snapshot.endsAt.slice(0, 10) < check.coverage.maxVan) ? { missingFromLatestCheck: true } : {}),
       ...(item.statusActor ? { statusActor: item.statusActor } : {}), ...(item.helpActor ? { helpActor: item.helpActor } : {}),
       ...(item.reviews ? { reviews: item.reviews.map((review) => ({ ...review, self: review.actor.participantId === scope!.localId,
         previous: item.reviewContent !== progressVersionText(item.snapshot) || review.version !== item.reviewVersion })) } : {}),
@@ -68,6 +73,7 @@ export function validateTasksView(value: unknown): TasksView | null {
   for (const raw of view.entries) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
     const item = raw as Record<string, unknown>;
+    if (item.missingFromLatestCheck !== undefined && typeof item.missingFromLatestCheck !== 'boolean') return null;
     if ((item.statusActor !== undefined && !isActionStamp(item.statusActor)) || (item.helpActor !== undefined && !isActionStamp(item.helpActor))) return null;
     if (item.reviews !== undefined && (!Array.isArray(item.reviews) || item.reviews.length > 200 || !item.reviews.every((raw: unknown) => {
       if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
@@ -82,6 +88,7 @@ export function validateTasksView(value: unknown): TasksView | null {
         !(item.updatedAt === null || timestamp(item.updatedAt)) || !timestamp(item.firstSeenAt) || !timestamp(item.lastSeenAt)) return null;
     entries.push({ id: item.id, category: item.category as TaskEntry['category'], snapshot, subject: item.subject, room: item.room,
       status: item.status, updatedAt: item.updatedAt as string | null, firstSeenAt: item.firstSeenAt, lastSeenAt: item.lastSeenAt,
+      ...(item.missingFromLatestCheck !== undefined ? { missingFromLatestCheck: item.missingFromLatestCheck as boolean } : {}),
       ...(item.statusActor ? { statusActor: item.statusActor as ActionStamp } : {}), ...(item.helpActor ? { helpActor: item.helpActor as ActionStamp } : {}),
       ...(item.reviews ? { reviews: item.reviews as NonNullable<TaskEntry['reviews']> } : {}),
       ...(help ? { help, ...(item.helpForYou !== undefined ? { helpForYou: item.helpForYou as boolean } : {}) } : {}) });

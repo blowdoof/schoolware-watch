@@ -22,6 +22,7 @@ export function TodoOverview({ view, now, working, update, updateMany, updateHel
 }) {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const overview = view ? todoOverview(view, now, selectedDay) : null;
+  const unconfirmed = view?.entries.filter((task) => task.missingFromLatestCheck) ?? [];
   const dayIndex = overview?.targetDay ? overview.schoolDays.indexOf(overview.targetDay) : -1;
   const followingDay = overview?.schoolDays[dayIndex + 1] ?? null;
   const previousDay = dayIndex > 0 ? overview?.schoolDays[dayIndex - 1] : null;
@@ -42,10 +43,10 @@ export function TodoOverview({ view, now, working, update, updateMany, updateHel
     <h2 className="text-lg font-semibold">To-do</h2>
     {view?.syncIssue && <p role="status" className="mt-2 text-sm text-amber-800">{compatibilityMessage(view.syncIssue)}</p>}
     {!overview ? <p className="mt-2 text-sm">Taken laden…</p> : <>
-      {view?.entries.some((task) => task.help?.needed) && <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3" aria-label="Hulpvragen">
+      {view?.entries.some((task) => task.help?.needed && !task.missingFromLatestCheck) && <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3" aria-label="Hulpvragen">
         <h3 className="font-semibold text-amber-900">Hulp nodig</h3>
         <p className="mt-1 text-xs text-slate-600">Ook hulpvragen bij afgeronde, eerdere en latere taken blijven hier zichtbaar.</p>
-        {rows(view.entries.filter((task) => task.help?.needed))}
+        {rows(view.entries.filter((task) => task.help?.needed && !task.missingFromLatestCheck))}
       </div>}
       <p className="mt-1 text-sm font-medium" aria-live="polite">{overview.targetDay ? `Tegen ${dateLabel(overview.targetDay)}` : 'Voor vandaag'}</p>
       <p className="mt-2 text-xs leading-5 text-slate-600">{overview.browsing ?
@@ -79,6 +80,11 @@ export function TodoOverview({ view, now, working, update, updateMany, updateHel
           Alles als klaar markeren
         </button>
         {rows(overview.earlier)}
+      </details>}
+      {unconfirmed.length > 0 && <details className="mt-3 border-t border-teal-200 pt-3">
+        <summary className="cursor-pointer text-sm font-medium text-amber-800">Niet teruggevonden bij laatste controle ({unconfirmed.length})</summary>
+        <p className="mt-2 text-xs text-slate-600">Deze punten ontbreken in de opgehaalde periode en tellen niet mee als actuele to-do. Dit bewijst niet dat ze verwijderd zijn. Hun voortgang en geschiedenis blijven bewaard.</p>
+        {rows(unconfirmed)}
       </details>}
       {view?.agenda && <details className="mt-3 text-xs leading-5 text-slate-500">
         <summary className="cursor-pointer">Over dit overzicht</summary>

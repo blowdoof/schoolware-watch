@@ -28,7 +28,7 @@ export function todoOverview(view: TasksView, now: Date, selectedDay: string | n
   const nextDay = schoolDays[0] ?? null;
   const targetDay = selectedDay && schoolDays.includes(selectedDay) ? selectedDay : nextDay;
   const browsing = targetDay !== nextDay;
-  const pending = view.entries.filter((task) => task.status !== 'done' && hasAgendaMarker(task.snapshot.typePunt) &&
+  const pending = view.entries.filter((task) => !task.missingFromLatestCheck && task.status !== 'done' && hasAgendaMarker(task.snapshot.typePunt) &&
     !task.snapshot.hidden && !task.snapshot.cancelled);
   const chronological = (a: TaskEntry, b: TaskEntry) => a.snapshot.startsAt.localeCompare(b.snapshot.startsAt) || a.id.localeCompare(b.id);
   return { today, nextDay, schoolDays, targetDay, browsing,
