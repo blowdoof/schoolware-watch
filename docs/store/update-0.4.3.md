@@ -21,7 +21,13 @@ candidate contains all 0.4.2 fixes. No Store submission or main merge is perform
 Real student discovery acceptance remains pending because the prior failed path
 was not captured; the settings-only wrong-environment path is regression tested.
 
-Validation passed: strict TypeScript, ESLint, 429 Vitest tests across 37 files,
+Validation passed: strict TypeScript, ESLint, 431 Vitest tests across 37 files,
 production build and both synthetic Chrome smoke suites. Version UI tests cover
 an old worker versus an old shared announcement and backward-compatible local
 message validation. No real account content or identifiers were committed.
+
+Follow-up: owner-supplied wide and rolling-window responses contain 237 matching
+source tuples with identical dates. This rules out a rolling-window date shift
+for this sample. Regressions cover corrected dates with stable and changed source
+tuples. A legacy worker without version diagnostics now also triggers a local
+reload instruction. Actual local database and worker state have not been inspected.

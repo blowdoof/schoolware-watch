@@ -15,6 +15,7 @@ export function SyncVersionStatus({ view, working, onCheck }: { view: SyncView; 
   const update = view.storeUpdate;
   return <div className="mt-3 rounded-lg border border-slate-200 p-3 text-sm" aria-label="Versie en synchronisatie">
     <p>Deze computer: versie {APP_VERSION}.</p>
+    {!view.workerVersion && <p role="status" className="mt-2 text-amber-800">De achtergrond meldt zijn actieve versie nog niet. Bij een lokale bronbuild: herlaad de extensie via chrome://extensions, sluit oude extensievensters en open dit scherm opnieuw. Alleen de bronbestanden bijwerken herlaadt de achtergrond niet.</p>}
     {view.workerVersion && view.workerVersion !== APP_VERSION && <p role="status" className="mt-2 text-amber-800">De interface gebruikt {APP_VERSION}, maar de achtergrond werkt nog met {view.workerVersion}. Herlaad een lokaal geladen extensie via chrome://extensions en open dit scherm opnieuw.</p>}
     {text && <p role="status" className="mt-2 text-amber-800">{text}</p>}
     {view.compatibility && <p className="mt-1 text-xs text-slate-600">Compatibiliteit gecontroleerd: {new Date(view.compatibility.checkedAt).toLocaleString('nl-BE', { timeZone: 'Europe/Brussels' })}.

@@ -53,4 +53,17 @@ describe('retained tasks missing from a successful response', () => {
     const view = createTasksView(missing());
     expect(validateTasksView({ ...view, entries: [{ ...view.entries[0], missingFromLatestCheck: 'yes' }] })).toBeNull();
   });
+  it.each([false, true])('does not keep a previous task date in current todo after refresh (new source tuple: %s)', (changedIdentity) => {
+    const oldPoint = { ...point, localId: '11111111-1111-4111-8111-111111111111', category: 'tests' as const,
+      snapshot: { ...point.snapshot, typePunt: 100, startsAt: '2026-10-14 09:00:00', endsAt: '2026-10-14 09:50:00' } };
+    const baseline = compareObservations(null, check({ points: [oldPoint], coverage, observedAt: '2026-10-11T08:00:00Z' }));
+    const currentPoint = { ...oldPoint, sourceKey: changedIdentity ? 'synthetic-new-tuple' : oldPoint.sourceKey,
+      localId: changedIdentity ? '22222222-2222-4222-8222-222222222222' : oldPoint.localId,
+      snapshot: { ...oldPoint.snapshot, startsAt: '2026-10-09 09:00:00', endsAt: '2026-10-09 09:50:00' } };
+    const scope = compareObservations(baseline, check({ checkId: 'correct-date', coverage, observedAt: '2026-10-13T17:00:00Z', points: [currentPoint] }));
+    const view = createTasksView(scope); view.agenda!.days = ['2026-10-14'];
+    expect(todoOverview(view, new Date('2026-10-13T17:00:00Z')).upcoming).toEqual([]);
+    expect(view.entries.filter((entry) => !entry.missingFromLatestCheck).map((entry) => entry.snapshot.startsAt)).toEqual(['2026-10-09 09:00:00']);
+    if (changedIdentity) expect(view.entries.find((entry) => entry.snapshot.startsAt.startsWith('2026-10-14'))!.missingFromLatestCheck).toBe(true);
+  });
 });

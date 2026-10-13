@@ -22,5 +22,6 @@ describe('local and shared version distinction', () => {
     expect(validateSyncView({ ...view, workerVersion: 'invalid' })).toBeNull();
     const legacy = { ...view }; delete legacy.workerVersion;
     expect(validateSyncView(legacy)).toEqual(legacy);
+    expect(renderToStaticMarkup(<SyncVersionStatus view={legacy} working={false} onCheck={() => {}} />)).toContain('De achtergrond meldt zijn actieve versie nog niet');
   });
 });
