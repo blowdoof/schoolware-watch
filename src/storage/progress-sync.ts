@@ -19,7 +19,7 @@ export class ProgressSyncRepository {
   }
   async view(): Promise<SyncView> {
     const state = await this.read();
-    return { ok: true, enabled: Boolean(state), pending: (state?.outbox.length ?? 0) + (state?.planningOutbox?.length ?? 0),
+    return { ok: true, workerVersion: APP_VERSION, enabled: Boolean(state), pending: (state?.outbox.length ?? 0) + (state?.planningOutbox?.length ?? 0),
       lastSuccessAt: state?.lastSuccessAt ?? null, error: state?.error ?? false,
       ...(state && state.cursor < state.head ? { receiving: true } : {}),
       ...(state?.compatibility ? { compatibility: state.compatibility } : {}), ...(state?.storeUpdate ? { storeUpdate: state.storeUpdate } : {}),

@@ -4,8 +4,10 @@ The student frontend uses `/webleerling/start.html#!fn=llagenda`. Discovery keep
 an explicitly selected student tab in this environment rather than navigating
 to the parent portal. On a student computer, sign in to the intranet, open its
 agenda, click the extension icon and start connection using that school tab.
-Address-only setup still opens the parent portal by default; students should
-start from their signed-in intranet tab. The advanced connection field also
+From 0.4.3, connection setup includes an explicit parent/student environment
+selector. The active school tab supplies its initial choice; settings-only setup
+can select the student intranet without developer tools. A successful existing
+manual connection does not need replacement. The advanced connection field also
 accepts the full validated student request.
 
 The separately allowlisted GET endpoint is

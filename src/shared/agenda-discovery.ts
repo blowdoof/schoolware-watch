@@ -6,16 +6,18 @@ export const DISCOVERY_STATUSES = ['idle', 'waiting', 'found', 'expired', 'permi
 export interface DiscoveryView { status: typeof DISCOVERY_STATUSES[number]; id: string | null }
 type SimpleDiscoveryType = 'connection.discovery.read' | 'connection.discovery.cancel';
 export type DiscoveryMessage = { [T in SimpleDiscoveryType]: { type: T } }[SimpleDiscoveryType] |
-  { type: 'connection.discovery.start'; origin?: string; tabId?: number } |
+  { type: 'connection.discovery.start'; origin?: string; tabId?: number; environment?: 'parent' | 'student' } |
   { type: 'connection.discovery.confirm'; id: string };
 export function validateDiscoveryMessage(raw: unknown): DiscoveryMessage | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const value = raw as Record<string, unknown>;
-  if (value.type === 'connection.discovery.start' && Object.keys(value).every((key) => ['type', 'origin', 'tabId'].includes(key)) &&
+  if (value.type === 'connection.discovery.start' && Object.keys(value).every((key) => ['type', 'origin', 'tabId', 'environment'].includes(key)) &&
+      (value.environment === undefined || value.environment === 'parent' || value.environment === 'student') &&
       (value.origin === undefined || schoolwareOrigin(value.origin) === value.origin) &&
       (value.tabId === undefined || (typeof value.tabId === 'number' && Number.isSafeInteger(value.tabId) && value.tabId >= 0 && typeof value.origin === 'string'))) {
     return { type: 'connection.discovery.start', ...(value.origin ? { origin: value.origin as string } : {}),
-      ...(value.tabId !== undefined ? { tabId: value.tabId as number } : {}) };
+      ...(value.tabId !== undefined ? { tabId: value.tabId as number } : {}),
+      ...(value.environment ? { environment: value.environment as 'parent' | 'student' } : {}) };
   }
   if (Object.keys(value).length === 1 && ['connection.discovery.read', 'connection.discovery.cancel'].includes(value.type as string)) {
     return { type: value.type } as DiscoveryMessage;

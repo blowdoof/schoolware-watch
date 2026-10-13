@@ -31,6 +31,12 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe('explicit agenda discovery', () => {
+  it('opens the student intranet from settings without needing an active school tab', async () => {
+    await beginAgendaDiscovery('https://schoolware_siw.ksgwl.be', undefined, 'student');
+    expect(chrome.tabs.update).toHaveBeenCalledWith(9, { url: 'https://schoolware_siw.ksgwl.be/webleerling/start.html#!fn=llagenda', active: true });
+    expect(validateDiscoveryMessage({ type: 'connection.discovery.start', environment: 'student' })).toEqual({ type: 'connection.discovery.start', environment: 'student' });
+    expect(validateDiscoveryMessage({ type: 'connection.discovery.start', environment: 'admin' })).toBeNull();
+  });
   it('keeps a selected student tab in the intranet and captures its agenda safely', async () => {
     tabUrl = 'https://schoolware_siw.ksgwl.be/webleerling/start.html#!fn=llagenda';
     const url = 'https://schoolware_siw.ksgwl.be/webleerling/bin/server.fcgi/REST/AgendaPunt/?Agenda=10,20&NietMappen=20&MapAgendasOp=10&MinTot=2026-10-01T00:00:00&MaxVan=2026-10-31T00:00:00&page=1&start=0&limit=0&_dc=123';

@@ -43,7 +43,7 @@ export async function restoreAgendaDiscovery(): Promise<void> {
   }
   await chrome.alarms.create(DISCOVERY_ALARM, { when: state.expiresAt });
 }
-export async function beginAgendaDiscovery(origin = SCHOOLWARE_ORIGIN, tabId?: number): Promise<DiscoveryView> {
+export async function beginAgendaDiscovery(origin = SCHOOLWARE_ORIGIN, tabId?: number, environment?: 'parent' | 'student'): Promise<DiscoveryView> {
   if (schoolwareOrigin(origin) !== origin) throw new Error('Invalid installation');
   if (!chrome.storage.session || !chrome.webRequest || !await chrome.permissions.contains(discoveryPermissions(origin))) {
     return { status: 'permission-required', id: null };
@@ -57,7 +57,8 @@ export async function beginAgendaDiscovery(origin = SCHOOLWARE_ORIGIN, tabId?: n
   try {
     await chrome.storage.session.set({ [DISCOVERY_KEY]: state });
     await chrome.alarms.create(DISCOVERY_ALARM, { when: state.expiresAt });
-    const landing = tab.url && new URL(tab.url).pathname.startsWith('/webleerling/') ?
+    const student = environment ? environment === 'student' : Boolean(tab.url && new URL(tab.url).pathname.startsWith('/webleerling/'));
+    const landing = student ?
       '/webleerling/start.html#!fn=llagenda' : '/webouders/start.html';
     await chrome.tabs.update(tab.id, { url: `${origin}${landing}`, active: true });
     return { status: 'waiting', id: state.id };

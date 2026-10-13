@@ -40,7 +40,7 @@ export interface SyncState {
   lastApplyOrdinaryChanged?: boolean;
   compatibility?: SyncCompatibility; storeUpdate?: StoreUpdate; deviceVersionAnnounced?: string;
 }
-export interface SyncView { ok: boolean; enabled: boolean; pending: number; lastSuccessAt: string | null; error: boolean; checking?: boolean; receiving?: boolean; pairingCode?: string; registrationPending?: boolean; blocked?: boolean;
+export interface SyncView { ok: boolean; enabled: boolean; pending: number; lastSuccessAt: string | null; error: boolean; workerVersion?: string; checking?: boolean; receiving?: boolean; pairingCode?: string; registrationPending?: boolean; blocked?: boolean;
   displayName?: string; members?: (SyncMember & { self: boolean })[]; membersError?: boolean; compatibility?: SyncCompatibility; storeUpdate?: StoreUpdate; devices?: SyncDevice[] }
 type SimpleSyncType = 'sync.read' | 'sync.run' | 'sync.disconnect' | 'sync.delete' | 'sync.pairing' | 'sync.update';
 export type SyncMessage = { [T in SimpleSyncType]: { type: T } }[SimpleSyncType] |
@@ -72,6 +72,7 @@ export function validateSyncView(raw: unknown): SyncView | null {
   if (!raw || typeof raw !== 'object') return null;
   const v = raw as Record<string, unknown>;
   if (typeof v.ok !== 'boolean' || typeof v.enabled !== 'boolean' || typeof v.error !== 'boolean' ||
+      (v.workerVersion !== undefined && !isAppVersion(v.workerVersion)) ||
       (v.checking !== undefined && typeof v.checking !== 'boolean') ||
       (v.receiving !== undefined && typeof v.receiving !== 'boolean') ||
       typeof v.pending !== 'number' || !Number.isSafeInteger(v.pending) || v.pending < 0 ||
