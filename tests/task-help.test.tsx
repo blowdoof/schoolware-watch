@@ -227,12 +227,15 @@ describe('independent encrypted help requests', () => {
     expect(await progressSync.claimHelpNotifications(scope.scopeId.replace('CompletedTaskForLL=30', 'CompletedTaskForLL=31'))).toBeNull();
   });
 
-  it('shows done/old/future help requests prominently and exports the independent flag', async () => {
+  it('keeps completed help independent while limiting the focused panel to its two-day horizon', async () => {
     const scope = await history.record(check()); const id = scope.items[0]!.localId!;
     await history.setTaskStatus(scope.scopeId, id, 'done', audit); await history.setTaskHelp(scope.scopeId, id, true, []);
     const view = createTasksView((await history.read(scope.scopeId)).scope);
     expect(validateTasksView(view)).toEqual(view);
-    const html = renderToStaticMarkup(<TodoOverview view={view} now={new Date()} working={false} update={async () => {}} updateMany={async () => {}} updateHelp={async () => {}} />);
+    const pastHtml = renderToStaticMarkup(<TodoOverview view={view} now={new Date()} working={false} update={async () => {}} updateMany={async () => {}} updateHelp={async () => {}} />);
+    expect(pastHtml).not.toContain('aria-label="Hulpvragen"');
+    expect(view.entries[0]?.help?.needed).toBe(true);
+    const html = renderToStaticMarkup(<TodoOverview view={view} now={new Date('2026-10-02T12:00:00Z')} working={false} update={async () => {}} updateMany={async () => {}} updateHelp={async () => {}} />);
     expect(html).toContain('aria-label="Hulpvragen"'); expect(html).toContain(point.snapshot.title); expect(html).toContain('Bewaard zonder ontvanger');
     expect(tasksCsv(view.entries)).toContain('"Klaar";"Ja"');
     expect(validateTasksView({ ...view, helpRecipients: [{ id: crypto.randomUUID(), label: '' }] })).toBeNull();

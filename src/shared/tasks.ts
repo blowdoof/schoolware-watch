@@ -8,6 +8,7 @@ import { normalizeSyncLabel } from './progress-sync';
 import type { CompatibilityIssue } from './sync-compatibility';
 import { isActionStamp, isTaskReview, type ActionStamp, type TaskReview } from './participation';
 import { progressVersionText } from '../domain/progress-sync';
+import { validateSpecialDays, type SpecialDay } from '../domain/special-days';
 
 export const MAX_TASK_UPDATES = 5000;
 
@@ -20,10 +21,10 @@ export interface TaskEntry {
   missingFromLatestCheck?: boolean;
 }
 export interface TaskAgenda { days: string[]; lastSuccessAt: string }
-export interface TasksView { ok: boolean; entries: TaskEntry[]; agenda?: TaskAgenda; helpRecipients?: { id: string; label: string }[]; helpMembersError?: boolean; syncIssue?: CompatibilityIssue }
+export interface TasksView { ok: boolean; entries: TaskEntry[]; agenda?: TaskAgenda; specialDays?: SpecialDay[]; helpRecipients?: { id: string; label: string }[]; helpMembersError?: boolean; syncIssue?: CompatibilityIssue }
 export function createTasksView(scope: HistoryScope | null, sync?: SyncState): TasksView {
   const sharing = sync?.scopeId === scope?.scopeId ? sync : undefined;
-  return { ok: true, ...(sharing?.compatibility?.issue ? { syncIssue: sharing.compatibility.issue } : {}), ...(sharing ? { helpRecipients: (sharing.members ?? []).filter((member) => member.id !== sharing.connectionId)
+  return { ok: true, ...(scope?.specialDays?.length ? { specialDays: scope.specialDays } : {}), ...(sharing?.compatibility?.issue ? { syncIssue: sharing.compatibility.issue } : {}), ...(sharing ? { helpRecipients: (sharing.members ?? []).filter((member) => member.id !== sharing.connectionId)
     .map(({ id, label }) => ({ id, label })), helpMembersError: sharing.membersError ?? false } : {}), ...(scope ? { agenda: {
     // Only positive evidence from the latest successful response. Retained items
     // missing from an incomplete response must not invent a future school day.
@@ -48,6 +49,8 @@ export function validateTasksView(value: unknown): TasksView | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const view = value as Record<string, unknown>;
   if (typeof view.ok !== 'boolean' || !Array.isArray(view.entries)) return null;
+  const specialDays = view.specialDays === undefined ? undefined : validateSpecialDays(view.specialDays);
+  if (specialDays === null) return null;
   if (view.syncIssue !== undefined && !['update-required', 'server-update-required', 'check-unavailable'].includes(view.syncIssue as string)) return null;
   if (view.helpMembersError !== undefined && typeof view.helpMembersError !== 'boolean') return null;
   if (view.helpRecipients !== undefined && (!Array.isArray(view.helpRecipients) || view.helpRecipients.length > 49 ||
@@ -93,7 +96,7 @@ export function validateTasksView(value: unknown): TasksView | null {
       ...(item.reviews ? { reviews: item.reviews as NonNullable<TaskEntry['reviews']> } : {}),
       ...(help ? { help, ...(item.helpForYou !== undefined ? { helpForYou: item.helpForYou as boolean } : {}) } : {}) });
   }
-  return { ok: view.ok, entries, ...(agenda ? { agenda } : {}),
+  return { ok: view.ok, entries, ...(agenda ? { agenda } : {}), ...(specialDays ? { specialDays } : {}),
     ...(view.syncIssue !== undefined ? { syncIssue: view.syncIssue as CompatibilityIssue } : {}),
     ...(view.helpRecipients !== undefined ? { helpRecipients: view.helpRecipients as NonNullable<TasksView['helpRecipients']> } : {}),
     ...(view.helpMembersError !== undefined ? { helpMembersError: view.helpMembersError as boolean } : {}) };

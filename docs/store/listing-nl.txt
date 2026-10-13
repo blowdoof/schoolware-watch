@@ -13,6 +13,7 @@ Wat kun je ermee?
 - Openstaande taken en toetsen bekijken en zelf Open, Bezig of Klaar markeren.
 - Onafhankelijk hulp vragen aan gekoppelde toestellen en zien wie een status heeft gewijzigd of werk heeft nagekeken of verbeterd.
 - Speciale dagen met opmerkingen, voorbereiding en checklists toevoegen, bijvoorbeeld thuisstudie of een sportdag.
+- De volgende twee bekende schooldagen opvolgen, met een lokaal planningsvoorstel op basis van open werk, hulpvragen en voorbereiding.
 - Agenda en taakvoortgang als CSV downloaden naar je eigen computer.
 - Een boekentasoverzicht bekijken: Mee naar school en Mee naar huis, met laptop, materiaal en paginaverwijzingen uit de agenda.
 - Optioneel algemene systeemmeldingen en een banner op Schoolware ontvangen.

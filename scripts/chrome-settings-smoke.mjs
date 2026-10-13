@@ -561,6 +561,7 @@ try {
     };
     await capture('screenshot-schoolbag-1280x800.png', '[aria-label="Boekentas"]');
     await capture('screenshot-tasks-1280x800.png', '[aria-label="Taken, toetsen en voortgang"]');
+    await capture('screenshot-planning-1280x800.png', '[aria-label="Planningsvoorstel"]');
     const icon = (await readFile(resolve('public/icons/icon128.png'))).toString('base64');
     const { targetId: promoTarget } = await command('Target.createTarget', { url: 'about:blank' });
     const { sessionId: promoSession } = await command('Target.attachToTarget', { targetId: promoTarget, flatten: true });
