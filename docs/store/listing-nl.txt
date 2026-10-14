@@ -30,6 +30,7 @@ Open Schoolware Watch, kies Ouderportaal of Leerlingintranet, verbind met je Sch
 Automatische controles werken wanneer Chrome draait en je Schoolware-sessie geldig is. Meldingen volgen de instellingen van je browser en besturingssysteem. Planningsadvies en boekentassuggesties helpen je voorbereiden; controleer opdrachten en benodigdheden in de bronagenda. Taakstatussen wijzigen de officiële Schoolware-agenda niet.
 
 Contact en ondersteuning: info@bumper.be
+Broncode: https://github.com/blowdoof/schoolware-watch
 Privacyverklaring: https://schoolware.bumper.be/privacy.html
 
 Enig doel

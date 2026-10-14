@@ -3,6 +3,12 @@
 Scope: read-only inspection of the tracked project and all locally reachable Git
 objects. No repository visibility change or history rewrite was performed.
 
+The owner subsequently authorized keeping the source link and making the source
+public if the exposure checks permit it. A GitHub plugin connection is suggested
+for authenticated review of remote settings, workflow logs and attached data;
+the available connector is not yet installed/connected. Until that review is
+possible, retain the link only as a conditional draft, not a verified public URL.
+
 Anonymous requests to the GitHub repository page and repository REST endpoint
 both returned 404. The source link is not usable as a public Store homepage.
 Authenticated visibility could not be inspected; a 404 alone is not proof of

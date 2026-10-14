@@ -8,7 +8,10 @@ change is justified. Set latest-published version only after actual publication.
 
 The Dutch listing now describes available functions without institution-specific
 references or development test notes. It retains accurate scope/session/privacy
-information. The inaccessible GitHub link has been removed. Technical acceptance
+information. The owner prefers public source transparency; the draft listing
+retains the GitHub link conditionally. Confirm public accessibility after the
+remaining remote exposure checks before copying that line into the live Store.
+The extension's source link can be restored after that verification. Technical acceptance
 limitations remain documented separately; do not claim universal compatibility
 or completed teacher support. No teacher rights are implemented.
 
