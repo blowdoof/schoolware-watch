@@ -478,7 +478,7 @@ async function handle(message: ConnectionMessage, current: Trace): Promise<Reply
   });
   if (message.type === 'connection.discovery.start') return serializeMutation(async () => {
     registerAgendaDiscovery(observeDiscovery);
-    return beginAgendaDiscovery(message.origin, message.tabId);
+    return beginAgendaDiscovery(message.origin, message.tabId, message.environment);
   });
   if (message.type === 'connection.discovery.read') return serializeMutation(readAgendaDiscovery);
   if (message.type === 'connection.discovery.cancel') return serializeMutation(async () => {

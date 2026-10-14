@@ -18,8 +18,8 @@ export function TasksPanel({ refreshToken }: { refreshToken: number }) {
   const [dayLimit, setDayLimit] = useState(5);
   const now = useNow();
   if (!available) return null;
-  const entries = view?.entries.filter((task) => hasAgendaMarker(task.snapshot.typePunt) && (!hideDone || task.status !== 'done' || task.help?.needed) &&
-    (planning === 'all' || (planning === 'upcoming' ? !isPastTask(task.snapshot.endsAt, now) : isPastTask(task.snapshot.endsAt, now)))) ?? [];
+  const entries = view?.entries.filter((task) => (planning === 'all' || (planning === 'unconfirmed' ? task.missingFromLatestCheck : !task.missingFromLatestCheck)) && hasAgendaMarker(task.snapshot.typePunt) && (!hideDone || task.status !== 'done' || task.help?.needed) &&
+    (planning === 'all' || planning === 'unconfirmed' || (planning === 'upcoming' ? !isPastTask(task.snapshot.endsAt, now) : isPastTask(task.snapshot.endsAt, now)))) ?? [];
   const { days, cutoffDay } = planningWindow(view?.agenda?.days ?? [], entries.map((task) => task.snapshot), now, dayLimit);
   const visibleEntries = planning === 'upcoming' ? entries.filter((task) => cutoffDay !== null && task.snapshot.startsAt.slice(0, 10) <= cutoffDay) : entries;
   return <>
@@ -30,7 +30,7 @@ export function TasksPanel({ refreshToken }: { refreshToken: number }) {
     <p className="mt-2 text-sm text-slate-600">Vink Bezig of Klaar aan. Hulp nodig kan daarnaast aanstaan, met één of meerdere ontvangers. Een gewijzigde of opnieuw verschenen voltooide taak gaat automatisch terug naar Bezig. Met delen ingeschakeld wordt je voortgang versleuteld gedeeld; Schoolware wordt niet gewijzigd.</p>
     <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
       <label>Planning <select value={planning} onChange={(event) => { setPlanning(event.target.value); setLimit(20); setDayLimit(5); }} className="ml-2 rounded-lg border border-slate-300 p-2">
-        <option value="upcoming">Nog gepland</option><option value="past">Eerdere taken</option><option value="all">Alle taken</option>
+        <option value="upcoming">Nog gepland</option><option value="past">Eerdere taken</option><option value="unconfirmed">Niet teruggevonden bij laatste controle</option><option value="all">Alle taken</option>
       </select></label>
       <label className="flex items-center gap-2"><input type="checkbox" checked={hideDone} onChange={(event) => setHideDone(event.target.checked)} />Verberg afgeronde taken</label>
     </div>
@@ -41,6 +41,7 @@ export function TasksPanel({ refreshToken }: { refreshToken: number }) {
       {planning === 'upcoming' && <p className="mt-2 text-xs text-slate-500">Eerst de komende {Math.min(dayLimit, days.length)} bekende schooldagen. Lege dagen bewijzen niet dat er geen les is.</p>}
       {!entries.length && <p className="mt-3 text-sm">Geen taken in deze selectie.</p>}
       <ol className="mt-4 space-y-3">{visibleEntries.slice(0, limit).map((task) => <li key={task.id} className="rounded-xl border border-slate-200 p-4">
+        {task.missingFromLatestCheck && <p className="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Niet teruggevonden bij de laatste geslaagde controle van deze periode. Dit bewijst niet dat de taak verwijderd is. Je voortgang en geschiedenis blijven bewaard.</p>}
         <details className="group">
           <summary className="cursor-pointer rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-teal-700">
             <span className="text-xs text-slate-500">{task.category === 'tests' ? 'Toets - ' : task.category === 'review' ? 'Met sterretje · ' : ''}{task.subject}{task.room ? ` · ${task.room}` : ''}</span>

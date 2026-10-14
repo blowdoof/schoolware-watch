@@ -8,6 +8,7 @@ import { setTimeout, clearTimeout } from 'node:timers';
 import process from 'node:process';
 
 const { fetch, WebSocket, console } = globalThis;
+const appVersion = JSON.parse(await readFile(resolve('dist/manifest.json'), 'utf8')).version;
 const chromePath = process.argv[2];
 if (!chromePath) throw new Error('Usage: node scripts/chrome-planning-sync-smoke.mjs PATH_TO_CHROME');
 const profile = await mkdtemp(join(tmpdir(), 'schoolware-planning-sync-'));
@@ -53,7 +54,7 @@ async function routeBinding(message) {
   recentActions.push(body.action); if (recentActions.length > 8) recentActions.shift();
   assert.ok(!request.options.body.includes('Synthetic shared notes'));
   const token = request.options.headers.Authorization;
-  assert.equal(request.options.headers['X-Schoolware-Version'], '0.4.0');
+  assert.equal(request.options.headers['X-Schoolware-Version'], appVersion);
   assert.equal(request.options.headers['X-Schoolware-Protocol'], '3');
   if (body.action === 'compatibility') {
     await evaluate(message.sessionId, `globalThis.syntheticReply(${JSON.stringify(request.id)}, ${JSON.stringify({ ok: true, policy })})`);
@@ -124,7 +125,7 @@ try {
       const date = new Date(now.toLocaleDateString('en-CA', { timeZone: 'Europe/Brussels' }) + 'T12:00:00Z');
       do { date.setUTCDate(date.getUTCDate() + 1); } while ([0, 6].includes(date.getUTCDay()));
       const day = date.toISOString().slice(0, 10);
-      const scopeId = 'https://schoolware_siw.ksgwl.be/webouders/bin/server.fcgi/REST/AgendaPunt?AgendaID=10&MapAgendasOp=20&MinTot=2026-01-01&MaxVan=2026-12-31&CompletedTaskForLL=${pupil}';
+      const scopeId = ${JSON.stringify(pupil === 30 ? 'https://schoolware_siw.ksgwl.be/webouders/bin/server.fcgi/REST/AgendaPunt?AgendaID=10&MapAgendasOp=20&MinTot=2026-01-01&MaxVan=2026-12-31&CompletedTaskForLL=30' : 'https://schoolware_siw.ksgwl.be/webleerling/bin/server.fcgi/REST/AgendaPunt/?Agenda=10&NietMappen=20&MapAgendasOp=20&MinTot=2026-01-01T00%3A00%3A00&MaxVan=2026-12-31T00%3A00%3A00&page=1&start=0&limit=0')};
       await chrome.storage.local.set({ schoolwarePreferences: { ...preferences, monitoringEnabled: false, notificationsEnabled: false },
         schoolwareConnection: { requestUrl: scopeId, lastCheck: null } });
       const db = await new Promise((resolve, reject) => {
@@ -268,9 +269,9 @@ try {
   assert.ok([...server.values()][0].length > 0);
   const versions = await evaluate(parent.sessionId, `chrome.runtime.sendMessage({ type: 'sync.read' })`);
   assert.equal(versions.devices.length, 2);
-  assert.ok(versions.devices.every(device => device.version === '0.4.0' && device.protocol === 3));
+  assert.ok(versions.devices.every(device => device.version === appVersion && device.protocol === 3));
   const recordCount = [...server.values()][0].length;
-  policy.minimumVersion = '0.5.0';
+  policy.minimumVersion = '0.6.0';
   await evaluate(parent.sessionId, `(async () => {
     const tasks = await chrome.runtime.sendMessage({ type: 'tasks.read' });
     await chrome.runtime.sendMessage({ type: 'tasks.update', itemId: tasks.entries[0].id, status: 'in-progress' });

@@ -1,4 +1,4 @@
-import { AGENDA_PATH, SCHOOLWARE_ORIGIN, schoolwareOrigin, validateAgendaRequest } from '../schoolware/agenda-request';
+import { AGENDA_PATH, STUDENT_AGENDA_PATH, SCHOOLWARE_ORIGIN, schoolwareOrigin, validateAgendaRequest } from '../schoolware/agenda-request';
 import { discoveryPermissions, type DiscoveryView } from '../shared/agenda-discovery';
 import { isAlertId } from '../shared/browser-alerts';
 
@@ -43,7 +43,7 @@ export async function restoreAgendaDiscovery(): Promise<void> {
   }
   await chrome.alarms.create(DISCOVERY_ALARM, { when: state.expiresAt });
 }
-export async function beginAgendaDiscovery(origin = SCHOOLWARE_ORIGIN, tabId?: number): Promise<DiscoveryView> {
+export async function beginAgendaDiscovery(origin = SCHOOLWARE_ORIGIN, tabId?: number, environment?: 'parent' | 'student'): Promise<DiscoveryView> {
   if (schoolwareOrigin(origin) !== origin) throw new Error('Invalid installation');
   if (!chrome.storage.session || !chrome.webRequest || !await chrome.permissions.contains(discoveryPermissions(origin))) {
     return { status: 'permission-required', id: null };
@@ -57,7 +57,10 @@ export async function beginAgendaDiscovery(origin = SCHOOLWARE_ORIGIN, tabId?: n
   try {
     await chrome.storage.session.set({ [DISCOVERY_KEY]: state });
     await chrome.alarms.create(DISCOVERY_ALARM, { when: state.expiresAt });
-    await chrome.tabs.update(tab.id, { url: `${origin}/webouders/start.html`, active: true });
+    const student = environment ? environment === 'student' : Boolean(tab.url && new URL(tab.url).pathname.startsWith('/webleerling/'));
+    const landing = student ?
+      '/webleerling/start.html#!fn=llagenda' : '/webouders/start.html';
+    await chrome.tabs.update(tab.id, { url: `${origin}${landing}`, active: true });
     return { status: 'waiting', id: state.id };
   } catch { await cancelAgendaDiscovery(); throw new Error('Discovery unavailable'); }
 }
@@ -89,7 +92,7 @@ export function registerAgendaDiscovery(observe: (details: chrome.webRequest.OnC
   if (!event) return;
   try {
     if (!event.hasListener(observe)) event.addListener(observe, {
-      urls: [`https://*${AGENDA_PATH}?*`], types: ['xmlhttprequest'],
+      urls: [`https://*${AGENDA_PATH}?*`, `https://*${STUDENT_AGENDA_PATH}?*`, `https://*${STUDENT_AGENDA_PATH.slice(0, -1)}?*`], types: ['xmlhttprequest'],
     });
   } catch { /* Optional access may not have been granted yet. */ }
 }

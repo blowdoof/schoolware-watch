@@ -1,5 +1,6 @@
 export const SCHOOLWARE_ORIGIN = 'https://schoolware_siw.ksgwl.be';
 export const AGENDA_PATH = '/webouders/bin/server.fcgi/REST/AgendaPunt';
+export const STUDENT_AGENDA_PATH = '/webleerling/bin/server.fcgi/REST/AgendaPunt/';
 
 /** User-selected public HTTPS installations; endpoint validation is separate from host consent. */
 export function schoolwareOrigin(value: unknown): string | null {
@@ -20,10 +21,11 @@ export function schoolwarePermission(value: string): string {
 export function isSchoolwarePage(value: unknown): boolean {
   if (!schoolwareOrigin(value)) return false;
   const url = new URL(value as string);
-  return /^\/web(?:ouders|wisad)(?:\/|$)/.test(url.pathname) || /(?:^|[._-])schoolware(?:[._-]|$)/i.test(url.hostname);
+  return /^\/web(?:ouders|leerling|wisad)(?:\/|$)/.test(url.pathname) || /(?:^|[._-])schoolware(?:[._-]|$)/i.test(url.hostname);
 }
 
 const parameters = ['AgendaID', 'MapAgendasOp', 'MinTot', 'MaxVan', 'CompletedTaskForLL'] as const;
+const studentParameters = ['Agenda', 'NietMappen', 'MapAgendasOp', 'MinTot', 'MaxVan', 'page', 'start', 'limit'] as const;
 
 /** Coverage is transport configuration, never pupil identity. Preserve all other IDs. */
 export function agendaProfileKey(value: string): string | null {
@@ -50,8 +52,27 @@ export function validateAgendaRequest(value: unknown): string | null {
   if (typeof value !== 'string' || value.length > 4096) return null;
   let url: URL;
   try { url = new URL(value); } catch { return null; }
-  if (!schoolwareOrigin(value) || url.pathname !== AGENDA_PATH ||
-      url.username || url.password || url.hash) return null;
+  if (!schoolwareOrigin(value) || url.username || url.password || url.hash) return null;
+  if (url.pathname === STUDENT_AGENDA_PATH || url.pathname === STUDENT_AGENDA_PATH.slice(0, -1)) {
+    const keys = [...url.searchParams.keys()];
+    if (studentParameters.some((key) => url.searchParams.getAll(key).length !== 1) ||
+        keys.some((key) => key !== '_dc' && !studentParameters.includes(key as typeof studentParameters[number])) ||
+        url.searchParams.getAll('_dc').length > 1 ||
+        (url.searchParams.has('_dc') && !/^\d{1,16}$/.test(url.searchParams.get('_dc')!))) return null;
+    if (!url.searchParams.get('Agenda')!.split(',').every(isId) ||
+        !url.searchParams.get('NietMappen')!.split(',').every(isId) ||
+        !isId(url.searchParams.get('MapAgendasOp')!) ||
+        url.searchParams.get('page') !== '1' || url.searchParams.get('start') !== '0' ||
+        url.searchParams.get('limit') !== '0') return null;
+    const min = url.searchParams.get('MinTot')!;
+    const max = url.searchParams.get('MaxVan')!;
+    if (![min, max].every((date) => /^\d{4}-\d{2}-\d{2}T00:00:00$/.test(date) && isDate(date.slice(0, 10))) || min > max) return null;
+    const canonical = new URL(STUDENT_AGENDA_PATH, url.origin);
+    // The observed cache buster is transient and must not split local profiles.
+    for (const key of studentParameters) canonical.searchParams.set(key, url.searchParams.get(key)!);
+    return canonical.href;
+  }
+  if (url.pathname !== AGENDA_PATH) return null;
   const keys = [...url.searchParams.keys()];
   if (keys.length !== parameters.length ||
       parameters.some((key) => url.searchParams.getAll(key).length !== 1)) return null;

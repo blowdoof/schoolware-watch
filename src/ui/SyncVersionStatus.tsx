@@ -15,6 +15,8 @@ export function SyncVersionStatus({ view, working, onCheck }: { view: SyncView; 
   const update = view.storeUpdate;
   return <div className="mt-3 rounded-lg border border-slate-200 p-3 text-sm" aria-label="Versie en synchronisatie">
     <p>Deze computer: versie {APP_VERSION}.</p>
+    {!view.workerVersion && <p role="status" className="mt-2 text-amber-800">De achtergrond meldt zijn actieve versie nog niet. Bij een lokale bronbuild: herlaad de extensie via chrome://extensions, sluit oude extensievensters en open dit scherm opnieuw. Alleen de bronbestanden bijwerken herlaadt de achtergrond niet.</p>}
+    {view.workerVersion && view.workerVersion !== APP_VERSION && <p role="status" className="mt-2 text-amber-800">De interface gebruikt {APP_VERSION}, maar de achtergrond werkt nog met {view.workerVersion}. Herlaad een lokaal geladen extensie via chrome://extensions en open dit scherm opnieuw.</p>}
     {text && <p role="status" className="mt-2 text-amber-800">{text}</p>}
     {view.compatibility && <p className="mt-1 text-xs text-slate-600">Compatibiliteit gecontroleerd: {new Date(view.compatibility.checkedAt).toLocaleString('nl-BE', { timeZone: 'Europe/Brussels' })}.
       {view.compatibility.policy?.latestVersion ? ` Laatst gepubliceerde versie volgens de dienst: ${view.compatibility.policy.latestVersion}.` : ''}</p>}
@@ -24,7 +26,7 @@ export function SyncVersionStatus({ view, working, onCheck }: { view: SyncView; 
       update.status === 'no_update' ? 'Chrome heeft bij deze controle geen beschikbare update gemeld. Dit bewijst niet dat synchronisatie compatibel is.' :
       'Chrome kon geen Store-updatecontrole uitvoeren. Een lokaal geladen extensie moet je zelf bijwerken.'}</p>}
     {view.devices?.length ? <ul className="mt-3 space-y-2">{view.devices.map((device) => <li key={device.id}>
-      <span className="font-medium">{device.self ? 'Deze computer' : device.label ?? 'Naamloos gekoppeld toestel'}</span>: versie {device.version}
+      <span className="font-medium">{device.self ? 'Deze computer — laatst gedeelde versie' : device.label ?? 'Naamloos gekoppeld toestel'}</span>: {device.version}
       <span className="block text-xs text-slate-600">Versie gemeld: {new Date(device.reportedAt).toLocaleString('nl-BE', { timeZone: 'Europe/Brussels' })}. Dit is de laatst gemelde versie, geen bewijs dat het toestel nu online is.</span>
       {(view.compatibility?.policy ? compatibilityIssue(view.compatibility.policy, device.version, device.protocol) !== null : device.protocol !== SYNC_PROTOCOL) &&
         <span className="block text-xs text-amber-800">Dit toestel heeft een update of aangepaste synchronisatiedienst nodig.</span>}

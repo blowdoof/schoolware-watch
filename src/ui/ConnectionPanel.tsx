@@ -39,6 +39,7 @@ export function ConnectionPanel({ showSetup, refreshToken, onHistoryChanged }: {
   const [discovery, setDiscovery] = useState<DiscoveryView>({ status: 'idle', id: null });
   const [candidate, setCandidate] = useState<{ origin: string; tabId: number } | null>(null);
   const [schoolAddress, setSchoolAddress] = useState('');
+  const [environment, setEnvironment] = useState<'parent' | 'student'>('parent');
   const [confirmedId, setConfirmedId] = useState<string | null>(null);
   useSettingsChanges('connection', !loading && (requestUrl !== (connection.requestUrl ?? '') || Boolean(schoolAddress) || confirmedId !== null));
 
@@ -48,6 +49,7 @@ export function ConnectionPanel({ showSetup, refreshToken, onHistoryChanged }: {
     void chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
       if (mounted && tab?.id !== undefined && isSchoolwarePage(tab.url)) {
         setCandidate({ origin: schoolwareOrigin(tab.url)!, tabId: tab.id });
+        setEnvironment(new URL(tab.url!).pathname.startsWith('/webleerling/') ? 'student' : 'parent');
       }
     }).catch(() => {});
     return () => { mounted = false; };
@@ -88,7 +90,7 @@ export function ConnectionPanel({ showSetup, refreshToken, onHistoryChanged }: {
   async function check(event: FormEvent, manual = false) {
     event.preventDefault();
     const url = validateAgendaRequest(manual ? requestUrl : connection.requestUrl);
-    if (!url) { setError('Gebruik de volledige Request URL van de AgendaPunt-request, met de vijf agenda- en datumparameters.'); return; }
+    if (!url) { setError('Gebruik de volledige Request URL van de ondersteunde ouder- of leerlingagenda, inclusief agenda- en datumparameters.'); return; }
     setError('');
     setWorking(true);
     try {
@@ -135,7 +137,7 @@ export function ConnectionPanel({ showSetup, refreshToken, onHistoryChanged }: {
         if (!granted) { setError('Geef toestemming om je agenda in Schoolware te herkennen.'); return; }
       }
       const view = validateDiscoveryView(await chrome.runtime.sendMessage(type === 'connection.discovery.start' ?
-        { type, origin: selectedOrigin!, ...(candidate ? { tabId: candidate.tabId } : {}) } satisfies DiscoveryMessage : { type } satisfies DiscoveryMessage));
+        { type, origin: selectedOrigin!, environment, ...(candidate ? { tabId: candidate.tabId } : {}) } satisfies DiscoveryMessage : { type } satisfies DiscoveryMessage));
       if (!view || view.status === 'error' || view.status === 'permission-required') throw new Error('Discovery unavailable');
       setDiscovery(view);
     } catch { setError('Schoolware kon niet worden geopend. Herlaad de extensie en probeer opnieuw.'); }
@@ -182,6 +184,11 @@ export function ConnectionPanel({ showSetup, refreshToken, onHistoryChanged }: {
               </label>
               <p className="text-xs text-slate-500">Chrome vraagt alleen toegang tot de gekozen website. Zonder adres gebruiken we de huidige koppeling of de Wetteren-Lede-installatie.</p>
             </>}
+            <label className="block">Aanmelden via
+              <select value={environment} disabled={working} onChange={(event) => setEnvironment(event.target.value === 'student' ? 'student' : 'parent')} className="ml-2 rounded-lg border border-slate-300 p-2">
+                <option value="parent">Ouderportaal</option><option value="student">Leerlingintranet</option>
+              </select>
+            </label>
             <button type="button" disabled={working} onClick={() => { void discover('connection.discovery.start'); }}
               className="rounded-lg bg-teal-700 px-4 py-2 font-medium text-white disabled:opacity-50">
               {connection.requestUrl ? 'Andere agenda koppelen' : 'Schoolware verbinden'}

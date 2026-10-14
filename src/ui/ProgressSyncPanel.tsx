@@ -16,6 +16,10 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
   const [pairing, setPairing] = useState('');
   const [invitation, setInvitation] = useState('');
   const [publicInvitation, setPublicInvitation] = useState('');
+  const invitationPreview = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (invitation || publicInvitation) invitationPreview.current?.scrollIntoView({ block: 'center' });
+  }, [invitation, publicInvitation]);
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -83,7 +87,7 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
     finally { setWorking(false); }
   }
   async function copyInvitation() {
-    setWorking(true); setMessage(''); setPublicInvitation('');
+    setWorking(true); setMessage('Uitnodiging wordt klaargemaakt...'); setInvitation(''); setPublicInvitation(''); setPairing('');
     try {
       const next = await send({ type: 'sync.pairing' });
       if (!next.pairingCode) throw new Error('Not paired');
@@ -97,6 +101,7 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
     finally { setWorking(false); }
   }
   async function shareExtension() {
+    if (publicInvitation) invitationPreview.current?.scrollIntoView({ block: 'center' });
     setWorking(true); setMessage(''); setInvitation(''); setPairing('');
     const text = extensionInvitation();
     setPublicInvitation(text);
@@ -135,6 +140,20 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
         {!view?.enabled && <p className="mt-1 text-xs text-slate-600">Maak hieronder eerst een leerlinggroep aan of koppel een bestaande groep.</p>}
       </div>
     </div>
+    {message && <p role="status" className="mt-3 rounded-lg bg-slate-50 p-3 text-sm">{message}</p>}
+    {publicInvitation && <div className="mt-4 text-sm">
+      <label className="block font-medium">Openbaar installatiebericht — alleen de extensie
+        <textarea ref={invitationPreview} readOnly rows={6} value={publicInvitation} onFocus={(event) => event.currentTarget.select()} className="mt-2 block w-full rounded-lg border border-slate-300 p-2 text-xs" />
+      </label>
+      <button type="button" onClick={() => setPublicInvitation('')} className="mt-2 text-teal-700">Installatiebericht verbergen</button>
+    </div>}
+    {invitation && <div className="mt-4 text-sm">
+      <label className="block font-medium">Privé-uitnodiging met installatielink en koppelcode
+        <textarea ref={invitationPreview} readOnly rows={10} value={invitation} onFocus={(event) => event.currentTarget.select()} className="mt-2 block w-full rounded-lg border border-slate-300 p-2 text-xs" />
+      </label>
+      <p className="mt-2 text-xs text-slate-500">Iedereen met deze code kan de gedeelde voortgang lezen en wijzigen. Controleer de ontvanger voordat je het bericht verstuurt.</p>
+      <button type="button" onClick={() => setInvitation('')} className="mt-2 text-teal-700">Uitnodiging verbergen</button>
+    </div>}
     <p className="mt-2 text-sm leading-6 text-slate-600">Deel Open, Bezig en Klaar, hulpvragen met ontvangers, speciale dagen met opmerkingen en checklists, en boekentaskeuzes versleuteld via schoolware.bumper.be. Schoolware-titels, instructies en inloggegevens blijven lokaal.
       Koppel alleen computers die de agenda van dezelfde leerling bekijken. Elke leerling heeft een eigen deelgroep en koppelcode; verschillende gezinnen blijven gescheiden.</p>
     <p className="mt-2 text-xs text-amber-800">Werk de extensie op alle gekoppelde computers bij voor hulpvragen, speciale dagen en boekentaskeuzes. Oudere versies kunnen deze wijzigingen niet verwerken. De Schoolware-agenda wordt op elk toestel afzonderlijk ingelezen; een verlopen sessie of oudere controle kan tijdelijk verschillende lijsten geven.</p>
@@ -192,19 +211,6 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
       <button type="button" disabled={working || !compatible || (Boolean(label.trim()) && !normalizeSyncLabel(label)) || (mode !== 'first' && !parsePairingCode(secret.trim()))}
         onClick={() => { void connect(); }} className="rounded-lg bg-teal-700 px-4 py-2 font-medium text-white disabled:opacity-50">{mode === 'first' ? 'Nieuwe leerlinggroep aanmaken' : 'Koppelen'}</button>
     </div>}
-    {publicInvitation && <div className="mt-4 text-sm">
-      <label className="block font-medium">Openbaar installatiebericht — alleen de extensie
-        <textarea readOnly rows={6} value={publicInvitation} onFocus={(event) => event.currentTarget.select()} className="mt-2 block w-full rounded-lg border border-slate-300 p-2 text-xs" />
-      </label>
-      <button type="button" onClick={() => setPublicInvitation('')} className="mt-2 text-teal-700">Installatiebericht verbergen</button>
-    </div>}
-    {invitation && <div className="mt-4 text-sm">
-      <label className="block font-medium">Privé-uitnodiging met installatielink en koppelcode
-        <textarea readOnly rows={10} value={invitation} onFocus={(event) => event.currentTarget.select()} className="mt-2 block w-full rounded-lg border border-slate-300 p-2 text-xs" />
-      </label>
-      <p className="mt-2 text-xs text-slate-500">Iedereen met deze code kan de gedeelde voortgang lezen en wijzigen. Controleer de ontvanger voordat je het bericht verstuurt.</p>
-      <button type="button" onClick={() => setInvitation('')} className="mt-2 text-teal-700">Uitnodiging verbergen</button>
-    </div>}
     {pairing && <div className="mt-4 text-sm">
       <label className="block font-medium">Bewaar deze koppelcode privé en voer hem op de tweede computer in.
         <textarea readOnly value={pairing} onFocus={(e) => e.currentTarget.select()} className="mt-2 block w-full rounded-lg border border-slate-300 p-2 font-mono text-xs" />
@@ -216,6 +222,5 @@ export function ProgressSyncPanel({ refreshToken, initialMode = 'first' }: { ref
       Open extensievensters werken automatisch bij zodra wijzigingen ontvangen zijn. Ingeschakelde systeemmeldingen melden ontvangen statuswijzigingen met algemene tekst; de eerste synchronisatie blijft stil.
       Bij gelijktijdige wijzigingen geldt de laatst door de server ontvangen wijziging. Bestaande afmeldingen worden alleen van de eerste computer overgenomen.
       Gewijzigde bron-ID’s kunnen voorlopig niet worden gekoppeld. Alleen overeenkomende inhoudsversies delen voortgang.</p>
-    {message && <p role="status" className="mt-3 text-sm">{message}</p>}
   </section>;
 }

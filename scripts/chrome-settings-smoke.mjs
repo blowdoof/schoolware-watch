@@ -389,14 +389,16 @@ try {
   assert.equal(await evaluate(restarted.sessionId, `Boolean([...document.querySelectorAll('button')].find(button => button.textContent === 'Leerlingvoortgang delen')?.disabled)`), true);
   await evaluate(restarted.sessionId, `(() => {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => { throw new Error('Synthetic denied clipboard'); } } });
+    document.querySelector('[aria-label="Voortgang synchroniseren"]').closest('details').open = true;
+    [...document.querySelectorAll('button')].find(button => button.textContent === 'Leerlingvoortgang delen').scrollIntoView({ block: 'start' });
     [...document.querySelectorAll('button')].find(button => button.textContent === 'Extensie delen').click(); return true;
   })()`);
   await poll(() => evaluate(restarted.sessionId, `document.body.textContent.includes('openbare installatiebericht')`));
-  assert.equal(await evaluate(restarted.sessionId, `(() => {
+  await poll(() => evaluate(restarted.sessionId, `(() => {
     const text = document.querySelector('[aria-label="Voortgang synchroniseren"] textarea')?.value ?? '';
     return text.includes('chromewebstore.google.com/detail/phngkgibiapcabhnfjafkfibjobgkkaf') && !text.includes('sw1.') &&
       !text.includes('Koppelen aan een bestaande computer');
-  })()`), true);
+  })()`));
   await evaluate(restarted.sessionId, `(async () => {
     const { schoolwareConnection: connection } = await chrome.storage.local.get('schoolwareConnection');
     const db = await new Promise((resolve, reject) => {
@@ -414,9 +416,20 @@ try {
   await poll(() => evaluate(restarted.sessionId, `Boolean([...document.querySelectorAll('button')].find(button => button.textContent === 'Leerlingvoortgang delen' && !button.disabled))`));
   await evaluate(restarted.sessionId, `(() => {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => { throw new Error('Synthetic denied clipboard'); } } });
+    document.querySelector('[aria-label="Voortgang synchroniseren"]').closest('details').open = true;
+    [...document.querySelectorAll('button')].find(button => button.textContent === 'Leerlingvoortgang delen').scrollIntoView({ block: 'start' });
     [...document.querySelectorAll('button')].find(button => button.textContent === 'Leerlingvoortgang delen').click(); return true;
   })()`);
   await poll(() => evaluate(restarted.sessionId, `document.body.textContent.includes('Automatisch kopiëren is niet gelukt')`));
+  await poll(() => evaluate(restarted.sessionId, `(() => {
+    const panel = document.querySelector('[aria-label="Voortgang synchroniseren"]');
+    const invitation = panel.querySelector('textarea');
+    const status = panel.querySelector('[role="status"]');
+    const version = [...panel.querySelectorAll('button')].find(button => button.textContent === 'Controleren op updates');
+    return invitation.getBoundingClientRect().top >= 0 && invitation.getBoundingClientRect().top < innerHeight &&
+      Boolean(invitation.compareDocumentPosition(version) & Node.DOCUMENT_POSITION_FOLLOWING) &&
+      Boolean(status.compareDocumentPosition(invitation) & Node.DOCUMENT_POSITION_FOLLOWING);
+  })()`));
   assert.equal(await evaluate(restarted.sessionId, `(() => {
     const text = document.querySelector('[aria-label="Voortgang synchroniseren"] textarea')?.value ?? '';
     return text.includes('chromewebstore.google.com/detail/phngkgibiapcabhnfjafkfibjobgkkaf') &&
@@ -548,6 +561,7 @@ try {
     };
     await capture('screenshot-schoolbag-1280x800.png', '[aria-label="Boekentas"]');
     await capture('screenshot-tasks-1280x800.png', '[aria-label="Taken, toetsen en voortgang"]');
+    await capture('screenshot-planning-1280x800.png', '[aria-label="Planningsvoorstel"]');
     const icon = (await readFile(resolve('public/icons/icon128.png'))).toString('base64');
     const { targetId: promoTarget } = await command('Target.createTarget', { url: 'about:blank' });
     const { sessionId: promoSession } = await command('Target.attachToTarget', { targetId: promoTarget, flatten: true });
