@@ -4,8 +4,7 @@ Candidate package: version 0.5.0, prepared on 2026-10-14. Includes all 0.4.x
 connection, freshness and planning corrections. Use the original Store item
 `phngkgibiapcabhnfjafkfibjobgkkaf`; the separately published duplicate is not an
 update target. Confirm the original item's current version in the dashboard.
-See [0.5.0 handoff](update-0.5.0.md). External review and resolution of blocking
-findings remain required before publication. No Store upload/publication or
+See [0.5.0 handoff](update-0.5.0.md). No Store upload/publication or
 repository visibility change is performed by local preparation.
 
 ## Upload assets
@@ -111,9 +110,8 @@ unconfirmed. Synthetic screenshots do not prove real Schoolware authorization.
 ## Publication handoff
 
 Use the existing published item `phngkgibiapcabhnfjafkfibjobgkkaf`; do not create
-a new item. The owner authorized merging and local package preparation while
-deferring Matthias's review. Complete that review and resolve blocking findings
-before publication. Store upload and publication require
+a new item. Build release packages from a clean `main` checkout after the
+authorized feature merge. Store upload and publication require
 separate owner authorization. Then use Package → Upload New Package with the
 complete ZIP whose manifest is at the root. Candidate 0.5.0 includes the 0.4.x
 corrections; verify the original item identity before uploading.

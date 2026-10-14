@@ -24,8 +24,8 @@ https://schoolware.bumper.be/privacy.html. Leave homepage/source URL empty until
 a public project page has been verified. No GitHub visibility change, Store
 upload, publication or main merge is performed by preparing this candidate.
 
-External review and unresolved real student discovery/hosting operational
-acceptance remain release checks; the owner previously confirmed manual student
+Real student discovery and hosting operational acceptance remain documented
+checks; the owner previously confirmed manual student
 connection and sharing. See earlier candidate notes for synthetic validation.
 
 Public source preflight: 702 locally reachable historical blobs scanned without

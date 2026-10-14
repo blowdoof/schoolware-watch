@@ -1,14 +1,17 @@
 # Release readiness and distribution
 
-Current candidate (2026-10-11): 0.4.0 adds fail-closed synchronization compatibility
+Current release (owner-reported, 2026-10-14): 0.5.0. All released changes are being
+integrated into `main`; future release packages must be built from clean `main`
+after the authorized feature merge. The 0.5.0 runtime matches the existing release
+ZIP byte for byte. Its update requires no new PHP or SQL deployment. See
+[0.5.0 handoff](store/update-0.5.0.md).
+
+The 0.4.0 foundation adds fail-closed synchronization compatibility
 checks, encrypted device-version announcements, change attribution and independent
 per-participant checked/corrected reviews. See [participation and reviews](participation-and-reviews.md) and
 [version compatibility](version-compatibility.md) for deployment and limitations.
 The PHP endpoint and private helper must be upgraded together; there is no SQL
 migration. No production deployment or Store publication is performed here.
-On 2026-10-11 the owner authorized merging and local Store package preparation,
-explicitly deferring Matthias's external review until later in the week. His
-review and resolution of blocking findings remain required before publication.
 Validate deployed TLS/WAF controls, scheduled
 retention cleanup, backups and deletion, and real paired-device upgrade/restart
 behavior. Shared-code holders have full group rights; individual revocation and

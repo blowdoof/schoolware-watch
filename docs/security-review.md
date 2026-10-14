@@ -23,8 +23,8 @@ remote executable code, permissions or SQL tables are introduced.
 This source review does not certify the deployed service. Group secrets still
 grant full read/write/delete access, with no individual revocation or verified
 parent/teacher roles. Hosting access logs, TLS/WAF settings, backups, scheduled
-retention cleanup and deletion require operator verification. Matthias's external
-review remains a release gate. See [version compatibility](version-compatibility.md).
+retention cleanup and deletion require operator verification. See
+[version compatibility](version-compatibility.md).
 
 Review date: 2026-10-04. This report describes the current local working tree,
 including the fixes below. It is a source review with synthetic tests, not a
