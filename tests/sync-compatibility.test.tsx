@@ -44,7 +44,7 @@ describe('version compatibility before content exchange', () => {
   });
 
   it.each([
-    { response: () => Response.json({ ok: true, policy: { ...policy, minimumVersion: '0.5.0' } }), issue: 'update-required' },
+    { response: () => Response.json({ ok: true, policy: { ...policy, minimumVersion: '0.6.0' } }), issue: 'update-required' },
     { response: () => Response.json({ ok: true, policy: { ...policy, minimumProtocol: 4, maximumProtocol: 4 } }), issue: 'update-required' },
     { response: () => Response.json({ ok: true, policy: { ...policy, minimumProtocol: 1, maximumProtocol: 1 } }), issue: 'server-update-required' },
     { response: () => Response.json({ ok: true, acknowledged: [], operations: [], cursor: 0, head: 0 }), issue: 'server-update-required' },

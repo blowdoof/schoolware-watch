@@ -271,7 +271,7 @@ try {
   assert.equal(versions.devices.length, 2);
   assert.ok(versions.devices.every(device => device.version === appVersion && device.protocol === 3));
   const recordCount = [...server.values()][0].length;
-  policy.minimumVersion = '0.5.0';
+  policy.minimumVersion = '0.6.0';
   await evaluate(parent.sessionId, `(async () => {
     const tasks = await chrome.runtime.sendMessage({ type: 'tasks.read' });
     await chrome.runtime.sendMessage({ type: 'tasks.update', itemId: tasks.entries[0].id, status: 'in-progress' });

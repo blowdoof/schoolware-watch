@@ -1,14 +1,12 @@
 # Chrome Web Store submission pack
 
-Candidate package: version 0.4.0, updated on 2026-10-11. The owner reports
-that 0.2.0 is the latest published release; 0.3.0 was never published.
-The owner authorized merging and local package preparation on 2026-10-11,
-deferring Matthias's external review until later in the week. External review and
-resolution of blocking findings remain required before publication. Store upload
-and publication have not been authorized.
-See [0.4.0 release checks](update-0.4.0.md) and the
-[candidate review](../review-0.4.0-2026-10-11.md). No Store upload or publication
-is performed by preparing this package.
+Candidate package: version 0.5.0, prepared on 2026-10-14. Includes all 0.4.x
+connection, freshness and planning corrections. Use the original Store item
+`phngkgibiapcabhnfjafkfibjobgkkaf`; the separately published duplicate is not an
+update target. Confirm the original item's current version in the dashboard.
+See [0.5.0 handoff](update-0.5.0.md). External review and resolution of blocking
+findings remain required before publication. No Store upload/publication or
+repository visibility change is performed by local preparation.
 
 ## Upload assets
 
@@ -44,7 +42,7 @@ the application cannot guarantee that those systems delete data immediately.
 - Name: Schoolware Watch.
 - Language: Dutch.
 - Support contact: info@bumper.be.
-- Website/source: https://github.com/blowdoof/schoolware-watch.
+- Website/source: leave empty until an anonymously accessible project page is verified.
 - Single purpose: use the final paragraph in listing-nl.txt.
 - Remote executable code: No. All JavaScript and styles are locally bundled;
   HTTPS API responses are data, not executable code.
@@ -117,11 +115,11 @@ a new item. The owner authorized merging and local package preparation while
 deferring Matthias's review. Complete that review and resolve blocking findings
 before publication. Store upload and publication require
 separate owner authorization. Then use Package → Upload New Package with the
-complete ZIP whose manifest is at the root. Candidate 0.4.0 is greater than the
-owner-confirmed published 0.2.0; 0.3.0 was never published.
+complete ZIP whose manifest is at the root. Candidate 0.5.0 includes the 0.4.x
+corrections; verify the original item identity before uploading.
 Update Store Listing, Privacy practices and Test Instructions to match the
 current implementation, encrypted planning/progress, attribution/reviews and
-compatibility enforcement described in [the rollout checks](update-0.4.0.md). Keep distribution
+compatibility enforcement described in [the rollout checks](update-0.5.0.md). Keep distribution
 public. Deferred publication is an optional final release checkpoint. Automatic
 publication may be enabled when the owner is ready for release before submission.
 Submission does not guarantee approval.

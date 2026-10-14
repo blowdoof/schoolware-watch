@@ -43,14 +43,13 @@ export function InfoPanel({ section, onSectionChange, onSettings }: {
         <p>De server bewaart versleutelde gegevens en ontvangstmetadata. De hosting kan verbindingsgegevens zoals je IP-adres zien. Wie je koppelcode heeft, kan bij de deelgroep; computernamen bewijzen geen identiteit. Deel de code alleen met vertrouwde personen.</p>
         <p>Lokaal ontkoppelen wist de servergegevens niet automatisch. Gebruik bij voortgang delen de aparte optie ‘Gedeelde servergegevens wissen’ om de gedeelde gegevens te wissen. De groepstoegang blijft bestaan: een gekopieerde koppelcode wordt hierdoor niet ingetrokken.</p>
         <h3 className="font-semibold">Externe links</h3>
-        <p>PayPal, Bumper.be en de broncodewebsite openen pas wanneer je op een link klikt. De extensie stuurt geen agendagegevens mee. Voor die websites geldt hun eigen privacybeleid; PayPal verwerkt eventuele betaalgegevens.</p>
+        <p>PayPal en Bumper.be openen pas wanneer je op een link klikt. De extensie stuurt geen agendagegevens mee. Voor die websites geldt hun eigen privacybeleid; PayPal verwerkt eventuele betaalgegevens.</p>
         <button type="button" onClick={onSettings} className="rounded-lg border border-teal-300 px-3 py-2 font-medium text-teal-800 hover:bg-teal-50">Privacy-instellingen openen</button>
       </>}
       {section === 'licenses' && <>
-        <h2 className="text-lg font-semibold">Open source en rechten</h2>
+        <h2 className="text-lg font-semibold">Licenties en rechten</h2>
         <p>Schoolware Watch gebruikt de MIT-licentie. Je mag de software gebruiken, kopiëren, aanpassen en verspreiden, ook commercieel. Bewaar daarbij de copyright- en licentietekst. De software wordt zonder garantie aangeboden.</p>
-        <p>Copyright © 2026 Bumper.be en bijdragers.<br />
-          <a className={externalLink} href="https://github.com/blowdoof/schoolware-watch" target="_blank" rel="noopener noreferrer">Broncode op GitHub</a></p>
+        <p>Copyright © 2026 Bumper.be en bijdragers.</p>
         <details><summary className="cursor-pointer font-medium text-teal-800">Volledige MIT-licentie</summary>
           <pre className="mt-3 whitespace-pre-wrap break-words rounded-lg bg-slate-50 p-3 text-xs leading-5">{projectLicense}</pre>
         </details>

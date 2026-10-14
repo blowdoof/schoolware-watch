@@ -1,12 +1,12 @@
 Schoolware Watch
 
 Korte beschrijving
-Volg Schoolware-agendawijzigingen, taken en je boekentas. Agenda-inhoud blijft lokaal in je browser.
+Volg je Schoolware-agenda, taken en boekentas. Deel voortgang met je gezin en plan de volgende schooldagen.
 
 Volledige beschrijving
 Schoolware Watch helpt ouders en leerlingen de Schoolware-agenda op te volgen: wat is veranderd, welk werk staat nog open en welk materiaal moet mee?
 
-Ondersteunt Schoolware-websites met het ondersteunde ouder- of leerlingagendaformaat, ook buiten KSGWL. De extensie herkent het schooladres en de agenda-aanvraag nadat je bij je eigen school bent ingelogd. Taken en toetsen worden herkend via standaard Schoolware-typecodes, gecontroleerd in publieke omgevingen van twee andere scholengroepen. De ouderkoppeling is met een echt account getest bij KSGWL. De leerlingkoppeling is gecontroleerd aan de hand van aangeleverde antwoorden uit dezelfde installatie en synthetische tests; een volledige praktijktest met een ingelogd leerlingaccount blijft nodig. afwijkende Schoolware-versies of agendaformaten kunnen niet worden gekoppeld. Een installatiehulp begeleidt je bij koppelen, instellingen en optioneel aansluiten met een bestaande koppelcode. Je hebt een eigen, geldig Schoolware-account nodig. Schoolware Watch is een onafhankelijk project van Bumper.be en geen officieel product van Schoolware of WISA.
+Koppel je ouderportaal of leerlingintranet via de installatiehulp. De extensie herkent het schooladres en de agenda-aanvraag, vraagt toegang tot de gekozen Schoolware-website en laat je de agenda bevestigen. Gebruik je bestaande Schoolware-aanmelding in dezelfde browser. De koppeling ondersteunt het herkende Schoolware-agendaformaat; beschikbaarheid hangt af van de schoolomgeving. Schoolware Watch is een onafhankelijk project van Bumper.be en geen officieel product van Schoolware of WISA.
 
 Wat kun je ermee?
 - Veranderingen volgen tegenover eerdere lokale waarnemingen.
@@ -20,17 +20,17 @@ Wat kun je ermee?
 - Je bewaartermijn instellen en lokale gegevens verwijderen.
 - Optioneel versleutelde voortgang delen met andere gekoppelde toestellen via de Bumper.be-dienst.
 - Extensie delen: kopieer alleen de installatielink zodat iemand de extensie zelfstandig kan gebruiken of testen.
-- Leerlingvoortgang delen: kopieer een privé-uitnodiging met koppelcode voor een andere ouder die dezelfde leerling volgt.
+- Leerlingvoortgang delen: kopieer een privé-uitnodiging met koppelcode voor een vertrouwd gezinstoestel dat dezelfde leerling volgt.
 
 Schoolware-agenda-inhoud, instructies en geschiedenis blijven lokaal. Schoolware-wachtwoorden, sessiecookies en authenticatietokens worden niet door de extensie opgeslagen. Er zijn geen advertenties, analytics of telemetrie. Bij optionele voortgangsdeling worden statussen, hulpvragen met ontvangerverwijzingen, zelf ingevoerde speciale dagen met tekst en checklists, checklistvinkjes, boekentaskeuzes, auteursgegevens, onafhankelijke controles en versies van gekoppelde toestellen versleuteld gedeeld. Deelnemerlabels zijn optioneel en niet geverifieerd. Schoolware-agendatitels, instructies en geschiedenis worden niet verstuurd. De server verwerkt ook verbindingsmetadata. Iedereen met de volledige koppelcode kan gedeelde gegevens lezen, wijzigen en wissen. Deel die code uitsluitend met iemand die je vertrouwt en zet alleen informatie in speciale dagen die je met die personen wilt delen. CSV-bestanden kunnen persoonlijke agendatekst bevatten; bewaar en verwijder ze zelf.
 
 Aan de slag
-Open Schoolware Watch, kies Schoolware verbinden, log in bij Schoolware, open de juiste agenda en bevestig de koppeling. Meldingen en voortgangsdeling zijn optioneel.
+Open Schoolware Watch, kies Ouderportaal of Leerlingintranet, verbind met je Schoolware-website en bevestig de juiste agenda. Meldingen en voortgangsdeling zijn optioneel. Gebruik op andere gezinstoestellen de bestaande koppelcode voor dezelfde leerling.
 
-Dit is een aanvullend overzicht. Een eerste lokale waarneming bewijst niet wanneer een punt is aangemaakt. Boekentassuggesties kunnen onvolledig zijn; controleer de brontekst. Automatische controles vereisen een draaiende Chrome-browser en een geldige Schoolware-sessie. Meldingen kunnen door browser- of systeeminstellingen worden vertraagd of onderdrukt. Taakstatussen wijzigen de Schoolware-agenda niet.
+Automatische controles werken wanneer Chrome draait en je Schoolware-sessie geldig is. Meldingen volgen de instellingen van je browser en besturingssysteem. Planningsadvies en boekentassuggesties helpen je voorbereiden; controleer opdrachten en benodigdheden in de bronagenda. Taakstatussen wijzigen de officiële Schoolware-agenda niet.
 
 Contact en ondersteuning: info@bumper.be
-Project: https://github.com/blowdoof/schoolware-watch
+Privacyverklaring: https://schoolware.bumper.be/privacy.html
 
 Enig doel
 Ouders en leerlingen helpen de agenda en taakvoortgang van hun gekoppelde Schoolware-profiel op te volgen, met lokale geschiedenis, meldingen en materiaaloverzichten.
