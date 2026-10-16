@@ -20,6 +20,7 @@ Use TypeScript, React, Vite, Tailwind CSS, IndexedDB, Chrome Alarms, and Vitest.
 - Reuse the existing browser session only through the verified integration mechanism.
 - Never commit real student data, API captures, HAR files, screenshots containing personal data, or secrets.
 - Use synthetic test fixtures.
+- Keep production hosting account names, database names/users, private filesystem paths, and operator runbooks out of tracked code and documentation. Use neutral examples and server-side configuration; retain public endpoints and privacy contacts required for accurate product behavior and disclosures.
 - Do not log agenda payloads, student identifiers, or credentials.
 - Store only fields required for monitoring and history.
 - Use generic notification text by default.

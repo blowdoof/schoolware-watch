@@ -4,8 +4,8 @@ declare(strict_types=1);
 // Copy outside the public document root as schoolware-sync-config.php.
 // Never commit the populated file or use a Schoolware password here.
 return [
-    'dsn' => 'mysql:host=localhost;dbname=example_sync;charset=utf8mb4',
-    'user' => 'example_sync',
+    'dsn' => 'mysql:host=localhost;dbname=REPLACE_WITH_DATABASE_NAME;charset=utf8mb4',
+    'user' => 'REPLACE_WITH_DATABASE_USER',
     'password' => 'REPLACE_WITH_DATABASE_PASSWORD',
     // Group token verifiers are stored in sw_sync_groups, not this file.
     // Keep the legacy token_hash temporarily only when migrating an old server.

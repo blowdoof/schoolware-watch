@@ -1,8 +1,8 @@
-# cPanel installation: schoolware.bumper.be
+# Self-hosted PHP service installation
 
 ## Compatibility and attribution upgrade (0.4.0 candidate, 2026-10-10)
 
-Copy `sync-policy.php` to `/home/example-account/sync-policy.php` outside the public root,
+Copy `sync-policy.php` to `/srv/example-sync/private/sync-policy.php` outside the public root,
 then replace `public/sync.php` at the existing HTTPS endpoint. Existing database
 tables remain unchanged; no SQL migration is required for this upgrade.
 Optional configuration defaults are `sync_minimum_protocol = 3`,
@@ -75,47 +75,59 @@ Never point it at the hosting database.
 
 ## Files and database
 
-1. In phpMyAdmin, select `example_sync` and import `schema.sql`.
-   The tables use InnoDB; other tables are not touched.
-2. Create a private folder, for example `/home/example-account/schoolware-sync`, with
-   a `public` child directory. Adjust the home path to the actual cPanel account.
-3. Set the subdomain's document root to that `public` directory. Upload
-   `public/sync.php` and `public/.htaccess` there. Copy `maintenance.php` to
-   `/home/example-account/maintenance.php`, the absolute private path required by the API.
-   This also supports a document root at `/home/example-account/public_html/schoolware`.
-   No other project file belongs
-   in the public directory. Ensure HTTPS works before enabling the extension.
-4. Copy `config.example.php` to `/home/example-account/schoolware-sync-config.php`.
-   It must be outside ALL websites' document
-   roots, not merely outside the subdomain's directory. Set permissions to 600
-   where the PHP handler runs as the account user.
-5. Keep `user` and database name as `example_sync`; fill in the database
-   password privately. Use the actual database host if it is not `localhost`.
-   Do not send this file, password or the pairing code in chat or commit it.
+All paths below are examples, not production deployment details.
+
+1. Create a dedicated database and restricted database user. Import `schema.sql`
+   into that database using your host's database administration tools.
+2. Create separate `public` and `private` directories. Only `public` may be a
+   website document root. The private directory must be outside **every** website
+   document root, including other websites on the same hosting account.
+3. Put `public/sync.php`, `public/.htaccess` and `public/privacy.html` in `public`.
+   Put `maintenance.php`, `sync-policy.php` and `manage-groups.php` in `private`.
+4. Copy `config.example.php` to `private/schoolware-sync-config.php`. Replace all
+   database placeholders privately. Restrict file access to the hosting account
+   (for example mode 600 where supported). Never commit the populated file.
+5. Configure HTTPS and check that private files cannot be served by any website.
 
 Example layout:
 
 ```text
-/home/example-account/schoolware-sync/
-    public/                       <- subdomain document root
+/srv/example-sync/
+    public/                       <- only website document root
         sync.php
         .htaccess
-/home/example-account/schoolware-sync-config.php
-/home/example-account/manage-groups.php
+        privacy.html
+    private/                      <- never publicly served
+        schoolware-sync-config.php
+        maintenance.php
+        sync-policy.php
+        manage-groups.php
 ```
 
-The API and CLI manager currently load `/home/example-account/schoolware-sync-config.php`.
-For the existing deployment, keep `sync.php` and `.htaccess` in
-`/home/example-account/public_html/schoolware/` and the configuration in `/home/example-account/`.
-For other accounts, adjust that private absolute path in both PHP files. Do not place the configuration in a
-directory accessible through another website.
+By default, the API loads helpers and configuration from `../private` relative
+to its own directory. For a different layout, set the **server-side** environment
+variable `SCHOOLWARE_SYNC_PRIVATE_DIR` to the absolute private directory. Configure
+this through the host's private PHP/process configuration, not a request parameter
+or a committed file. The CLI always reads configuration and helpers beside itself.
+Do not change the API's request destination or authentication settings.
+
+### Upgrade from an installation with fixed paths
+
+Before uploading the updated API, place the CLI, both helpers and the existing
+private configuration together in the private directory. Either use the default
+layout above or configure `SCHOOLWARE_SYNC_PRIVATE_DIR` for the PHP handler first.
+Update scheduled commands to the CLI's location. Keep credentials and database
+contents unchanged. Back up privately and verify a normal authenticated exchange,
+an unauthorized request and a private maintenance invocation after deployment.
+Uploading only `sync.php` without preparing this layout can interrupt sharing.
+Repository changes do not deploy files or modify the live service.
 
 ## Upgrade participant display on an existing server
 
 1. Back up the database and import the latest `schema.sql` into the existing
    database. It adds `sw_sync_members`; existing groups and progress are retained.
 2. Upload the latest `public/sync.php` over the current endpoint at
-   `/home/example-account/public_html/schoolware/sync.php`.
+   `/srv/example-sync/public/sync.php`.
 3. Reload the built extension on all participating computers in their existing
    directories. No migration, CLI command, registration toggle or re-pairing is
    needed for this update. Private configuration remains unchanged.
@@ -164,12 +176,12 @@ pairing codes and cursors remain valid through this additive update.
    database with phpMyAdmin. This adds registration settings/rate-limit tables;
    existing group tables and data are unchanged.
 2. Upload the new `public/sync.php` over the existing endpoint and upload the new
-   `manage-groups.php` to `/home/example-account/manage-groups.php` outside document roots.
+   `manage-groups.php` to `/srv/example-sync/private/manage-groups.php` outside document roots.
    The private config path and database credentials stay unchanged.
 3. Run this once in PuTTY/SSH using the hosting account:
 
    ```sh
-   /opt/cpanel/ea-php82/root/usr/bin/php /home/example-account/manage-groups.php enable-registration
+   php /srv/example-sync/private/manage-groups.php enable-registration
    ```
 
 4. Reload the built extension on each computer in its existing directory. Current
@@ -189,7 +201,7 @@ Behind a proxy, configure trusted server-side address handling before use.
 To stop new registrations without disrupting current groups:
 
 ```sh
-/opt/cpanel/ea-php82/root/usr/bin/php /home/example-account/manage-groups.php disable-registration
+php /srv/example-sync/private/manage-groups.php disable-registration
 ```
 
 Registration uses a fresh 256-bit token generated locally; only its SHA-256
@@ -220,13 +232,13 @@ registered group retains the existing 20,000-operation storage limit.
 2. Import the new `schema.sql` into the existing database in phpMyAdmin. It adds
    group and registration tables and leaves legacy tables unchanged; no new
    database is needed.
-3. Upload `manage-groups.php` to `/home/example-account/manage-groups.php`, outside every
+3. Upload `manage-groups.php` to `/srv/example-sync/private/manage-groups.php`, outside every
    document root. Keep the existing private configuration, including its
    `token_hash`, for this migration.
-4. Run in cPanel Terminal with PHP 8.2:
+4. Run privately with PHP 8.2:
 
    ```sh
-   /opt/cpanel/ea-php82/root/usr/bin/php /home/example-account/manage-groups.php migrate-legacy
+   php /srv/example-sync/private/manage-groups.php migrate-legacy
    ```
 
    This copies ciphertext, revisions and the verifier into one group atomically.
@@ -234,7 +246,7 @@ registered group retains the existing 20,000-operation storage limit.
    codes, encryption keys and device cursors stay valid. Save the printed group
    ID privately for administration. Never run this while the old API is active.
 5. Upload the updated `public/sync.php` as
-   `/home/example-account/public_html/schoolware/sync.php`. Restart Chrome and click
+   `/srv/example-sync/public/sync.php`. Restart Chrome and click
    "Nu synchroniseren". Do not disconnect or generate new pairing codes.
 6. After confirming both devices work, remove the old endpoint copy. Remove the
    legacy `sw_sync_meta` and `sw_sync_operations` tables in phpMyAdmin after
@@ -263,7 +275,7 @@ access to that group. Never put tokens or pairing codes in URLs or support logs.
 To revoke every device in a group without affecting other groups:
 
 ```sh
-/opt/cpanel/ea-php82/root/usr/bin/php /home/example-account/manage-groups.php disable GROUP_ID
+php /srv/example-sync/private/manage-groups.php disable GROUP_ID
 ```
 
 Disabled groups keep encrypted records until an administrator removes them;
@@ -366,17 +378,16 @@ For an existing deployment, import `schema.sql`, then run
 `schema.sql` and must not repeat the ALTER. Existing groups receive an activity
 timestamp at upgrade time; no token, revision or ciphertext is replaced.
 
-Copy `maintenance.php` to `/home/example-account/maintenance.php` before replacing the API.
-The API uses that absolute path regardless of its document root. The private CLI
+Copy `maintenance.php` to `/srv/example-sync/private/maintenance.php` before replacing the API.
+The API resolves the private directory as described above. The private CLI
 `manage-groups.php` requires a helper in its own directory: place both in the
-account home, or also copy the helper beside an existing CLI in another private
-directory. Adjust the cron command to the CLI location. Replace `.htaccess` only
+same private directory. Adjust the cron command to the CLI location. Replace `.htaccess` only
 in the dedicated API document root, never in a shared `public_html`. The public allowlist
 serves only `sync.php` and `privacy.html`; the cPanel PHP handler stays intact.
 Schedule a daily cPanel cron using the host's PHP 8.2 CLI:
 
 ```text
-15 3 * * * /usr/local/bin/ea-php82 /home/example-account/schoolware-sync/manage-groups.php purge
+15 3 * * * php /srv/example-sync/private/manage-groups.php purge
 ```
 
 Adjust the executable and private path to the hosting installation. Run the
