@@ -1,5 +1,32 @@
 # Public source preflight (2026-10-14)
 
+## Follow-up (2026-10-16)
+
+Anonymous repository API access now confirms that the repository is public.
+The visibility observations below describe the earlier review date only.
+A broader inspection covered 202 tracked files and 720 reachable file blobs.
+It identified deployment account/database names and private hosting paths in
+server code, installation documentation and the integration harness. No actual
+credential was identified by the bounded checks. The current files replace those
+values with neutral examples and configurable private-directory loading.
+The harness now exercises the default directory layout without patching PHP.
+Public service URLs, source attribution and privacy contacts remain intentionally
+visible: they are required destinations/disclosures, not access credentials.
+
+Earlier commits and other branches still contain the removed metadata. This
+change does not rewrite Git history, clean remote caches or inspect GitHub-only
+attachments/logs. Removing historical metadata requires a separate coordinated
+history rewrite; a clean current tree must not be described as historical erasure.
+Do not copy an updated endpoint to production before preparing the private layout
+or server environment described in [installation](../../server/INSTALL.md).
+No production deployment or credential change is performed by this cleanup.
+
+Validation: TypeScript, lint, 436 Vitest tests and the production build passed.
+PHP 8.2 syntax checks and the isolated MySQL integration harness passed, including
+legacy encrypted-client compatibility, migration, isolation, quotas and deletion.
+
+## Original observations (2026-10-14)
+
 Scope: read-only inspection of the tracked project and all locally reachable Git
 objects. No repository visibility change or history rewrite was performed.
 

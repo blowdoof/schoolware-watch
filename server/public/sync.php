@@ -3,8 +3,10 @@ declare(strict_types=1);
 
 // PHP 8.2 / PDO MySQL. No Schoolware transport or plaintext agenda data.
 ini_set('display_errors', '0');
-require '/home/example-account/maintenance.php';
-require '/home/example-account/sync-policy.php';
+// The environment variable is configured by the host, never by a request.
+$privateDirectory = getenv('SCHOOLWARE_SYNC_PRIVATE_DIR') ?: dirname(__DIR__) . '/private';
+require $privateDirectory . '/maintenance.php';
+require $privateDirectory . '/sync-policy.php';
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
@@ -124,7 +126,7 @@ if ((int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 150000) reply(413, ['ok' => false])
 $pdo = null;
 try {
     // Keep the configuration outside every public document root.
-    $config = require '/home/example-account/schoolware-sync-config.php';
+    $config = require $privateDirectory . '/schoolware-sync-config.php';
     if (!is_array($config)) {
         reply(503, ['ok' => false]);
     }

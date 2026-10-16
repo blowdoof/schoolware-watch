@@ -6,7 +6,7 @@ if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 require __DIR__ . '/maintenance.php';
 $pdo = null;
 try {
-    $config = require '/home/example-account/schoolware-sync-config.php';
+    $config = require __DIR__ . '/schoolware-sync-config.php';
     $pdo = new PDO($config['dsn'], $config['user'], $config['password'], [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_EMULATE_PREPARES => false,

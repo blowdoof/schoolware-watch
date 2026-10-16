@@ -39,19 +39,13 @@ def main():
             folder = Path(folder)
             public = folder / 'public'
             public.mkdir()
-            (folder / 'maintenance.php').write_text((root / 'maintenance.php').read_text(), encoding='utf-8')
-            (folder / 'sync-policy.php').write_text((root / 'sync-policy.php').read_text(), encoding='utf-8')
-            # Rewrite only the fixed production path in the disposable test copies.
-            for source, destination in [(root / 'public/sync.php', public / 'sync.php'),
-                                        (root / 'manage-groups.php', folder / 'manage-groups.php')]:
-                destination.write_text(source.read_text().replace(
-                    "'/home/example-account/sync-policy.php'", "'" + (folder / 'sync-policy.php').as_posix() + "'").replace(
-                    "'/home/example-account/maintenance.php'",
-                    "'" + (folder / 'maintenance.php').as_posix() + "'").replace(
-                    "'/home/example-account/schoolware-sync-config.php'",
-                    "'" + (folder / 'schoolware-sync-config.php').as_posix() + "'"), encoding='utf-8')
+            private = folder / 'private'
+            private.mkdir()
+            for name in ['maintenance.php', 'sync-policy.php', 'manage-groups.php']:
+                (private / name).write_text((root / name).read_text(), encoding='utf-8')
+            (public / 'sync.php').write_text((root / 'public/sync.php').read_text(), encoding='utf-8')
             def configure(extra=''):
-                (folder / 'schoolware-sync-config.php').write_text(
+                (private / 'schoolware-sync-config.php').write_text(
                     "<?php return ['dsn'=>'mysql:host=127.0.0.1;port=33307;dbname=" + database +
                     "','user'=>'root','password'=>'','token_hash'=>'" + hashlib.sha256(token.encode()).hexdigest() +
                     "','retention_days'=>90,'requests_per_token_minute'=>10000" + extra + "];", encoding='utf-8')
@@ -76,7 +70,7 @@ def main():
             legacy = {'id': str(uuid.uuid4()), 'iv': '0' * 24, 'ciphertext': '4' * 320}
             sql("INSERT INTO sw_sync_operations VALUES (7, '" + legacy['id'] + "', '" + legacy['iv'] +
                 "', '" + legacy['ciphertext'] + "', UTC_TIMESTAMP()); UPDATE sw_sync_meta SET revision = 9;")
-            manager = php + [str(folder / 'manage-groups.php')]
+            manager = php + [str(private / 'manage-groups.php')]
             subprocess.run(manager + ['migrate-legacy'], check=True, capture_output=True)
             assert 'already exists' in subprocess.run(manager + ['migrate-legacy'], check=True, capture_output=True, text=True).stdout
             created = subprocess.run(manager + ['create'], check=True, capture_output=True, text=True).stdout.splitlines()
@@ -326,7 +320,7 @@ def main():
             sql('DELETE FROM sw_sync_request_limits;')
             assert call(registration, other_token)[0] == 401  # Cleanup must not undo revocation.
             # IPv6 rotation inside a /64 has the same private rate identity.
-            peer_script = "require '" + (folder / 'maintenance.php').as_posix() + "'; echo (ratePeer('2001:db8:1234:5678::1') === ratePeer('2001:db8:1234:5678::abcd') && ratePeer('2001:db8:1234:5678::1') !== ratePeer('2001:db8:1234:5679::1')) ? 'ok' : 'fail';"
+            peer_script = "require '" + (private / 'maintenance.php').as_posix() + "'; echo (ratePeer('2001:db8:1234:5678::1') === ratePeer('2001:db8:1234:5678::abcd') && ratePeer('2001:db8:1234:5678::1') !== ratePeer('2001:db8:1234:5679::1')) ? 'ok' : 'fail';"
             assert subprocess.run(php + ['-r', peer_script], check=True, capture_output=True, text=True).stdout == 'ok'
             print('PHP 8.2 / MySQL API integration passed: migration, isolation, revocation, authentication, validation, retry, pagination, scoped deletion, registration, quotas and encrypted participant isolation/deletion.')
     finally:
